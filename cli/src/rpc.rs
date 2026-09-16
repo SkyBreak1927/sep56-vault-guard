@@ -4,8 +4,7 @@ use std::process::Stdio;
 use serde_json::Value;
 use tokio::process::Command;
 
-/// Errors that can occur while invoking a contract function via the
-/// `stellar` CLI subprocess.
+/// Errors that can occur while running a `stellar` CLI subprocess.
 #[derive(Debug)]
 pub enum RpcError {
     /// The `stellar` binary could not be spawned (e.g. not found on PATH).
@@ -32,7 +31,7 @@ impl fmt::Display for RpcError {
             RpcError::Spawn(e) => write!(f, "failed to spawn `stellar` process: {e}"),
             RpcError::CommandFailed { exit_code, stderr } => write!(
                 f,
-                "`stellar contract invoke` failed (exit code {:?}): {}",
+                "`stellar` command failed (exit code {:?}): {}",
                 exit_code,
                 if stderr.is_empty() {
                     "<no stderr output>"
@@ -42,11 +41,11 @@ impl fmt::Display for RpcError {
             ),
             RpcError::UnexpectedStderr(stderr) => write!(
                 f,
-                "`stellar contract invoke` exited successfully but wrote to stderr: {stderr}"
+                "`stellar` command exited successfully but wrote to stderr: {stderr}"
             ),
             RpcError::InvalidJson { raw, source } => write!(
                 f,
-                "failed to parse `stellar contract invoke` output as JSON: {source} (raw output: {raw:?})"
+                "failed to parse `stellar` command output as JSON: {source} (raw output: {raw:?})"
             ),
         }
     }
@@ -62,31 +61,17 @@ impl std::error::Error for RpcError {
     }
 }
 
-/// Invokes a function on a deployed Soroban contract by wrapping
-/// `stellar contract invoke` as a subprocess (rather than talking to
-/// RPC/XDR directly), and parses its stdout as JSON.
+/// Runs `stellar` with the given fully-formed argument list as a
+/// subprocess, and returns trimmed stdout after verifying the process
+/// exited successfully and wrote nothing to stderr.
 ///
-/// Runs:
-/// `stellar contract invoke --id <contract_id> --source-account <source_account>
-///  --network testnet --quiet -- <function_name> <args...>`
-pub async fn invoke_contract(
-    contract_id: &str,
-    function_name: &str,
-    args: &[String],
-    source_account: &str,
-) -> Result<Value, RpcError> {
+/// Callers are responsible for placing `--quiet` correctly in `args`
+/// (before any `--` subcommand-argument separator), since appending it
+/// blindly at the end could land it past a `--` and be misinterpreted as
+/// a positional argument to the invoked contract function instead of a
+/// top-level CLI flag.
+async fn run_stellar(args: &[String]) -> Result<String, RpcError> {
     let output = Command::new("stellar")
-        .arg("contract")
-        .arg("invoke")
-        .arg("--id")
-        .arg(contract_id)
-        .arg("--source-account")
-        .arg(source_account)
-        .arg("--network")
-        .arg("testnet")
-        .arg("--quiet")
-        .arg("--")
-        .arg(function_name)
         .args(args)
         .stdin(Stdio::null())
         .output()
@@ -106,7 +91,38 @@ pub async fn invoke_contract(
         return Err(RpcError::UnexpectedStderr(stderr));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Invokes a function on a deployed Soroban contract by wrapping
+/// `stellar contract invoke` as a subprocess (rather than talking to
+/// RPC/XDR directly), and parses its stdout as JSON.
+///
+/// Runs:
+/// `stellar contract invoke --id <contract_id> --source-account <source_account>
+///  --network testnet --quiet -- <function_name> <args...>`
+pub async fn invoke_contract(
+    contract_id: &str,
+    function_name: &str,
+    args: &[String],
+    source_account: &str,
+) -> Result<Value, RpcError> {
+    let mut full_args: Vec<String> = vec![
+        "contract".to_string(),
+        "invoke".to_string(),
+        "--id".to_string(),
+        contract_id.to_string(),
+        "--source-account".to_string(),
+        source_account.to_string(),
+        "--network".to_string(),
+        "testnet".to_string(),
+        "--quiet".to_string(),
+        "--".to_string(),
+        function_name.to_string(),
+    ];
+    full_args.extend(args.iter().cloned());
+
+    let stdout = run_stellar(&full_args).await?;
 
     if stdout.is_empty() {
         return Ok(Value::Null);
@@ -116,4 +132,33 @@ pub async fn invoke_contract(
         raw: stdout,
         source,
     })
+}
+
+/// Deploys a new instance of an already-uploaded contract (identified by
+/// its wasm hash, so no re-upload is needed) via `stellar contract
+/// deploy`, and returns the newly deployed contract's address.
+///
+/// Runs:
+/// `stellar contract deploy --wasm-hash <wasm_hash> --source-account <source_account>
+///  --network testnet --quiet -- <constructor_args...>`
+pub async fn deploy_contract(
+    wasm_hash: &str,
+    source_account: &str,
+    constructor_args: &[String],
+) -> Result<String, RpcError> {
+    let mut full_args: Vec<String> = vec![
+        "contract".to_string(),
+        "deploy".to_string(),
+        "--wasm-hash".to_string(),
+        wasm_hash.to_string(),
+        "--source-account".to_string(),
+        source_account.to_string(),
+        "--network".to_string(),
+        "testnet".to_string(),
+        "--quiet".to_string(),
+        "--".to_string(),
+    ];
+    full_args.extend(constructor_args.iter().cloned());
+
+    run_stellar(&full_args).await
 }

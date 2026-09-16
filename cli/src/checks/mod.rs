@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::rpc::invoke_contract;
+use crate::rpc::{deploy_contract, invoke_contract};
 
 /// Outcome of a single conformance check.
 pub struct CheckResult {
@@ -629,6 +629,234 @@ async fn convert_to_assets(
             format!("convert_to_assets returned a non-numeric or negative value: {value}")
         }),
         Err(e) => Err(format!("convert_to_assets invoke failed: {e}")),
+    }
+}
+
+/// Simulates a donation/inflation attack against a **freshly deployed**
+/// vault instance of the given `wasm_hash`, with `attacker_account` as the
+/// attacker and `victim_account` as an unrelated victim depositor.
+///
+/// This check is self-contained: it deploys its own throwaway vault
+/// instance (reusing the already-uploaded `wasm_hash`, so no re-upload is
+/// needed) rather than touching any pre-existing vault, so it can be
+/// re-run at any time and reused against any other vault built from the
+/// same OpenZeppelin vault module.
+///
+/// Scenario:
+/// 1. Deploy a fresh vault (`decimals_offset = 0`, given `underlying_asset`).
+/// 2. Attacker deposits a dust amount (1 stroop) to become the sole,
+///    near-worthless first shareholder.
+/// 3. Attacker donates a large amount directly to the vault's contract
+///    address via the underlying asset's `transfer()`, bypassing
+///    `deposit()` entirely — inflating `total_assets()` without minting
+///    any shares.
+/// 4. Victim deposits a normal amount and receives however many shares
+///    the (now heavily donation-inflated) exchange rate yields.
+/// 5. Attacker's shares are redeemed to record a P&L figure, purely as
+///    supplementary context.
+///
+/// # Pass/fail criteria
+///
+/// The verdict is driven **solely** by whether the victim received a
+/// reasonably proportional number of shares (at least
+/// `SHARE_TOLERANCE_PCT`% of the 1:1 ratio observed on a healthy vault).
+/// Attacker profit/loss is recorded in the detail string for context only
+/// — it does not affect PASS/FAIL, because the victim is harmed by a
+/// donation attack regardless of whether the attacker personally profits.
+pub async fn check_donation_attack(
+    wasm_hash: &str,
+    attacker_account: &str,
+    victim_account: &str,
+    underlying_asset: &str,
+) -> CheckResult {
+    let name = "donation_attack".to_string();
+    const ATTACKER_DUST_DEPOSIT: i128 = 1;
+    const DONATION_AMOUNT: i128 = 100_000_000;
+    const VICTIM_DEPOSIT: i128 = 5_000_000;
+    const SHARE_TOLERANCE_PCT: i128 = 90;
+
+    let constructor_args = vec![
+        "--name".to_string(),
+        "Donation Attack Check Vault".to_string(),
+        "--symbol".to_string(),
+        "DACHK".to_string(),
+        "--asset".to_string(),
+        underlying_asset.to_string(),
+        "--decimals_offset".to_string(),
+        "0".to_string(),
+    ];
+
+    let vault_id = match deploy_contract(wasm_hash, attacker_account, &constructor_args).await {
+        Ok(id) => id,
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "could not deploy a fresh vault instance for the attack simulation: {e}"
+                ),
+            }
+        }
+    };
+
+    let attacker_deposit_args = vec![
+        "--assets".to_string(),
+        ATTACKER_DUST_DEPOSIT.to_string(),
+        "--receiver".to_string(),
+        attacker_account.to_string(),
+        "--from".to_string(),
+        attacker_account.to_string(),
+        "--operator".to_string(),
+        attacker_account.to_string(),
+    ];
+    let attacker_shares = match invoke_contract(
+        &vault_id,
+        "deposit",
+        &attacker_deposit_args,
+        attacker_account,
+    )
+    .await
+    {
+        Ok(value) => match parse_non_negative_i128(&value) {
+            Some(amount) => amount,
+            None => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!(
+                        "attacker dust deposit on {vault_id} returned an unexpected value: {value}"
+                    ),
+                }
+            }
+        },
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("attacker dust deposit failed on {vault_id}: {e}"),
+            }
+        }
+    };
+
+    let donation_args = vec![
+        "--from".to_string(),
+        attacker_account.to_string(),
+        "--to".to_string(),
+        vault_id.clone(),
+        "--amount".to_string(),
+        DONATION_AMOUNT.to_string(),
+    ];
+    if let Err(e) =
+        invoke_contract(underlying_asset, "transfer", &donation_args, attacker_account).await
+    {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!("attacker donation transfer to {vault_id} failed: {e}"),
+        };
+    }
+
+    let victim_deposit_args = vec![
+        "--assets".to_string(),
+        VICTIM_DEPOSIT.to_string(),
+        "--receiver".to_string(),
+        victim_account.to_string(),
+        "--from".to_string(),
+        victim_account.to_string(),
+        "--operator".to_string(),
+        victim_account.to_string(),
+    ];
+    let victim_shares =
+        match invoke_contract(&vault_id, "deposit", &victim_deposit_args, victim_account).await {
+            Ok(value) => match parse_non_negative_i128(&value) {
+                Some(amount) => amount,
+                None => {
+                    return CheckResult {
+                        name,
+                        passed: false,
+                        detail: format!(
+                            "victim deposit on {vault_id} returned an unexpected value: {value}"
+                        ),
+                    }
+                }
+            },
+            Err(e) => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!("victim deposit failed on {vault_id}: {e}"),
+                }
+            }
+        };
+
+    // Attacker P&L is supplementary context only — failures here never
+    // affect the pass/fail verdict, which is driven solely by the
+    // victim's share of the expected proportional amount.
+    let attacker_cost = ATTACKER_DUST_DEPOSIT + DONATION_AMOUNT;
+    let attacker_pnl_detail = if attacker_shares > 0 {
+        let redeem_args = vec![
+            "--shares".to_string(),
+            attacker_shares.to_string(),
+            "--receiver".to_string(),
+            attacker_account.to_string(),
+            "--owner".to_string(),
+            attacker_account.to_string(),
+            "--operator".to_string(),
+            attacker_account.to_string(),
+        ];
+        match invoke_contract(&vault_id, "redeem", &redeem_args, attacker_account).await {
+            Ok(value) => match parse_non_negative_i128(&value) {
+                Some(proceeds) => {
+                    let net = proceeds - attacker_cost;
+                    if net > 0 {
+                        format!(
+                            "attacker P&L: NET PROFIT of {net} stroops \
+                             (spent {attacker_cost}, redeemed {proceeds})"
+                        )
+                    } else {
+                        format!(
+                            "attacker P&L: net loss of {} stroops \
+                             (spent {attacker_cost}, redeemed {proceeds})",
+                            -net
+                        )
+                    }
+                }
+                None => {
+                    format!("attacker P&L: could not parse redeem result (spent {attacker_cost})")
+                }
+            },
+            Err(e) => format!(
+                "attacker P&L: could not redeem attacker shares to determine proceeds \
+                 ({e}); spent {attacker_cost}"
+            ),
+        }
+    } else {
+        format!("attacker P&L: attacker holds 0 shares, nothing to redeem; spent {attacker_cost}")
+    };
+
+    let expected_shares = VICTIM_DEPOSIT;
+    let min_acceptable_shares = expected_shares * SHARE_TOLERANCE_PCT / 100;
+    let victim_pct_of_expected = victim_shares.saturating_mul(100) / expected_shares;
+
+    let verdict_detail = format!(
+        "fresh vault {vault_id}: attacker deposited {ATTACKER_DUST_DEPOSIT} stroop(s) then donated \
+         {DONATION_AMOUNT} stroops directly (bypassing deposit()); victim then deposited \
+         {VICTIM_DEPOSIT} stroops and received {victim_shares} shares ({victim_pct_of_expected}% \
+         of the {expected_shares} expected at a proportional 1:1 ratio); {attacker_pnl_detail}"
+    );
+
+    if victim_shares < min_acceptable_shares {
+        CheckResult {
+            name,
+            passed: false,
+            detail: format!("VULNERABLE to donation/inflation attack — {verdict_detail}"),
+        }
+    } else {
+        CheckResult {
+            name,
+            passed: true,
+            detail: format!("resilient to donation/inflation attack — {verdict_detail}"),
+        }
     }
 }
 

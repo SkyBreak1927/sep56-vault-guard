@@ -39,6 +39,13 @@ async fn main() {
             NATIVE_XLM_SAC_TESTNET,
         )
         .await,
+        checks::check_access_control_probing(
+            REFERENCE_VAULT_WASM_HASH,
+            SOURCE_ACCOUNT,
+            VICTIM_ACCOUNT,
+            NATIVE_XLM_SAC_TESTNET,
+        )
+        .await,
     ];
 
     for result in &results {

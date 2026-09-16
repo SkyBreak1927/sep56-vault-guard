@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::rpc::{deploy_contract, invoke_contract};
+use crate::rpc::{deploy_contract, fetch_current_ledger_sequence, invoke_contract};
 
 /// Outcome of a single conformance check.
 pub struct CheckResult {
@@ -1277,6 +1277,299 @@ pub async fn check_rounding_direction(
              matching preview_mint() (ceil) and strictly greater than the idealized \
              convert_to_assets() ({idealized_assets}) — rounding direction confirmed to always \
              favor the vault over the user"
+        ),
+    }
+}
+
+/// Probes the vault's access-control (allowance) enforcement on
+/// operator-initiated `withdraw()` calls against a **freshly deployed**
+/// vault instance, replicating the exploratory experiment:
+///
+/// 1. Deploy a fresh vault and have `owner_account` seed-deposit shares.
+/// 2. `operator_account` attempts `withdraw()` on the owner's behalf
+///    **without any prior `approve()`** — must fail (insufficient
+///    allowance).
+/// 3. Owner `approve()`s the operator for a limited share allowance.
+/// 4. Operator withdraws WITHIN that allowance — must succeed, and the
+///    allowance must decrease by exactly the shares spent (not reset to
+///    `0`, not left unchanged).
+/// 5. Operator attempts to withdraw MORE than the remaining allowance —
+///    must fail, and the allowance must remain untouched (a failed
+///    transaction must not partially spend allowance).
+///
+/// # Pass/fail criteria
+///
+/// PASS only if all steps behave exactly as above; FAIL with a specific
+/// detail identifying which step diverged. An unauthorized withdrawal
+/// succeeding (step 2 or step 5) is the most severe possible finding.
+pub async fn check_access_control_probing(
+    wasm_hash: &str,
+    owner_account: &str,
+    operator_account: &str,
+    underlying_asset: &str,
+) -> CheckResult {
+    let name = "access_control_probing".to_string();
+    const SEED_DEPOSIT: i128 = 10_000_000;
+    const UNAUTHORIZED_WITHDRAW: i128 = 500_000;
+    const APPROVED_ALLOWANCE: i128 = 1_000_000;
+    const WITHDRAW_WITHIN_ALLOWANCE: i128 = 500_000;
+    const WITHDRAW_EXCEEDING_REMAINING: i128 = 600_000;
+    const LIVE_UNTIL_LEDGER_HORIZON: u32 = 500_000;
+
+    let constructor_args = vec![
+        "--name".to_string(),
+        "Access Control Test Vault".to_string(),
+        "--symbol".to_string(),
+        "ACLCHK".to_string(),
+        "--asset".to_string(),
+        underlying_asset.to_string(),
+        "--decimals_offset".to_string(),
+        "0".to_string(),
+    ];
+
+    let vault_id = match deploy_contract(wasm_hash, owner_account, &constructor_args).await {
+        Ok(id) => id,
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "could not deploy a fresh vault instance for the access-control probe: {e}"
+                ),
+            }
+        }
+    };
+
+    let seed_args = vec![
+        "--assets".to_string(),
+        SEED_DEPOSIT.to_string(),
+        "--receiver".to_string(),
+        owner_account.to_string(),
+        "--from".to_string(),
+        owner_account.to_string(),
+        "--operator".to_string(),
+        owner_account.to_string(),
+    ];
+    if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, owner_account).await {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!("owner seed deposit failed on {vault_id}: {e}"),
+        };
+    }
+
+    // --- Step 1: unauthorized withdraw (0 allowance) must fail ---
+    let unauthorized_args = vec![
+        "--assets".to_string(),
+        UNAUTHORIZED_WITHDRAW.to_string(),
+        "--receiver".to_string(),
+        operator_account.to_string(),
+        "--owner".to_string(),
+        owner_account.to_string(),
+        "--operator".to_string(),
+        operator_account.to_string(),
+    ];
+    if let Ok(shares) =
+        invoke_contract(&vault_id, "withdraw", &unauthorized_args, operator_account).await
+    {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "VULNERABLE: operator withdrew {shares} shares from owner on {vault_id} \
+                 WITHOUT any prior approve() — access control was not enforced"
+            ),
+        };
+    }
+
+    // --- Step 2: owner approves operator for a limited allowance ---
+    let current_ledger = match fetch_current_ledger_sequence().await {
+        Ok(seq) => seq,
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "could not fetch current ledger sequence to compute a valid \
+                     live_until_ledger for approve() on {vault_id}: {e}"
+                ),
+            }
+        }
+    };
+    let live_until_ledger = current_ledger + LIVE_UNTIL_LEDGER_HORIZON;
+
+    let approve_args = vec![
+        "--owner".to_string(),
+        owner_account.to_string(),
+        "--spender".to_string(),
+        operator_account.to_string(),
+        "--amount".to_string(),
+        APPROVED_ALLOWANCE.to_string(),
+        "--live_until_ledger".to_string(),
+        live_until_ledger.to_string(),
+    ];
+    if let Err(e) = invoke_contract(&vault_id, "approve", &approve_args, owner_account).await {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!("owner approve() failed on {vault_id}: {e}"),
+        };
+    }
+
+    // --- Step 3: withdraw within the allowance must succeed, decrementing
+    //     the allowance by exactly the shares spent ---
+    let within_args = vec![
+        "--assets".to_string(),
+        WITHDRAW_WITHIN_ALLOWANCE.to_string(),
+        "--receiver".to_string(),
+        operator_account.to_string(),
+        "--owner".to_string(),
+        owner_account.to_string(),
+        "--operator".to_string(),
+        operator_account.to_string(),
+    ];
+    let shares_spent =
+        match invoke_contract(&vault_id, "withdraw", &within_args, operator_account).await {
+            Ok(value) => match parse_non_negative_i128(&value) {
+                Some(amount) => amount,
+                None => {
+                    return CheckResult {
+                        name,
+                        passed: false,
+                        detail: format!(
+                            "authorized withdraw on {vault_id} returned an unexpected value: \
+                             {value}"
+                        ),
+                    }
+                }
+            },
+            Err(e) => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!(
+                        "authorized withdraw within allowance unexpectedly failed on \
+                         {vault_id}: {e}"
+                    ),
+                }
+            }
+        };
+
+    let allowance_args = vec![
+        "--owner".to_string(),
+        owner_account.to_string(),
+        "--spender".to_string(),
+        operator_account.to_string(),
+    ];
+    let allowance_after_spend =
+        match invoke_contract(&vault_id, "allowance", &allowance_args, owner_account).await {
+            Ok(value) => match parse_non_negative_i128(&value) {
+                Some(amount) => amount,
+                None => {
+                    return CheckResult {
+                        name,
+                        passed: false,
+                        detail: format!(
+                            "allowance query on {vault_id} returned an unexpected value: {value}"
+                        ),
+                    }
+                }
+            },
+            Err(e) => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!("allowance query failed on {vault_id}: {e}"),
+                }
+            }
+        };
+
+    let expected_remaining = APPROVED_ALLOWANCE - shares_spent;
+    if allowance_after_spend != expected_remaining {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "VULNERABLE: after operator spent {shares_spent} shares of a \
+                 {APPROVED_ALLOWANCE}-share allowance on {vault_id}, remaining allowance is \
+                 {allowance_after_spend}, expected {expected_remaining} — allowance was not \
+                 decremented correctly (reset to 0, left unchanged, or otherwise wrong)"
+            ),
+        };
+    }
+
+    // --- Step 4: withdraw exceeding the remaining allowance must fail,
+    //     leaving the allowance untouched ---
+    let exceeding_args = vec![
+        "--assets".to_string(),
+        WITHDRAW_EXCEEDING_REMAINING.to_string(),
+        "--receiver".to_string(),
+        operator_account.to_string(),
+        "--owner".to_string(),
+        owner_account.to_string(),
+        "--operator".to_string(),
+        operator_account.to_string(),
+    ];
+    if let Ok(shares) =
+        invoke_contract(&vault_id, "withdraw", &exceeding_args, operator_account).await
+    {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "VULNERABLE: operator withdrew {shares} shares on {vault_id} exceeding the \
+                 remaining allowance of {allowance_after_spend} — allowance limit was not \
+                 enforced"
+            ),
+        };
+    }
+
+    let allowance_final =
+        match invoke_contract(&vault_id, "allowance", &allowance_args, owner_account).await {
+            Ok(value) => match parse_non_negative_i128(&value) {
+                Some(amount) => amount,
+                None => {
+                    return CheckResult {
+                        name,
+                        passed: false,
+                        detail: format!(
+                            "final allowance query on {vault_id} returned an unexpected value: \
+                             {value}"
+                        ),
+                    }
+                }
+            },
+            Err(e) => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!("final allowance query failed on {vault_id}: {e}"),
+                }
+            }
+        };
+
+    if allowance_final != allowance_after_spend {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "VULNERABLE: allowance on {vault_id} changed from {allowance_after_spend} to \
+                 {allowance_final} after a REJECTED over-allowance withdraw attempt — a failed \
+                 transaction must not partially spend allowance"
+            ),
+        };
+    }
+
+    CheckResult {
+        name,
+        passed: true,
+        detail: format!(
+            "fresh vault {vault_id}: unauthorized withdraw (no approval) correctly rejected; \
+             after owner approved operator for {APPROVED_ALLOWANCE} shares, operator withdrew \
+             {shares_spent} shares (allowance {APPROVED_ALLOWANCE} -> {allowance_after_spend}, \
+             decremented exactly); operator's over-allowance withdraw attempt \
+             ({WITHDRAW_EXCEEDING_REMAINING} > remaining {allowance_after_spend}) correctly \
+             rejected with allowance left untouched at {allowance_final}"
         ),
     }
 }

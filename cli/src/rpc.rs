@@ -162,3 +162,28 @@ pub async fn deploy_contract(
 
     run_stellar(&full_args).await
 }
+
+/// Fetches the current ledger sequence from Horizon testnet.
+///
+/// Used to compute a `live_until_ledger` value for `approve()` calls that
+/// is guaranteed to not already be expired at the time the transaction
+/// executes — the vault's `FungibleTokenError::InvalidLiveUntilLedger`
+/// check requires `live_until_ledger >= current ledger sequence`, so a
+/// hardcoded constant would eventually go stale as the network progresses.
+pub async fn fetch_current_ledger_sequence() -> Result<u32, String> {
+    #[derive(serde::Deserialize)]
+    struct HorizonRoot {
+        history_latest_ledger: u32,
+    }
+
+    let response = reqwest::get("https://horizon-testnet.stellar.org/")
+        .await
+        .map_err(|e| format!("Horizon request failed: {e}"))?;
+
+    let body: HorizonRoot = response
+        .json()
+        .await
+        .map_err(|e| format!("failed to parse Horizon response: {e}"))?;
+
+    Ok(body.history_latest_ledger)
+}

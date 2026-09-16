@@ -14,6 +14,8 @@ async fn main() {
         checks::check_mint(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
         checks::check_withdraw(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
         checks::check_redeem(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
+        checks::check_convert_to_shares(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
+        checks::check_convert_to_assets(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
     ];
 
     for result in &results {

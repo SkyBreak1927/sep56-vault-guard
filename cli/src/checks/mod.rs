@@ -418,6 +418,220 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
     }
 }
 
+/// Calls `convert_to_shares(assets = 4_000_000)` (a read-only conversion,
+/// no vault shares are actually minted) and checks that:
+/// 1. The result matches the 1:1 ratio observed on this vault so far.
+/// 2. `total_assets()` is unchanged before/after the call, since a pure
+///    conversion must not have any side effects on vault state.
+pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) -> CheckResult {
+    let name = "convert_to_shares".to_string();
+    const CONVERT_ASSETS: i128 = 4_000_000;
+
+    let before = match read_total_assets(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "could not read total_assets before convert_to_shares: {detail}"
+                ),
+            }
+        }
+    };
+
+    let shares = match convert_to_shares(contract_id, source_account, CONVERT_ASSETS).await {
+        Ok(amount) => amount,
+        Err(detail) => return CheckResult { name, passed: false, detail },
+    };
+
+    if shares != CONVERT_ASSETS {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "convert_to_shares({CONVERT_ASSETS}) returned {shares}, expected the \
+                 1:1 ratio ({CONVERT_ASSETS})"
+            ),
+        };
+    }
+
+    let after = match read_total_assets(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not read total_assets after convert_to_shares: {detail}"),
+            }
+        }
+    };
+
+    if after != before {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "convert_to_shares is not read-only: total_assets changed from {before} \
+                 to {after}"
+            ),
+        };
+    }
+
+    CheckResult {
+        name,
+        passed: true,
+        detail: format!(
+            "convert_to_shares({CONVERT_ASSETS}) = {shares} (1:1 ratio), \
+             total_assets unchanged at {before}"
+        ),
+    }
+}
+
+/// Calls `convert_to_assets(shares = 4_000_000)` (a read-only conversion)
+/// and checks that:
+/// 1. The result matches the 1:1 ratio observed on this vault so far.
+/// 2. The round-trip `convert_to_assets(convert_to_shares(4_000_000))`
+///    returns `4_000_000` again, i.e. the two conversions are consistent
+///    inverses of each other.
+/// 3. `total_assets()` is unchanged before/after all of the above calls,
+///    since pure conversions must not have any side effects on vault
+///    state.
+pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) -> CheckResult {
+    let name = "convert_to_assets".to_string();
+    const CONVERT_SHARES: i128 = 4_000_000;
+
+    let before = match read_total_assets(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "could not read total_assets before convert_to_assets: {detail}"
+                ),
+            }
+        }
+    };
+
+    let assets = match convert_to_assets(contract_id, source_account, CONVERT_SHARES).await {
+        Ok(amount) => amount,
+        Err(detail) => return CheckResult { name, passed: false, detail },
+    };
+
+    if assets != CONVERT_SHARES {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "convert_to_assets({CONVERT_SHARES}) returned {assets}, expected the \
+                 1:1 ratio ({CONVERT_SHARES})"
+            ),
+        };
+    }
+
+    let roundtrip_shares = match convert_to_shares(contract_id, source_account, CONVERT_SHARES)
+        .await
+    {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("round-trip convert_to_shares call failed: {detail}"),
+            }
+        }
+    };
+
+    let roundtrip_assets =
+        match convert_to_assets(contract_id, source_account, roundtrip_shares).await {
+            Ok(amount) => amount,
+            Err(detail) => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!("round-trip convert_to_assets call failed: {detail}"),
+                }
+            }
+        };
+
+    if roundtrip_assets != CONVERT_SHARES {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "round-trip inconsistency: convert_to_assets(convert_to_shares({CONVERT_SHARES})) \
+                 = convert_to_assets({roundtrip_shares}) = {roundtrip_assets}, expected \
+                 {CONVERT_SHARES}"
+            ),
+        };
+    }
+
+    let after = match read_total_assets(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not read total_assets after convert_to_assets: {detail}"),
+            }
+        }
+    };
+
+    if after != before {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "convert_to_assets is not read-only: total_assets changed from {before} \
+                 to {after}"
+            ),
+        };
+    }
+
+    CheckResult {
+        name,
+        passed: true,
+        detail: format!(
+            "convert_to_assets({CONVERT_SHARES}) = {assets} (1:1 ratio), round-trip \
+             convert_to_assets(convert_to_shares({CONVERT_SHARES})) = {roundtrip_assets} \
+             (consistent), total_assets unchanged at {before}"
+        ),
+    }
+}
+
+/// Calls `convert_to_shares(assets)` and parses the result as a
+/// non-negative `i128`.
+async fn convert_to_shares(
+    contract_id: &str,
+    source_account: &str,
+    assets: i128,
+) -> Result<i128, String> {
+    let args = vec!["--assets".to_string(), assets.to_string()];
+    match invoke_contract(contract_id, "convert_to_shares", &args, source_account).await {
+        Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
+            format!("convert_to_shares returned a non-numeric or negative value: {value}")
+        }),
+        Err(e) => Err(format!("convert_to_shares invoke failed: {e}")),
+    }
+}
+
+/// Calls `convert_to_assets(shares)` and parses the result as a
+/// non-negative `i128`.
+async fn convert_to_assets(
+    contract_id: &str,
+    source_account: &str,
+    shares: i128,
+) -> Result<i128, String> {
+    let args = vec!["--shares".to_string(), shares.to_string()];
+    match invoke_contract(contract_id, "convert_to_assets", &args, source_account).await {
+        Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
+            format!("convert_to_assets returned a non-numeric or negative value: {value}")
+        }),
+        Err(e) => Err(format!("convert_to_assets invoke failed: {e}")),
+    }
+}
+
 /// Calls `total_assets()` and parses it as a non-negative `i128`, collapsing
 /// both invoke and parse failures into a single human-readable error string.
 async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i128, String> {

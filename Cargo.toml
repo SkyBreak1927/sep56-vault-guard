@@ -1,3 +1,6 @@
 [workspace]
 resolver = "2"
 members = ["cli", "contracts/reference-vault"]
+
+[profile.release]
+overflow-checks = true

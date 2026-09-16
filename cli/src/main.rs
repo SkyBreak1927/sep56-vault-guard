@@ -6,8 +6,13 @@ const SOURCE_ACCOUNT: &str = "alice";
 
 #[tokio::main]
 async fn main() {
-    let result = checks::check_total_assets(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await;
+    let results = [
+        checks::check_total_assets(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
+        checks::check_deposit(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
+    ];
 
-    let status = if result.passed { "PASS" } else { "FAIL" };
-    println!("[{status}] {} - {}", result.name, result.detail);
+    for result in &results {
+        let status = if result.passed { "PASS" } else { "FAIL" };
+        println!("[{status}] {} - {}", result.name, result.detail);
+    }
 }

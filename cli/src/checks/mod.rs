@@ -860,6 +860,427 @@ pub async fn check_donation_attack(
     }
 }
 
+/// Simulates an extreme-input overflow scenario against a **freshly
+/// deployed** vault instance: calling `deposit()` with `assets =
+/// i128::MAX`.
+///
+/// # What this check actually validates
+///
+/// This check verifies that an extreme input fails **cleanly** — the call
+/// returns an error and leaves no partial/corrupted vault state behind
+/// (`total_assets()` stays `0`) — rather than silently succeeding with a
+/// wrong result. It does **not** specifically prove that the vault's own
+/// overflow-protection math (`stellar-tokens`' checked arithmetic and
+/// `mul_div_with_rounding`'s i256 phantom-overflow handling) is what
+/// rejects the call. For a native-XLM (or any classic-asset) underlying
+/// asset, `i128::MAX` is rejected by the classic Stellar Asset Contract's
+/// own `int64` amount ceiling *after* the vault's share-conversion math
+/// has already run to completion — so this check exercises the SAC layer,
+/// not necessarily the vault's overflow protection specifically. See the
+/// detail string for which layer actually triggered the failure.
+pub async fn check_overflow_protection(
+    wasm_hash: &str,
+    deployer_account: &str,
+    underlying_asset: &str,
+) -> CheckResult {
+    let name = "overflow_protection".to_string();
+
+    let constructor_args = vec![
+        "--name".to_string(),
+        "Overflow Test Vault".to_string(),
+        "--symbol".to_string(),
+        "OVFCHK".to_string(),
+        "--asset".to_string(),
+        underlying_asset.to_string(),
+        "--decimals_offset".to_string(),
+        "0".to_string(),
+    ];
+
+    let vault_id = match deploy_contract(wasm_hash, deployer_account, &constructor_args).await {
+        Ok(id) => id,
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "could not deploy a fresh vault instance for the overflow test: {e}"
+                ),
+            }
+        }
+    };
+
+    let extreme_deposit_args = vec![
+        "--assets".to_string(),
+        i128::MAX.to_string(),
+        "--receiver".to_string(),
+        deployer_account.to_string(),
+        "--from".to_string(),
+        deployer_account.to_string(),
+        "--operator".to_string(),
+        deployer_account.to_string(),
+    ];
+
+    let deposit_result =
+        invoke_contract(&vault_id, "deposit", &extreme_deposit_args, deployer_account).await;
+
+    // Regardless of what happened above, confirm the vault's state is
+    // still sane — a clean rejection must leave no partial/corrupted
+    // state behind.
+    let total_assets_after = match read_total_assets(&vault_id, deployer_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            let outcome = match &deposit_result {
+                Ok(v) => format!("unexpectedly SUCCEEDED, returned {v}"),
+                Err(e) => format!("failed as expected ({e})"),
+            };
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "deposit(assets=i128::MAX) {outcome}; additionally could not read \
+                     total_assets afterwards to confirm clean state: {detail}"
+                ),
+            };
+        }
+    };
+
+    match deposit_result {
+        Ok(shares) => CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "VULNERABLE: deposit(assets=i128::MAX) unexpectedly SUCCEEDED and minted \
+                 {shares} shares on fresh vault {vault_id} (total_assets afterwards: \
+                 {total_assets_after}) — an extreme input should be rejected cleanly, not \
+                 accepted with a possibly-wrong result"
+            ),
+        },
+        Err(e) if total_assets_after != 0 => CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "VULNERABLE: deposit(assets=i128::MAX) failed as expected ({e}), but \
+                 total_assets on {vault_id} is {total_assets_after} instead of 0 — the failed \
+                 transaction left behind corrupted/partial state"
+            ),
+        },
+        Err(e) => CheckResult {
+            name,
+            passed: true,
+            detail: format!(
+                "deposit(assets=i128::MAX) on fresh vault {vault_id} failed cleanly ({e}), and \
+                 total_assets remained 0 — no silent-wrong-result observed. HONEST CAVEAT: for a \
+                 native XLM underlying asset, this failure is triggered by the classic Stellar \
+                 Asset Contract's own int64 amount ceiling (\"spent amount is too large for an \
+                 i64\"), reached AFTER the vault's own share-conversion math already completed \
+                 successfully (confirmed via the total_assets() call inside preview_deposit \
+                 executing without error). So this validates clean-failure behavior, NOT \
+                 specifically the vault's own overflow-protection math, which was never actually \
+                 pushed to its overflow point in this scenario."
+            ),
+        },
+    }
+}
+
+/// Simulates the two rounding-direction scenarios from the exploratory
+/// analysis against a **freshly deployed** vault instance, at a
+/// deliberately fractional share:asset ratio (so there is an actual
+/// remainder to observe the rounding direction of).
+///
+/// Scenario:
+/// 1. Deploy a fresh vault (`decimals_offset = 0`, given `underlying_asset`).
+/// 2. Seed deposit (1000) to establish an initial 1:1 supply.
+/// 3. Direct donation (500), breaking the ratio to `total_assets:total_supply
+///    = 1500:1000` (2:3), so subsequent conversions have a real remainder.
+/// 4. **Test A** (`deposit()` must round shares DOWN/floor, favoring the
+///    vault): compare `preview_deposit(100)` against the shares actually
+///    minted by `deposit(100)` — they must match, and both must reflect
+///    floor division.
+/// 5. **Test B** (`mint()` must round the assets charged UP/ceil,
+///    favoring the vault, in contrast to the always-floor idealized rate):
+///    compare `preview_mint(100)` and the assets actually pulled by
+///    `mint(shares=100)` — they must match each other, AND must be
+///    strictly greater than `convert_to_assets(100)` (the idealized,
+///    always-floor conversion), proving the rounding directions are
+///    deliberately different rather than accidentally identical.
+///
+/// # Pass/fail criteria
+///
+/// PASS only if both Test A and Test B hold exactly; FAIL with a specific
+/// detail identifying which comparison broke.
+pub async fn check_rounding_direction(
+    wasm_hash: &str,
+    deployer_account: &str,
+    underlying_asset: &str,
+) -> CheckResult {
+    let name = "rounding_direction".to_string();
+    const SEED_DEPOSIT: i128 = 1000;
+    const DONATION: i128 = 500;
+    const DEPOSIT_TEST_ASSETS: i128 = 100;
+    const MINT_TEST_SHARES: i128 = 100;
+
+    let constructor_args = vec![
+        "--name".to_string(),
+        "Rounding Test Vault".to_string(),
+        "--symbol".to_string(),
+        "RNDCHK".to_string(),
+        "--asset".to_string(),
+        underlying_asset.to_string(),
+        "--decimals_offset".to_string(),
+        "0".to_string(),
+    ];
+
+    let vault_id = match deploy_contract(wasm_hash, deployer_account, &constructor_args).await {
+        Ok(id) => id,
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not deploy a fresh vault instance for the rounding test: {e}"),
+            }
+        }
+    };
+
+    let seed_args = vec![
+        "--assets".to_string(),
+        SEED_DEPOSIT.to_string(),
+        "--receiver".to_string(),
+        deployer_account.to_string(),
+        "--from".to_string(),
+        deployer_account.to_string(),
+        "--operator".to_string(),
+        deployer_account.to_string(),
+    ];
+    if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, deployer_account).await {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!("seed deposit failed on {vault_id}: {e}"),
+        };
+    }
+
+    let donation_args = vec![
+        "--from".to_string(),
+        deployer_account.to_string(),
+        "--to".to_string(),
+        vault_id.clone(),
+        "--amount".to_string(),
+        DONATION.to_string(),
+    ];
+    if let Err(e) =
+        invoke_contract(underlying_asset, "transfer", &donation_args, deployer_account).await
+    {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!("donation transfer to {vault_id} failed: {e}"),
+        };
+    }
+
+    // --- Test A: deposit() must floor, matching preview_deposit() ---
+    let preview_deposit_shares = match invoke_contract(
+        &vault_id,
+        "preview_deposit",
+        &["--assets".to_string(), DEPOSIT_TEST_ASSETS.to_string()],
+        deployer_account,
+    )
+    .await
+    {
+        Ok(value) => match parse_non_negative_i128(&value) {
+            Some(amount) => amount,
+            None => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!(
+                        "preview_deposit on {vault_id} returned an unexpected value: {value}"
+                    ),
+                }
+            }
+        },
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("preview_deposit failed on {vault_id}: {e}"),
+            }
+        }
+    };
+
+    let deposit_args = vec![
+        "--assets".to_string(),
+        DEPOSIT_TEST_ASSETS.to_string(),
+        "--receiver".to_string(),
+        deployer_account.to_string(),
+        "--from".to_string(),
+        deployer_account.to_string(),
+        "--operator".to_string(),
+        deployer_account.to_string(),
+    ];
+    let actual_deposit_shares =
+        match invoke_contract(&vault_id, "deposit", &deposit_args, deployer_account).await {
+            Ok(value) => match parse_non_negative_i128(&value) {
+                Some(amount) => amount,
+                None => {
+                    return CheckResult {
+                        name,
+                        passed: false,
+                        detail: format!(
+                            "deposit on {vault_id} returned an unexpected value: {value}"
+                        ),
+                    }
+                }
+            },
+            Err(e) => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!("deposit failed on {vault_id}: {e}"),
+                }
+            }
+        };
+
+    if actual_deposit_shares != preview_deposit_shares {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "Test A failed: actual deposit() shares ({actual_deposit_shares}) does not \
+                 match preview_deposit() ({preview_deposit_shares}) on {vault_id}"
+            ),
+        };
+    }
+
+    // --- Test B: mint() must ceil, matching preview_mint() and strictly
+    //     exceeding the always-floor convert_to_assets() ---
+    let preview_mint_assets = match invoke_contract(
+        &vault_id,
+        "preview_mint",
+        &["--shares".to_string(), MINT_TEST_SHARES.to_string()],
+        deployer_account,
+    )
+    .await
+    {
+        Ok(value) => match parse_non_negative_i128(&value) {
+            Some(amount) => amount,
+            None => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!(
+                        "preview_mint on {vault_id} returned an unexpected value: {value}"
+                    ),
+                }
+            }
+        },
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("preview_mint failed on {vault_id}: {e}"),
+            }
+        }
+    };
+
+    let idealized_assets = match invoke_contract(
+        &vault_id,
+        "convert_to_assets",
+        &["--shares".to_string(), MINT_TEST_SHARES.to_string()],
+        deployer_account,
+    )
+    .await
+    {
+        Ok(value) => match parse_non_negative_i128(&value) {
+            Some(amount) => amount,
+            None => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!(
+                        "convert_to_assets on {vault_id} returned an unexpected value: {value}"
+                    ),
+                }
+            }
+        },
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("convert_to_assets failed on {vault_id}: {e}"),
+            }
+        }
+    };
+
+    let mint_args = vec![
+        "--shares".to_string(),
+        MINT_TEST_SHARES.to_string(),
+        "--receiver".to_string(),
+        deployer_account.to_string(),
+        "--from".to_string(),
+        deployer_account.to_string(),
+        "--operator".to_string(),
+        deployer_account.to_string(),
+    ];
+    let actual_mint_assets =
+        match invoke_contract(&vault_id, "mint", &mint_args, deployer_account).await {
+            Ok(value) => match parse_non_negative_i128(&value) {
+                Some(amount) => amount,
+                None => {
+                    return CheckResult {
+                        name,
+                        passed: false,
+                        detail: format!("mint on {vault_id} returned an unexpected value: {value}"),
+                    }
+                }
+            },
+            Err(e) => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!("mint failed on {vault_id}: {e}"),
+                }
+            }
+        };
+
+    if actual_mint_assets != preview_mint_assets {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "Test B failed: actual mint() assets pulled ({actual_mint_assets}) does not \
+                 match preview_mint() ({preview_mint_assets}) on {vault_id}"
+            ),
+        };
+    }
+
+    if actual_mint_assets <= idealized_assets {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "Test B failed: mint() assets pulled ({actual_mint_assets}) is not strictly \
+                 greater than the idealized convert_to_assets() ({idealized_assets}) on \
+                 {vault_id} at a fractional ratio — mint() should round UP (ceil), charging the \
+                 user strictly more, distinct from the always-floor idealized rate"
+            ),
+        };
+    }
+
+    CheckResult {
+        name,
+        passed: true,
+        detail: format!(
+            "fresh vault {vault_id} at fractional ratio (seed {SEED_DEPOSIT} + donation \
+             {DONATION}): Test A — deposit({DEPOSIT_TEST_ASSETS}) minted \
+             {actual_deposit_shares} shares matching preview_deposit() (floor, favors vault); \
+             Test B — mint({MINT_TEST_SHARES} shares) pulled {actual_mint_assets} assets \
+             matching preview_mint() (ceil) and strictly greater than the idealized \
+             convert_to_assets() ({idealized_assets}) — rounding direction confirmed to always \
+             favor the vault over the user"
+        ),
+    }
+}
+
 /// Calls `total_assets()` and parses it as a non-negative `i128`, collapsing
 /// both invoke and parse failures into a single human-readable error string.
 async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i128, String> {

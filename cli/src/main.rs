@@ -27,6 +27,18 @@ async fn main() {
             NATIVE_XLM_SAC_TESTNET,
         )
         .await,
+        checks::check_overflow_protection(
+            REFERENCE_VAULT_WASM_HASH,
+            SOURCE_ACCOUNT,
+            NATIVE_XLM_SAC_TESTNET,
+        )
+        .await,
+        checks::check_rounding_direction(
+            REFERENCE_VAULT_WASM_HASH,
+            SOURCE_ACCOUNT,
+            NATIVE_XLM_SAC_TESTNET,
+        )
+        .await,
     ];
 
     for result in &results {

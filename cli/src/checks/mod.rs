@@ -321,6 +321,103 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
     }
 }
 
+/// Redeems a fixed amount of vault shares (receiver = owner = operator =
+/// `source_account`) and checks that:
+/// 1. The assets received (the call's return value) match the redeemed
+///    shares 1:1, matching the ratio observed on this vault so far.
+/// 2. `total_assets()` after the redemption equals `total_assets()`
+///    before the redemption minus the assets received.
+pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResult {
+    let name = "redeem".to_string();
+    const REDEEM_SHARES: i128 = 1_000_000;
+
+    let before = match read_total_assets(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not read total_assets before redeem: {detail}"),
+            }
+        }
+    };
+
+    let args = vec![
+        "--shares".to_string(),
+        REDEEM_SHARES.to_string(),
+        "--receiver".to_string(),
+        source_account.to_string(),
+        "--owner".to_string(),
+        source_account.to_string(),
+        "--operator".to_string(),
+        source_account.to_string(),
+    ];
+
+    let assets_received = match invoke_contract(contract_id, "redeem", &args, source_account).await
+    {
+        Ok(value) => match parse_non_negative_i128(&value) {
+            Some(amount) => amount,
+            None => {
+                return CheckResult {
+                    name,
+                    passed: false,
+                    detail: format!("redeem returned a non-numeric or negative value: {value}"),
+                }
+            }
+        },
+        Err(e) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("redeem invoke failed: {e}"),
+            }
+        }
+    };
+
+    if assets_received != REDEEM_SHARES {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "assets received ({assets_received}) does not match redeemed shares \
+                 ({REDEEM_SHARES}) at the expected 1:1 ratio"
+            ),
+        };
+    }
+
+    let after = match read_total_assets(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not read total_assets after redeem: {detail}"),
+            }
+        }
+    };
+
+    let expected_after = before - assets_received;
+    if after != expected_after {
+        return CheckResult {
+            name,
+            passed: false,
+            detail: format!(
+                "total_assets after redeem ({after}) != before ({before}) - assets received \
+                 ({assets_received}) = {expected_after}"
+            ),
+        };
+    }
+
+    CheckResult {
+        name,
+        passed: true,
+        detail: format!(
+            "redeemed {REDEEM_SHARES} shares, received {assets_received} assets (1:1 ratio), \
+             total_assets {before} -> {after}"
+        ),
+    }
+}
+
 /// Calls `total_assets()` and parses it as a non-negative `i128`, collapsing
 /// both invoke and parse failures into a single human-readable error string.
 async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i128, String> {

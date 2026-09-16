@@ -13,6 +13,7 @@ async fn main() {
         checks::check_deposit(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
         checks::check_mint(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
         checks::check_withdraw(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
+        checks::check_redeem(REFERENCE_VAULT_CONTRACT_ID, SOURCE_ACCOUNT).await,
     ];
 
     for result in &results {

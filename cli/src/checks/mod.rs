@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::rpc::{deploy_contract, fetch_current_ledger_sequence, invoke_contract};
+use crate::rpc::{deploy_contract, fetch_current_ledger_sequence, fetch_wasm_hash, invoke_contract};
 
 /// Outcome of a single conformance check.
 pub struct CheckResult {
@@ -719,13 +719,15 @@ async fn convert_to_assets(
 /// attacker and `victim_account` as an unrelated victim depositor.
 ///
 /// This check is self-contained: it deploys its own throwaway vault
-/// instance (reusing the already-uploaded `wasm_hash`, so no re-upload is
-/// needed) rather than touching any pre-existing vault, so it can be
-/// re-run at any time and reused against any other vault built from the
-/// same OpenZeppelin vault module.
+/// instance rather than touching `target_vault` itself. The wasm hash and
+/// underlying asset are resolved from `target_vault` first (via
+/// [`fetch_wasm_hash`] and `query_asset()`), so the throwaway instance
+/// matches whatever vault is actually being audited — not a hardcoded
+/// reference — and this check can be re-run against any SEP-56 vault.
 ///
 /// Scenario:
-/// 1. Deploy a fresh vault (`decimals_offset = 0`, given `underlying_asset`).
+/// 1. Resolve `target_vault`'s wasm hash and underlying asset, then deploy
+///    a fresh vault from that same code (`decimals_offset = 0`).
 /// 2. Attacker deposits a dust amount (1 stroop) to become the sole,
 ///    near-worthless first shareholder.
 /// 3. Attacker donates a large amount directly to the vault's contract
@@ -745,11 +747,14 @@ async fn convert_to_assets(
 /// Attacker profit/loss is recorded in the detail string for context only
 /// — it does not affect PASS/FAIL, because the victim is harmed by a
 /// donation attack regardless of whether the attacker personally profits.
+///
+/// If `target_vault`'s wasm hash or underlying asset cannot be resolved
+/// (e.g. it's a Stellar Asset Contract or otherwise not a valid Soroban
+/// vault), the check fails with a clear error rather than panicking.
 pub async fn check_donation_attack(
-    wasm_hash: &str,
+    target_vault: &str,
     attacker_account: &str,
     victim_account: &str,
-    underlying_asset: &str,
 ) -> CheckResult {
     let name = "donation_attack".to_string();
     const ATTACKER_DUST_DEPOSIT: i128 = 1;
@@ -757,18 +762,24 @@ pub async fn check_donation_attack(
     const VICTIM_DEPOSIT: i128 = 5_000_000;
     const SHARE_TOLERANCE_PCT: i128 = 90;
 
+    let (wasm_hash, underlying_asset) =
+        match resolve_target_vault(target_vault, attacker_account).await {
+            Ok(pair) => pair,
+            Err(detail) => return CheckResult { name, passed: false, detail },
+        };
+
     let constructor_args = vec![
         "--name".to_string(),
         "Donation Attack Check Vault".to_string(),
         "--symbol".to_string(),
         "DACHK".to_string(),
         "--asset".to_string(),
-        underlying_asset.to_string(),
+        underlying_asset.clone(),
         "--decimals_offset".to_string(),
         "0".to_string(),
     ];
 
-    let vault_id = match deploy_contract(wasm_hash, attacker_account, &constructor_args).await {
+    let vault_id = match deploy_contract(&wasm_hash, attacker_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
             return CheckResult {
@@ -829,7 +840,7 @@ pub async fn check_donation_attack(
         DONATION_AMOUNT.to_string(),
     ];
     if let Err(e) =
-        invoke_contract(underlying_asset, "transfer", &donation_args, attacker_account).await
+        invoke_contract(&underlying_asset, "transfer", &donation_args, attacker_account).await
     {
         return CheckResult {
             name,
@@ -943,7 +954,8 @@ pub async fn check_donation_attack(
 }
 
 /// Simulates an extreme-input overflow scenario against a **freshly
-/// deployed** vault instance: calling `deposit()` with `assets =
+/// deployed** vault instance (built from `target_vault`'s own resolved
+/// wasm hash and underlying asset): calling `deposit()` with `assets =
 /// i128::MAX`.
 ///
 /// # What this check actually validates
@@ -960,12 +972,14 @@ pub async fn check_donation_attack(
 /// has already run to completion — so this check exercises the SAC layer,
 /// not necessarily the vault's overflow protection specifically. See the
 /// detail string for which layer actually triggered the failure.
-pub async fn check_overflow_protection(
-    wasm_hash: &str,
-    deployer_account: &str,
-    underlying_asset: &str,
-) -> CheckResult {
+pub async fn check_overflow_protection(target_vault: &str, deployer_account: &str) -> CheckResult {
     let name = "overflow_protection".to_string();
+
+    let (wasm_hash, underlying_asset) =
+        match resolve_target_vault(target_vault, deployer_account).await {
+            Ok(pair) => pair,
+            Err(detail) => return CheckResult { name, passed: false, detail },
+        };
 
     let constructor_args = vec![
         "--name".to_string(),
@@ -973,12 +987,12 @@ pub async fn check_overflow_protection(
         "--symbol".to_string(),
         "OVFCHK".to_string(),
         "--asset".to_string(),
-        underlying_asset.to_string(),
+        underlying_asset,
         "--decimals_offset".to_string(),
         "0".to_string(),
     ];
 
-    let vault_id = match deploy_contract(wasm_hash, deployer_account, &constructor_args).await {
+    let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
             return CheckResult {
@@ -1090,16 +1104,18 @@ pub async fn check_overflow_protection(
 ///
 /// PASS only if both Test A and Test B hold exactly; FAIL with a specific
 /// detail identifying which comparison broke.
-pub async fn check_rounding_direction(
-    wasm_hash: &str,
-    deployer_account: &str,
-    underlying_asset: &str,
-) -> CheckResult {
+pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str) -> CheckResult {
     let name = "rounding_direction".to_string();
     const SEED_DEPOSIT: i128 = 1000;
     const DONATION: i128 = 500;
     const DEPOSIT_TEST_ASSETS: i128 = 100;
     const MINT_TEST_SHARES: i128 = 100;
+
+    let (wasm_hash, underlying_asset) =
+        match resolve_target_vault(target_vault, deployer_account).await {
+            Ok(pair) => pair,
+            Err(detail) => return CheckResult { name, passed: false, detail },
+        };
 
     let constructor_args = vec![
         "--name".to_string(),
@@ -1107,12 +1123,12 @@ pub async fn check_rounding_direction(
         "--symbol".to_string(),
         "RNDCHK".to_string(),
         "--asset".to_string(),
-        underlying_asset.to_string(),
+        underlying_asset.clone(),
         "--decimals_offset".to_string(),
         "0".to_string(),
     ];
 
-    let vault_id = match deploy_contract(wasm_hash, deployer_account, &constructor_args).await {
+    let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
             return CheckResult {
@@ -1150,7 +1166,7 @@ pub async fn check_rounding_direction(
         DONATION.to_string(),
     ];
     if let Err(e) =
-        invoke_contract(underlying_asset, "transfer", &donation_args, deployer_account).await
+        invoke_contract(&underlying_asset, "transfer", &donation_args, deployer_account).await
     {
         return CheckResult {
             name,
@@ -1365,7 +1381,8 @@ pub async fn check_rounding_direction(
 
 /// Probes the vault's access-control (allowance) enforcement on
 /// operator-initiated `withdraw()` calls against a **freshly deployed**
-/// vault instance, replicating the exploratory experiment:
+/// vault instance (built from `target_vault`'s own resolved wasm hash and
+/// underlying asset), replicating the exploratory experiment:
 ///
 /// 1. Deploy a fresh vault and have `owner_account` seed-deposit shares.
 /// 2. `operator_account` attempts `withdraw()` on the owner's behalf
@@ -1385,10 +1402,9 @@ pub async fn check_rounding_direction(
 /// detail identifying which step diverged. An unauthorized withdrawal
 /// succeeding (step 2 or step 5) is the most severe possible finding.
 pub async fn check_access_control_probing(
-    wasm_hash: &str,
+    target_vault: &str,
     owner_account: &str,
     operator_account: &str,
-    underlying_asset: &str,
 ) -> CheckResult {
     let name = "access_control_probing".to_string();
     const SEED_DEPOSIT: i128 = 10_000_000;
@@ -1398,18 +1414,24 @@ pub async fn check_access_control_probing(
     const WITHDRAW_EXCEEDING_REMAINING: i128 = 600_000;
     const LIVE_UNTIL_LEDGER_HORIZON: u32 = 500_000;
 
+    let (wasm_hash, underlying_asset) =
+        match resolve_target_vault(target_vault, owner_account).await {
+            Ok(pair) => pair,
+            Err(detail) => return CheckResult { name, passed: false, detail },
+        };
+
     let constructor_args = vec![
         "--name".to_string(),
         "Access Control Test Vault".to_string(),
         "--symbol".to_string(),
         "ACLCHK".to_string(),
         "--asset".to_string(),
-        underlying_asset.to_string(),
+        underlying_asset,
         "--decimals_offset".to_string(),
         "0".to_string(),
     ];
 
-    let vault_id = match deploy_contract(wasm_hash, owner_account, &constructor_args).await {
+    let vault_id = match deploy_contract(&wasm_hash, owner_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
             return CheckResult {
@@ -1670,6 +1692,42 @@ async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i1
 /// `preview_mint`, `preview_withdraw`, or `preview_redeem`) and parses the
 /// result as a non-negative `i128`. `arg_name` is the CLI flag name for
 /// that function's sole argument (`"assets"` or `"shares"`).
+/// Resolves the wasm hash and underlying asset of `target_vault`, so the
+/// self-contained adversarial checks can deploy their own throwaway
+/// instances that match the code and asset of whatever vault is actually
+/// being audited, instead of a hardcoded reference. Returns a single
+/// combined error string on failure — e.g. if `target_vault` is a Stellar
+/// Asset Contract (which has no wasm hash) or otherwise not a valid
+/// Soroban vault contract — so callers can fail the check cleanly rather
+/// than panicking.
+async fn resolve_target_vault(
+    target_vault: &str,
+    caller_account: &str,
+) -> Result<(String, String), String> {
+    let wasm_hash = fetch_wasm_hash(target_vault)
+        .await
+        .map_err(|e| format!("could not fetch wasm hash from target vault {target_vault}: {e}"))?;
+
+    let underlying_asset =
+        match invoke_contract(target_vault, "query_asset", &[], caller_account).await {
+            Ok(value) => match value.as_str() {
+                Some(s) => s.to_string(),
+                None => {
+                    return Err(format!(
+                        "query_asset on {target_vault} returned an unexpected value: {value}"
+                    ))
+                }
+            },
+            Err(e) => {
+                return Err(format!(
+                    "could not query underlying asset from target vault {target_vault}: {e}"
+                ))
+            }
+        };
+
+    Ok((wasm_hash, underlying_asset))
+}
+
 async fn call_preview(
     contract_id: &str,
     source_account: &str,

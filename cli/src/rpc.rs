@@ -163,6 +163,30 @@ pub async fn deploy_contract(
     run_stellar(&full_args).await
 }
 
+/// Fetches the SHA-256 hash of a deployed contract's Wasm executable, by
+/// its contract address, via `stellar contract info hash`.
+///
+/// Runs:
+/// `stellar contract info hash --contract-id <contract_id> --network testnet --quiet`
+///
+/// Note: this fails for a Stellar Asset Contract (SAC), which has no Wasm
+/// of its own — a useful signal that `contract_id` isn't actually a
+/// Soroban vault contract if this errors unexpectedly.
+pub async fn fetch_wasm_hash(contract_id: &str) -> Result<String, RpcError> {
+    let args = vec![
+        "contract".to_string(),
+        "info".to_string(),
+        "hash".to_string(),
+        "--contract-id".to_string(),
+        contract_id.to_string(),
+        "--network".to_string(),
+        "testnet".to_string(),
+        "--quiet".to_string(),
+    ];
+
+    run_stellar(&args).await
+}
+
 /// Fetches the current ledger sequence from Horizon testnet.
 ///
 /// Used to compute a `live_until_ledger` value for `approve()` calls that

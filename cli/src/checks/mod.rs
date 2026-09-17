@@ -33,8 +33,11 @@ pub async fn check_total_assets(contract_id: &str, source_account: &str) -> Chec
 
 /// Deposits a fixed amount into the vault (receiver = from = operator =
 /// `source_account`) and checks that:
-/// 1. The shares minted (the call's return value) match the deposited
-///    assets 1:1, matching the ratio observed on this vault so far.
+/// 1. The shares minted (the call's return value) match `preview_deposit()`
+///    computed for the same amount just before executing — this correctly
+///    accounts for vaults that are not at a clean 1:1 share:asset ratio
+///    (which most real-world vaults, having accrued yield or donations,
+///    will not be).
 /// 2. `total_assets()` after the deposit equals `total_assets()` before
 ///    the deposit plus the deposited amount.
 pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResult {
@@ -48,6 +51,25 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
                 name,
                 passed: false,
                 detail: format!("could not read total_assets before deposit: {detail}"),
+            }
+        }
+    };
+
+    let expected_shares = match call_preview(
+        contract_id,
+        source_account,
+        "preview_deposit",
+        "assets",
+        DEPOSIT_AMOUNT,
+    )
+    .await
+    {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not compute preview_deposit: {detail}"),
             }
         }
     };
@@ -84,13 +106,13 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
         }
     };
 
-    if shares_minted != DEPOSIT_AMOUNT {
+    if shares_minted != expected_shares {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "shares minted ({shares_minted}) does not match deposited assets \
-                 ({DEPOSIT_AMOUNT}) at the expected 1:1 ratio"
+                "shares minted ({shares_minted}) does not match preview_deposit({DEPOSIT_AMOUNT}) \
+                 = {expected_shares}"
             ),
         };
     }
@@ -122,16 +144,17 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
         name,
         passed: true,
         detail: format!(
-            "deposited {DEPOSIT_AMOUNT} stroops, minted {shares_minted} shares (1:1 ratio), \
-             total_assets {before} -> {after}"
+            "deposited {DEPOSIT_AMOUNT} stroops, minted {shares_minted} shares matching \
+             preview_deposit(), total_assets {before} -> {after}"
         ),
     }
 }
 
 /// Mints a fixed amount of vault shares (receiver = from = operator =
 /// `source_account`) and checks that:
-/// 1. The assets pulled (the call's return value) match the minted shares
-///    1:1, matching the ratio observed on this vault so far.
+/// 1. The assets pulled (the call's return value) match `preview_mint()`
+///    computed for the same amount just before executing — this correctly
+///    accounts for vaults that are not at a clean 1:1 share:asset ratio.
 /// 2. `total_assets()` after the mint equals `total_assets()` before the
 ///    mint plus the assets pulled in.
 pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult {
@@ -145,6 +168,25 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
                 name,
                 passed: false,
                 detail: format!("could not read total_assets before mint: {detail}"),
+            }
+        }
+    };
+
+    let expected_assets = match call_preview(
+        contract_id,
+        source_account,
+        "preview_mint",
+        "shares",
+        MINT_SHARES,
+    )
+    .await
+    {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not compute preview_mint: {detail}"),
             }
         }
     };
@@ -180,13 +222,13 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
         }
     };
 
-    if assets_pulled != MINT_SHARES {
+    if assets_pulled != expected_assets {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "assets pulled ({assets_pulled}) does not match minted shares \
-                 ({MINT_SHARES}) at the expected 1:1 ratio"
+                "assets pulled ({assets_pulled}) does not match preview_mint({MINT_SHARES}) = \
+                 {expected_assets}"
             ),
         };
     }
@@ -218,16 +260,17 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
         name,
         passed: true,
         detail: format!(
-            "minted {MINT_SHARES} shares, pulled {assets_pulled} assets (1:1 ratio), \
-             total_assets {before} -> {after}"
+            "minted {MINT_SHARES} shares, pulled {assets_pulled} assets matching \
+             preview_mint(), total_assets {before} -> {after}"
         ),
     }
 }
 
 /// Withdraws a fixed amount of underlying assets from the vault
 /// (receiver = owner = operator = `source_account`) and checks that:
-/// 1. The shares burned (the call's return value) match the withdrawn
-///    assets 1:1, matching the ratio observed on this vault so far.
+/// 1. The shares burned (the call's return value) match `preview_withdraw()`
+///    computed for the same amount just before executing — this correctly
+///    accounts for vaults that are not at a clean 1:1 share:asset ratio.
 /// 2. `total_assets()` after the withdrawal equals `total_assets()`
 ///    before the withdrawal minus the withdrawn amount.
 pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckResult {
@@ -241,6 +284,25 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
                 name,
                 passed: false,
                 detail: format!("could not read total_assets before withdraw: {detail}"),
+            }
+        }
+    };
+
+    let expected_shares = match call_preview(
+        contract_id,
+        source_account,
+        "preview_withdraw",
+        "assets",
+        WITHDRAW_AMOUNT,
+    )
+    .await
+    {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not compute preview_withdraw: {detail}"),
             }
         }
     };
@@ -277,13 +339,13 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
         }
     };
 
-    if shares_burned != WITHDRAW_AMOUNT {
+    if shares_burned != expected_shares {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "shares burned ({shares_burned}) does not match withdrawn assets \
-                 ({WITHDRAW_AMOUNT}) at the expected 1:1 ratio"
+                "shares burned ({shares_burned}) does not match preview_withdraw({WITHDRAW_AMOUNT}) \
+                 = {expected_shares}"
             ),
         };
     }
@@ -315,16 +377,17 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
         name,
         passed: true,
         detail: format!(
-            "withdrew {WITHDRAW_AMOUNT} stroops, burned {shares_burned} shares (1:1 ratio), \
-             total_assets {before} -> {after}"
+            "withdrew {WITHDRAW_AMOUNT} stroops, burned {shares_burned} shares matching \
+             preview_withdraw(), total_assets {before} -> {after}"
         ),
     }
 }
 
 /// Redeems a fixed amount of vault shares (receiver = owner = operator =
 /// `source_account`) and checks that:
-/// 1. The assets received (the call's return value) match the redeemed
-///    shares 1:1, matching the ratio observed on this vault so far.
+/// 1. The assets received (the call's return value) match `preview_redeem()`
+///    computed for the same amount just before executing — this correctly
+///    accounts for vaults that are not at a clean 1:1 share:asset ratio.
 /// 2. `total_assets()` after the redemption equals `total_assets()`
 ///    before the redemption minus the assets received.
 pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResult {
@@ -338,6 +401,25 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
                 name,
                 passed: false,
                 detail: format!("could not read total_assets before redeem: {detail}"),
+            }
+        }
+    };
+
+    let expected_assets = match call_preview(
+        contract_id,
+        source_account,
+        "preview_redeem",
+        "shares",
+        REDEEM_SHARES,
+    )
+    .await
+    {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("could not compute preview_redeem: {detail}"),
             }
         }
     };
@@ -374,13 +456,13 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
         }
     };
 
-    if assets_received != REDEEM_SHARES {
+    if assets_received != expected_assets {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "assets received ({assets_received}) does not match redeemed shares \
-                 ({REDEEM_SHARES}) at the expected 1:1 ratio"
+                "assets received ({assets_received}) does not match preview_redeem({REDEEM_SHARES}) \
+                 = {expected_assets}"
             ),
         };
     }
@@ -412,8 +494,8 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
         name,
         passed: true,
         detail: format!(
-            "redeemed {REDEEM_SHARES} shares, received {assets_received} assets (1:1 ratio), \
-             total_assets {before} -> {after}"
+            "redeemed {REDEEM_SHARES} shares, received {assets_received} assets matching \
+             preview_redeem(), total_assets {before} -> {after}"
         ),
     }
 }
@@ -1581,6 +1663,26 @@ async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i1
         Ok(value) => parse_non_negative_i128(&value)
             .ok_or_else(|| format!("total_assets returned a non-numeric or negative value: {value}")),
         Err(e) => Err(format!("invoke_contract failed: {e}")),
+    }
+}
+
+/// Calls a single-argument preview function (`preview_deposit`,
+/// `preview_mint`, `preview_withdraw`, or `preview_redeem`) and parses the
+/// result as a non-negative `i128`. `arg_name` is the CLI flag name for
+/// that function's sole argument (`"assets"` or `"shares"`).
+async fn call_preview(
+    contract_id: &str,
+    source_account: &str,
+    function_name: &str,
+    arg_name: &str,
+    amount: i128,
+) -> Result<i128, String> {
+    let args = vec![format!("--{arg_name}"), amount.to_string()];
+    match invoke_contract(contract_id, function_name, &args, source_account).await {
+        Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
+            format!("{function_name} returned a non-numeric or negative value: {value}")
+        }),
+        Err(e) => Err(format!("{function_name} invoke failed: {e}")),
     }
 }
 

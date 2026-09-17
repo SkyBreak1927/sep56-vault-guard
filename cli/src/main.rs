@@ -2,6 +2,7 @@ mod rpc;
 mod checks;
 
 use clap::Parser;
+use serde::Serialize;
 
 use checks::CheckResult;
 
@@ -16,6 +17,40 @@ struct Cli {
     /// reference vault deployment.
     #[arg(long, default_value = REFERENCE_VAULT_CONTRACT_ID)]
     vault: String,
+
+    /// Output format: human-readable text, or a JSON array for
+    /// programmatic consumption (e.g. by the web UI).
+    #[arg(long, value_enum, default_value = "text")]
+    output: OutputFormat,
+}
+
+#[derive(Clone, clap::ValueEnum)]
+enum OutputFormat {
+    Text,
+    Json,
+}
+
+/// One check's result, shaped for JSON export (`--output json`).
+#[derive(Serialize)]
+struct JsonCheckResult<'a> {
+    name: &'a str,
+    category: &'static str,
+    status: &'static str,
+    detail: &'a str,
+}
+
+/// Classifies a check by name into the two categories documented in
+/// VAULT_CHECKS.md: the 7 Positive Conformance checks validate the core
+/// SEP-56 interface directly on the target vault, while the 4
+/// Security/Adversarial checks deploy their own throwaway vault clones.
+fn category_for(check_name: &str) -> &'static str {
+    match check_name {
+        "total_assets" | "deposit" | "mint" | "withdraw" | "redeem" | "convert_to_shares"
+        | "convert_to_assets" => "Positive Conformance",
+        "donation_attack" | "overflow_protection" | "rounding_direction"
+        | "access_control_probing" => "Security/Adversarial",
+        _ => "Unknown",
+    }
 }
 
 #[tokio::main]
@@ -37,16 +72,33 @@ async fn main() {
         checks::check_access_control_probing(vault, SOURCE_ACCOUNT, VICTIM_ACCOUNT).await,
     ];
 
-    for result in &results {
-        let status = if result.passed { "PASS" } else { "FAIL" };
-        println!("[{status}] {} - {}", result.name, result.detail);
-    }
-
     let total = results.len();
     let passed = results.iter().filter(|r| r.passed).count();
     let failed = total - passed;
 
-    println!("Summary: {total} checks, {passed} passed, {failed} failed");
+    match cli.output {
+        OutputFormat::Text => {
+            for result in &results {
+                let status = if result.passed { "PASS" } else { "FAIL" };
+                println!("[{status}] {} - {}", result.name, result.detail);
+            }
+            println!("Summary: {total} checks, {passed} passed, {failed} failed");
+        }
+        OutputFormat::Json => {
+            let json_results: Vec<JsonCheckResult> = results
+                .iter()
+                .map(|r| JsonCheckResult {
+                    name: &r.name,
+                    category: category_for(&r.name),
+                    status: if r.passed { "PASS" } else { "FAIL" },
+                    detail: &r.detail,
+                })
+                .collect();
+            let output =
+                serde_json::to_string_pretty(&json_results).expect("results are serializable");
+            println!("{output}");
+        }
+    }
 
     if failed > 0 {
         std::process::exit(1);

@@ -1,0 +1,159 @@
+:root {
+  --bg: #0b0f14;
+  --bg-panel: #121822;
+  --border: #26303d;
+  --text: #e6edf3;
+  --text-muted: #8b98a5;
+  --accent: #5b9dff;
+  --pass-bg: #103a20;
+  --pass-text: #4ade80;
+  --fail-bg: #3a1414;
+  --fail-text: #f87171;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  padding: 32px 0 24px;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+}
+
+main {
+  padding: 32px 24px 48px;
+}
+
+.run-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.summary-stat {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 20px;
+  min-width: 120px;
+}
+
+.summary-stat .value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-family: var(--mono);
+}
+
+.summary-stat .label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-stat.pass .value { color: var(--pass-text); }
+.summary-stat.fail .value { color: var(--fail-text); }
+
+.checks h2 {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 16px;
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.check-row {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
+.check-row-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.check-category {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.badge.pass {
+  background: var(--pass-bg);
+  color: var(--pass-text);
+}
+
+.badge.fail {
+  background: var(--fail-bg);
+  color: var(--fail-text);
+}
+
+.check-name {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.check-detail {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-family: var(--mono);
+  word-break: break-word;
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 20px 0 40px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}

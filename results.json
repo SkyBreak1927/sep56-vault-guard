@@ -1,0 +1,68 @@
+[
+  {
+    "name": "total_assets",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "total_assets = 177501000"
+  },
+  {
+    "name": "deposit",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "deposited 5000000 stroops, minted 5000000 shares matching preview_deposit(), total_assets 177501000 -> 182501000"
+  },
+  {
+    "name": "mint",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "minted 3000000 shares, pulled 3000000 assets matching preview_mint(), total_assets 182501000 -> 185501000"
+  },
+  {
+    "name": "withdraw",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "withdrew 2000000 stroops, burned 2000000 shares matching preview_withdraw(), total_assets 185501000 -> 183501000"
+  },
+  {
+    "name": "redeem",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "redeemed 1000000 shares, received 1000000 assets matching preview_redeem(), total_assets 183501000 -> 182501000"
+  },
+  {
+    "name": "convert_to_shares",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "convert_to_shares(4000000) = 4000000 (1:1 ratio), total_assets unchanged at 182501000"
+  },
+  {
+    "name": "convert_to_assets",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "convert_to_assets(4000000) = 4000000 (1:1 ratio), round-trip convert_to_assets(convert_to_shares(4000000)) = 4000000 (consistent), total_assets unchanged at 182501000"
+  },
+  {
+    "name": "donation_attack",
+    "category": "Security/Adversarial",
+    "status": "FAIL",
+    "detail": "VULNERABLE to donation/inflation attack — fresh vault CAYTWFAAJREXQ2TEOO4L7ZG6733PIJUOO6KLF2JZN6ZCIA62OX7GCOJP: attacker deposited 1 stroop(s) then donated 100000000 stroops directly (bypassing deposit()); victim then deposited 5000000 stroops and received 0 shares (0% of the 5000000 expected at a proportional 1:1 ratio); attacker P&L: net loss of 47500000 stroops (spent 100000001, redeemed 52500001)"
+  },
+  {
+    "name": "overflow_protection",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "deposit(assets=i128::MAX) on fresh vault CAEXI3USQVP55TD77NPR24LJHGFVVJ625XYEWDN4VPYBND42FYO7XSMC failed cleanly (`stellar` command failed (exit code Some(1)): <no stderr output>), and total_assets remained 0 — no silent-wrong-result observed. HONEST CAVEAT: for a native XLM underlying asset, this failure is triggered by the classic Stellar Asset Contract's own int64 amount ceiling (\"spent amount is too large for an i64\"), reached AFTER the vault's own share-conversion math already completed successfully (confirmed via the total_assets() call inside preview_deposit executing without error). So this validates clean-failure behavior, NOT specifically the vault's own overflow-protection math, which was never actually pushed to its overflow point in this scenario."
+  },
+  {
+    "name": "rounding_direction",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "fresh vault CDPGF4E6UQUPZKG4YMWXN2WGSOAR2QZJD6ZVB65XFTSSFL6D7OAMOBIM at fractional ratio (seed 1000 + donation 500): Test A — deposit(100) minted 66 shares matching preview_deposit() (floor, favors vault); Test B — mint(100 shares) pulled 151 assets matching preview_mint() (ceil) and strictly greater than the idealized convert_to_assets() (150) — rounding direction confirmed to always favor the vault over the user"
+  },
+  {
+    "name": "access_control_probing",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "fresh vault CBU4U3WPV3ONGXGO3UGIAWT3QF3VLNJST27JTIZJJVCNJKQDBK72IRB5: unauthorized withdraw (no approval) correctly rejected; after owner approved operator for 1000000 shares, operator withdrew 500000 shares (allowance 1000000 -> 500000, decremented exactly); operator's over-allowance withdraw attempt (600000 > remaining 500000) correctly rejected with allowance left untouched at 500000"
+  }
+]

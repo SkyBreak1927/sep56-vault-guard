@@ -10,7 +10,7 @@ The CLI (`cli/`) is a generic SEP-56 conformance checker, not a tool hardcoded t
 
 - **`--vault <contract_address>`** selects the target vault to check (defaults to our own reference vault deployment if omitted). All checks operate against whatever address is passed here.
 - The 7 **Positive Conformance** checks call read/write functions directly on the target vault and inspect real state changes (`total_assets()`, share balances, etc.) — they touch the target vault's live state.
-- The 4 **Security/Adversarial** checks never touch the target vault's own state. Each one first resolves the target vault's Wasm hash (`fetch_wasm_hash()`, via `stellar contract info hash`) and underlying asset (`query_asset()`), then **deploys its own fresh, throwaway clone** built from that same code and asset, and runs the adversarial scenario against the clone. This makes the security checks safe to run against any real, in-use vault without risking its funds or state, while still testing the exact contract code and asset the target actually uses.
+- The 4 **Security/Adversarial** checks never touch the target vault's own state. Each one first resolves the target vault's Wasm hash (`fetch_wasm_hash()`, via `stellar contract info hash`), underlying asset (`query_asset()`), and **actual `decimals_offset`** (derived as `vault.decimals() - underlying_asset.decimals()`, since the vault exposes no direct getter for it), then **deploys its own fresh, throwaway clone** built from that exact configuration, and runs the adversarial scenario against the clone. This makes the security checks safe to run against any real, in-use vault without risking its funds or state, while still testing the exact contract code, asset, and offset the target actually uses — see [Demo/Validation Vaults](#demovalidation-vaults) below for evidence this generalization actually works, not just for the default `decimals_offset = 0` case.
 - All checks are implemented in `cli/src/checks/mod.rs`; the subprocess wrapper around the `stellar` CLI lives in `cli/src/rpc.rs`.
 
 ---
@@ -66,15 +66,15 @@ These validate that the target vault correctly implements the seven core read/wr
 ### 6. `convert_to_shares`
 
 - **Function**: `check_convert_to_shares` — [cli/src/checks/mod.rs:508](cli/src/checks/mod.rs#L508)
-- **Validates**: `convert_to_shares()` is read-only — calling it does not change `total_assets()` (no side effects on vault state).
+- **Validates**: Round-trip consistency — `convert_to_assets(convert_to_shares(x))` returns `x` again — rather than a hardcoded 1:1 expectation, so it stays meaningful on vaults at any share:asset ratio or `decimals_offset`; and that `convert_to_shares()` is read-only (does not change `total_assets()`).
 - **SEP-56 reference** (`## Interface`, `fn convert_to_shares`):
   > "Converts an amount of underlying assets to the equivalent amount of vault shares (rounded down)."
 - **Category**: Positive Conformance
 
 ### 7. `convert_to_assets`
 
-- **Function**: `check_convert_to_assets` — [cli/src/checks/mod.rs:582](cli/src/checks/mod.rs#L582)
-- **Validates**: `convert_to_assets()` is read-only (no change to `total_assets()`), and round-trip consistency: `convert_to_assets(convert_to_shares(x))` returns `x` again.
+- **Function**: `check_convert_to_assets` — [cli/src/checks/mod.rs:599](cli/src/checks/mod.rs#L599)
+- **Validates**: Round-trip consistency in the other direction — `convert_to_shares(convert_to_assets(x))` returns `x` again — and that `convert_to_assets()` is read-only (no change to `total_assets()`).
 - **SEP-56 reference** (`## Interface`, `fn convert_to_assets`):
   > "Converts an amount of vault shares to the equivalent amount of underlying assets (rounded down)."
 - **Category**: Positive Conformance
@@ -105,6 +105,8 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
   **However, "non-profitable for the attacker" does not mean "safe for the victim."** The victim's loss is total and unconditional — it does not depend on whether the attack ultimately nets the attacker a profit. A `decimals_offset > 0` (up to OpenZeppelin's reference implementation cap of 10, per the SEP's Reference Implementation section) is required to meaningfully raise the cost of this attack; `decimals_offset = 0` is the weakest point on that spectrum, not "no mitigation," but it leaves individual victims fully exposed. This is a design tradeoff inherent to the reference vault's configuration, not a bug in the OpenZeppelin vault module itself.
 
+  **⚠️ Follow-up finding — raising `decimals_offset` alone did NOT flip this check to PASS.** We deployed [Vault A](#demovalidation-vaults) — the same reference vault code, `decimals_offset = 6` instead of `0` — and re-ran this exact check (same fixed attack parameters: 1-stroop dust deposit, 100,000,000-stroop donation, 5,000,000-stroop victim deposit). Result: the victim received only **99,999 shares out of the 5,000,000,000,000 (`assets × 10^offset`) they were fairly owed — effectively 0%**, and the check still FAILS. The reason: `decimals_offset` scales the attacker's *own* dust deposit and the "fair" baseline together, but it does **not** scale the raw donation amount, which is a plain asset transfer. Since our fixed donation (100,000,000) is ~20× the victim's deposit (5,000,000) regardless of offset, the offset's mitigation — which primarily helps by making an attacker's near-zero initial deposit represent a less dominant share of `totalSupply` — isn't strong enough to rescue this specific, disproportionately-funded attack. **Takeaway: `decimals_offset` alone is not a substitute for deployment-time safeguards (e.g. a meaningful seed deposit) when an attacker can fund a donation far larger than typical victim deposits.**
+
 ### 9. `overflow_protection`
 
 - **Function**: `check_overflow_protection` — [cli/src/checks/mod.rs:975](cli/src/checks/mod.rs#L975)
@@ -125,6 +127,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
   The specific rounding directions per function are documented inline in the `## Interface` trait doc comments: `convert_to_shares`/`convert_to_assets`/`preview_deposit`/`preview_redeem` are specified "(rounded down)", while `preview_mint`/`preview_withdraw` are specified "(rounded up)".
 - **Category**: Security/Adversarial
+- **Validated as a true negative detector**: we deployed [Vault B](#demovalidation-vaults), a variant of the reference vault with `convert_to_shares`/`convert_to_assets` deliberately overridden to round **up** instead of down (favoring the user, violating SEP-56). This check correctly caught it: `"mint() assets pulled (151) is not strictly greater than the idealized convert_to_assets() (151)"` — because the check's own throwaway clone inherits Vault B's exact (buggy) Wasm via the resolved `wasm_hash`, so the bug surfaces automatically without any check code changes. This is direct evidence the check can actually detect a real rounding-direction violation, not just pass vacuously.
 
 ### 11. `access_control_probing`
 
@@ -135,6 +138,59 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
   Also `## Security Concerns`: *"Authorization and Permissions (Access Control) - no access control enforced by default, authorization for the operator must be handled implementation-wise."* The allowance mechanism itself is inherited from the vault's `TokenInterface`/SEP-41 dependency (`## Dependencies`: *"The vault itself must also comply with SEP-41 and further extend it."*).
 - **Category**: Security/Adversarial
+
+---
+
+## Demo/Validation Vaults
+
+Two additional testnet deployments exist purely to validate that the checks
+above actually generalize to vaults other than our own reference deployment
+— not to represent third-party audits. Both use the same underlying native
+XLM asset as the reference vault.
+
+### Vault A — `decimals_offset = 6`
+
+- **Address**: `CAWUBSRHD4DUDWAJENO7XHI3QVEXKIU3ZZ4HRM3RFZ4PNBSCCYXH4VTA`
+- **Code**: identical to `contracts/reference-vault` (same Wasm hash), deployed with `--decimals_offset 6` instead of `0`.
+- **Purpose**: confirm the CLI's `decimals_offset`-resolution fix (see Architecture above) produces correct, non-false-positive/negative results at a non-zero offset — not just that it doesn't crash.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `total_assets` | PASS |
+| 2 | `deposit` | PASS |
+| 3 | `mint` | PASS |
+| 4 | `withdraw` | PASS |
+| 5 | `redeem` | PASS |
+| 6 | `convert_to_shares` | PASS |
+| 7 | `convert_to_assets` | PASS |
+| 8 | `donation_attack` | **FAIL** (see follow-up finding in check #8 above — offset alone didn't neutralize this specific fixed-size attack) |
+| 9 | `overflow_protection` | PASS |
+| 10 | `rounding_direction` | PASS |
+| 11 | `access_control_probing` | PASS |
+
+**10 PASS, 1 FAIL** — identical pass/fail pattern to the reference vault, confirming the offset generalization didn't introduce any false positives/negatives on the other 10 checks.
+
+### Vault B — intentional rounding bug
+
+- **Address**: `CAZBXMYP5TQWEHCFMUD6ZEON7DUWAC2BCKNCKKVBIRX7GZN7M6I2P6HV`
+- **Code**: `contracts/rounding-bug-vault` — a copy of the reference vault with `convert_to_shares`/`convert_to_assets` overridden to round **up** (`Rounding::Ceil`) instead of down (`Rounding::Floor`), reversing SEP-56's vault-favoring rounding requirement. `decimals_offset = 0`.
+- **Purpose**: a negative control — confirm `rounding_direction` actually detects a real, deliberately-injected rounding violation rather than passing vacuously.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `total_assets` | PASS |
+| 2 | `deposit` | PASS |
+| 3 | `mint` | PASS |
+| 4 | `withdraw` | PASS |
+| 5 | `redeem` | PASS |
+| 6 | `convert_to_shares` | PASS |
+| 7 | `convert_to_assets` | PASS |
+| 8 | `donation_attack` | FAIL (baseline finding, unrelated to this vault's injected bug) |
+| 9 | `overflow_protection` | PASS |
+| 10 | `rounding_direction` | **FAIL** (correctly detected the injected bug — see check #10 above) |
+| 11 | `access_control_probing` | PASS |
+
+**9 PASS, 2 FAIL** — `rounding_direction` is the only *newly* failing check compared to the reference vault, isolating exactly the bug that was injected.
 
 ---
 

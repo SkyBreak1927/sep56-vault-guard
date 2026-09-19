@@ -502,9 +502,14 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
 
 /// Calls `convert_to_shares(assets = 4_000_000)` (a read-only conversion,
 /// no vault shares are actually minted) and checks that:
-/// 1. The result matches the 1:1 ratio observed on this vault so far.
-/// 2. `total_assets()` is unchanged before/after the call, since a pure
-///    conversion must not have any side effects on vault state.
+/// 1. Round-trip consistency: `convert_to_assets(convert_to_shares(4_000_000))`
+///    returns `4_000_000` again. This is deliberately compared via a
+///    round trip rather than a hardcoded 1:1 expectation, since a vault's
+///    share:asset ratio depends on its `decimals_offset` and accrued
+///    activity — a hardcoded "shares == assets" assumption would only
+///    ever hold for a fresh `decimals_offset = 0` vault.
+/// 2. `total_assets()` is unchanged before/after the calls, since pure
+///    conversions must not have any side effects on vault state.
 pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) -> CheckResult {
     let name = "convert_to_shares".to_string();
     const CONVERT_ASSETS: i128 = 4_000_000;
@@ -527,13 +532,24 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
         Err(detail) => return CheckResult { name, passed: false, detail },
     };
 
-    if shares != CONVERT_ASSETS {
+    let roundtrip_assets = match convert_to_assets(contract_id, source_account, shares).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!("round-trip convert_to_assets call failed: {detail}"),
+            }
+        }
+    };
+
+    if roundtrip_assets != CONVERT_ASSETS {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "convert_to_shares({CONVERT_ASSETS}) returned {shares}, expected the \
-                 1:1 ratio ({CONVERT_ASSETS})"
+                "round-trip inconsistency: convert_to_assets(convert_to_shares({CONVERT_ASSETS})) \
+                 = convert_to_assets({shares}) = {roundtrip_assets}, expected {CONVERT_ASSETS}"
             ),
         };
     }
@@ -564,7 +580,8 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
         name,
         passed: true,
         detail: format!(
-            "convert_to_shares({CONVERT_ASSETS}) = {shares} (1:1 ratio), \
+            "convert_to_shares({CONVERT_ASSETS}) = {shares}, round-trip \
+             convert_to_assets({shares}) = {roundtrip_assets} (consistent), \
              total_assets unchanged at {before}"
         ),
     }
@@ -572,13 +589,12 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
 
 /// Calls `convert_to_assets(shares = 4_000_000)` (a read-only conversion)
 /// and checks that:
-/// 1. The result matches the 1:1 ratio observed on this vault so far.
-/// 2. The round-trip `convert_to_assets(convert_to_shares(4_000_000))`
-///    returns `4_000_000` again, i.e. the two conversions are consistent
-///    inverses of each other.
-/// 3. `total_assets()` is unchanged before/after all of the above calls,
-///    since pure conversions must not have any side effects on vault
-///    state.
+/// 1. Round-trip consistency: `convert_to_shares(convert_to_assets(4_000_000))`
+///    returns `4_000_000` again — compared via round trip, not a
+///    hardcoded 1:1 expectation, for the same reason as
+///    [`check_convert_to_shares`] (ratio depends on `decimals_offset`).
+/// 2. `total_assets()` is unchanged before/after the calls, since pure
+///    conversions must not have any side effects on vault state.
 pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) -> CheckResult {
     let name = "convert_to_assets".to_string();
     const CONVERT_SHARES: i128 = 4_000_000;
@@ -601,20 +617,7 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
         Err(detail) => return CheckResult { name, passed: false, detail },
     };
 
-    if assets != CONVERT_SHARES {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
-                "convert_to_assets({CONVERT_SHARES}) returned {assets}, expected the \
-                 1:1 ratio ({CONVERT_SHARES})"
-            ),
-        };
-    }
-
-    let roundtrip_shares = match convert_to_shares(contract_id, source_account, CONVERT_SHARES)
-        .await
-    {
+    let roundtrip_shares = match convert_to_shares(contract_id, source_account, assets).await {
         Ok(amount) => amount,
         Err(detail) => {
             return CheckResult {
@@ -625,26 +628,13 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
         }
     };
 
-    let roundtrip_assets =
-        match convert_to_assets(contract_id, source_account, roundtrip_shares).await {
-            Ok(amount) => amount,
-            Err(detail) => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("round-trip convert_to_assets call failed: {detail}"),
-                }
-            }
-        };
-
-    if roundtrip_assets != CONVERT_SHARES {
+    if roundtrip_shares != CONVERT_SHARES {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "round-trip inconsistency: convert_to_assets(convert_to_shares({CONVERT_SHARES})) \
-                 = convert_to_assets({roundtrip_shares}) = {roundtrip_assets}, expected \
-                 {CONVERT_SHARES}"
+                "round-trip inconsistency: convert_to_shares(convert_to_assets({CONVERT_SHARES})) \
+                 = convert_to_shares({assets}) = {roundtrip_shares}, expected {CONVERT_SHARES}"
             ),
         };
     }
@@ -675,9 +665,9 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
         name,
         passed: true,
         detail: format!(
-            "convert_to_assets({CONVERT_SHARES}) = {assets} (1:1 ratio), round-trip \
-             convert_to_assets(convert_to_shares({CONVERT_SHARES})) = {roundtrip_assets} \
-             (consistent), total_assets unchanged at {before}"
+            "convert_to_assets({CONVERT_SHARES}) = {assets}, round-trip \
+             convert_to_shares({assets}) = {roundtrip_shares} (consistent), \
+             total_assets unchanged at {before}"
         ),
     }
 }
@@ -719,15 +709,17 @@ async fn convert_to_assets(
 /// attacker and `victim_account` as an unrelated victim depositor.
 ///
 /// This check is self-contained: it deploys its own throwaway vault
-/// instance rather than touching `target_vault` itself. The wasm hash and
-/// underlying asset are resolved from `target_vault` first (via
-/// [`fetch_wasm_hash`] and `query_asset()`), so the throwaway instance
-/// matches whatever vault is actually being audited — not a hardcoded
-/// reference — and this check can be re-run against any SEP-56 vault.
+/// instance rather than touching `target_vault` itself. The wasm hash,
+/// underlying asset, and decimals_offset are all resolved from
+/// `target_vault` first (via [`resolve_target_vault`]), so the throwaway
+/// instance matches whatever vault is actually being audited — not a
+/// hardcoded reference — and this check can be re-run against any SEP-56
+/// vault regardless of its configured decimals_offset.
 ///
 /// Scenario:
-/// 1. Resolve `target_vault`'s wasm hash and underlying asset, then deploy
-///    a fresh vault from that same code (`decimals_offset = 0`).
+/// 1. Resolve `target_vault`'s wasm hash, underlying asset, and
+///    decimals_offset, then deploy a fresh vault from that same
+///    configuration.
 /// 2. Attacker deposits a dust amount (1 stroop) to become the sole,
 ///    near-worthless first shareholder.
 /// 3. Attacker donates a large amount directly to the vault's contract
@@ -742,11 +734,14 @@ async fn convert_to_assets(
 /// # Pass/fail criteria
 ///
 /// The verdict is driven **solely** by whether the victim received a
-/// reasonably proportional number of shares (at least
-/// `SHARE_TOLERANCE_PCT`% of the 1:1 ratio observed on a healthy vault).
-/// Attacker profit/loss is recorded in the detail string for context only
-/// — it does not affect PASS/FAIL, because the victim is harmed by a
-/// donation attack regardless of whether the attacker personally profits.
+/// reasonably proportional number of shares — at least `SHARE_TOLERANCE_PCT`%
+/// of what an undisturbed, fresh vault at this exact decimals_offset would
+/// have minted for the same deposit (`assets * 10^decimals_offset`, the
+/// vault's own genesis-state formula), not a hardcoded 1:1 assumption that
+/// would only hold at `decimals_offset = 0`. Attacker profit/loss is
+/// recorded in the detail string for context only — it does not affect
+/// PASS/FAIL, because the victim is harmed by a donation attack regardless
+/// of whether the attacker personally profits.
 ///
 /// If `target_vault`'s wasm hash or underlying asset cannot be resolved
 /// (e.g. it's a Stellar Asset Contract or otherwise not a valid Soroban
@@ -762,9 +757,9 @@ pub async fn check_donation_attack(
     const VICTIM_DEPOSIT: i128 = 5_000_000;
     const SHARE_TOLERANCE_PCT: i128 = 90;
 
-    let (wasm_hash, underlying_asset) =
+    let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, attacker_account).await {
-            Ok(pair) => pair,
+            Ok(triple) => triple,
             Err(detail) => return CheckResult { name, passed: false, detail },
         };
 
@@ -776,7 +771,7 @@ pub async fn check_donation_attack(
         "--asset".to_string(),
         underlying_asset.clone(),
         "--decimals_offset".to_string(),
-        "0".to_string(),
+        decimals_offset.to_string(),
     ];
 
     let vault_id = match deploy_contract(&wasm_hash, attacker_account, &constructor_args).await {
@@ -927,15 +922,23 @@ pub async fn check_donation_attack(
         format!("attacker P&L: attacker holds 0 shares, nothing to redeem; spent {attacker_cost}")
     };
 
-    let expected_shares = VICTIM_DEPOSIT;
-    let min_acceptable_shares = expected_shares * SHARE_TOLERANCE_PCT / 100;
-    let victim_pct_of_expected = victim_shares.saturating_mul(100) / expected_shares;
+    // The "fair" baseline is whatever a completely undisturbed, fresh vault
+    // of this exact decimals_offset would mint for a first deposit of
+    // VICTIM_DEPOSIT: shares = assets * 10^offset / 1 (genesis formula,
+    // totalSupply=0, totalAssets=0). Comparing against this instead of a
+    // hardcoded 1:1 assumption keeps the check meaningful for any
+    // decimals_offset, not just 0.
+    let offset_scale = 10i128.checked_pow(decimals_offset).unwrap_or(i128::MAX);
+    let expected_shares = VICTIM_DEPOSIT.checked_mul(offset_scale).unwrap_or(i128::MAX);
+    let min_acceptable_shares = (expected_shares / 100).saturating_mul(SHARE_TOLERANCE_PCT);
+    let victim_pct_of_expected = victim_shares.saturating_mul(100) / expected_shares.max(1);
 
     let verdict_detail = format!(
-        "fresh vault {vault_id}: attacker deposited {ATTACKER_DUST_DEPOSIT} stroop(s) then donated \
-         {DONATION_AMOUNT} stroops directly (bypassing deposit()); victim then deposited \
-         {VICTIM_DEPOSIT} stroops and received {victim_shares} shares ({victim_pct_of_expected}% \
-         of the {expected_shares} expected at a proportional 1:1 ratio); {attacker_pnl_detail}"
+        "fresh vault {vault_id} (decimals_offset={decimals_offset}): attacker deposited \
+         {ATTACKER_DUST_DEPOSIT} stroop(s) then donated {DONATION_AMOUNT} stroops directly \
+         (bypassing deposit()); victim then deposited {VICTIM_DEPOSIT} stroops and received \
+         {victim_shares} shares ({victim_pct_of_expected}% of the {expected_shares} expected \
+         from an undisturbed deposit at this vault's decimals_offset); {attacker_pnl_detail}"
     );
 
     if victim_shares < min_acceptable_shares {
@@ -975,9 +978,9 @@ pub async fn check_donation_attack(
 pub async fn check_overflow_protection(target_vault: &str, deployer_account: &str) -> CheckResult {
     let name = "overflow_protection".to_string();
 
-    let (wasm_hash, underlying_asset) =
+    let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
-            Ok(pair) => pair,
+            Ok(triple) => triple,
             Err(detail) => return CheckResult { name, passed: false, detail },
         };
 
@@ -989,7 +992,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
         "--asset".to_string(),
         underlying_asset,
         "--decimals_offset".to_string(),
-        "0".to_string(),
+        decimals_offset.to_string(),
     ];
 
     let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
@@ -1111,9 +1114,9 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
     const DEPOSIT_TEST_ASSETS: i128 = 100;
     const MINT_TEST_SHARES: i128 = 100;
 
-    let (wasm_hash, underlying_asset) =
+    let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
-            Ok(pair) => pair,
+            Ok(triple) => triple,
             Err(detail) => return CheckResult { name, passed: false, detail },
         };
 
@@ -1125,7 +1128,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         "--asset".to_string(),
         underlying_asset.clone(),
         "--decimals_offset".to_string(),
-        "0".to_string(),
+        decimals_offset.to_string(),
     ];
 
     let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
@@ -1381,14 +1384,17 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
 
 /// Probes the vault's access-control (allowance) enforcement on
 /// operator-initiated `withdraw()` calls against a **freshly deployed**
-/// vault instance (built from `target_vault`'s own resolved wasm hash and
-/// underlying asset), replicating the exploratory experiment:
+/// vault instance (built from `target_vault`'s own resolved wasm hash,
+/// underlying asset, and decimals_offset), replicating the exploratory
+/// experiment:
 ///
 /// 1. Deploy a fresh vault and have `owner_account` seed-deposit shares.
 /// 2. `operator_account` attempts `withdraw()` on the owner's behalf
 ///    **without any prior `approve()`** — must fail (insufficient
 ///    allowance).
-/// 3. Owner `approve()`s the operator for a limited share allowance.
+/// 3. Owner `approve()`s the operator for a limited share allowance,
+///    sized from `preview_withdraw()` rather than a hardcoded share
+///    count, so it stays sensible at any decimals_offset.
 /// 4. Operator withdraws WITHIN that allowance — must succeed, and the
 ///    allowance must decrease by exactly the shares spent (not reset to
 ///    `0`, not left unchanged).
@@ -1409,14 +1415,16 @@ pub async fn check_access_control_probing(
     let name = "access_control_probing".to_string();
     const SEED_DEPOSIT: i128 = 10_000_000;
     const UNAUTHORIZED_WITHDRAW: i128 = 500_000;
-    const APPROVED_ALLOWANCE: i128 = 1_000_000;
     const WITHDRAW_WITHIN_ALLOWANCE: i128 = 500_000;
-    const WITHDRAW_EXCEEDING_REMAINING: i128 = 600_000;
+    // Multiplier (not a fixed share count) for the second withdraw attempt,
+    // so its required shares clearly exceed the remaining allowance
+    // regardless of the vault's decimals_offset / share:asset scale.
+    const EXCEEDING_ASSET_MULTIPLIER: i128 = 3;
     const LIVE_UNTIL_LEDGER_HORIZON: u32 = 500_000;
 
-    let (wasm_hash, underlying_asset) =
+    let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, owner_account).await {
-            Ok(pair) => pair,
+            Ok(triple) => triple,
             Err(detail) => return CheckResult { name, passed: false, detail },
         };
 
@@ -1428,7 +1436,7 @@ pub async fn check_access_control_probing(
         "--asset".to_string(),
         underlying_asset,
         "--decimals_offset".to_string(),
-        "0".to_string(),
+        decimals_offset.to_string(),
     ];
 
     let vault_id = match deploy_contract(&wasm_hash, owner_account, &constructor_args).await {
@@ -1486,6 +1494,33 @@ pub async fn check_access_control_probing(
         };
     }
 
+    // Determine how many shares WITHDRAW_WITHIN_ALLOWANCE actually requires
+    // at this vault's current ratio/decimals_offset, so the approved
+    // allowance is set in proportion rather than a hardcoded share count
+    // that would only make sense at decimals_offset=0.
+    let shares_needed_for_within = match call_preview(
+        &vault_id,
+        owner_account,
+        "preview_withdraw",
+        "assets",
+        WITHDRAW_WITHIN_ALLOWANCE,
+    )
+    .await
+    {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return CheckResult {
+                name,
+                passed: false,
+                detail: format!(
+                    "could not compute preview_withdraw on {vault_id} to size the allowance: \
+                     {detail}"
+                ),
+            }
+        }
+    };
+    let approved_allowance = shares_needed_for_within.saturating_mul(2);
+
     // --- Step 2: owner approves operator for a limited allowance ---
     let current_ledger = match fetch_current_ledger_sequence().await {
         Ok(seq) => seq,
@@ -1508,7 +1543,7 @@ pub async fn check_access_control_probing(
         "--spender".to_string(),
         operator_account.to_string(),
         "--amount".to_string(),
-        APPROVED_ALLOWANCE.to_string(),
+        approved_allowance.to_string(),
         "--live_until_ledger".to_string(),
         live_until_ledger.to_string(),
     ];
@@ -1588,14 +1623,14 @@ pub async fn check_access_control_probing(
             }
         };
 
-    let expected_remaining = APPROVED_ALLOWANCE - shares_spent;
+    let expected_remaining = approved_allowance - shares_spent;
     if allowance_after_spend != expected_remaining {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
                 "VULNERABLE: after operator spent {shares_spent} shares of a \
-                 {APPROVED_ALLOWANCE}-share allowance on {vault_id}, remaining allowance is \
+                 {approved_allowance}-share allowance on {vault_id}, remaining allowance is \
                  {allowance_after_spend}, expected {expected_remaining} — allowance was not \
                  decremented correctly (reset to 0, left unchanged, or otherwise wrong)"
             ),
@@ -1604,9 +1639,10 @@ pub async fn check_access_control_probing(
 
     // --- Step 4: withdraw exceeding the remaining allowance must fail,
     //     leaving the allowance untouched ---
+    let withdraw_exceeding_assets = WITHDRAW_WITHIN_ALLOWANCE.saturating_mul(EXCEEDING_ASSET_MULTIPLIER);
     let exceeding_args = vec![
         "--assets".to_string(),
-        WITHDRAW_EXCEEDING_REMAINING.to_string(),
+        withdraw_exceeding_assets.to_string(),
         "--receiver".to_string(),
         operator_account.to_string(),
         "--owner".to_string(),
@@ -1668,11 +1704,12 @@ pub async fn check_access_control_probing(
         name,
         passed: true,
         detail: format!(
-            "fresh vault {vault_id}: unauthorized withdraw (no approval) correctly rejected; \
-             after owner approved operator for {APPROVED_ALLOWANCE} shares, operator withdrew \
-             {shares_spent} shares (allowance {APPROVED_ALLOWANCE} -> {allowance_after_spend}, \
-             decremented exactly); operator's over-allowance withdraw attempt \
-             ({WITHDRAW_EXCEEDING_REMAINING} > remaining {allowance_after_spend}) correctly \
+            "fresh vault {vault_id} (decimals_offset={decimals_offset}): unauthorized withdraw \
+             (no approval) correctly rejected; after owner approved operator for \
+             {approved_allowance} shares, operator withdrew {shares_spent} shares (allowance \
+             {approved_allowance} -> {allowance_after_spend}, decremented exactly); operator's \
+             over-allowance withdraw attempt of {withdraw_exceeding_assets} assets (requiring \
+             more shares than the remaining {allowance_after_spend}-share allowance) correctly \
              rejected with allowance left untouched at {allowance_final}"
         ),
     }
@@ -1688,22 +1725,25 @@ async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i1
     }
 }
 
-/// Calls a single-argument preview function (`preview_deposit`,
-/// `preview_mint`, `preview_withdraw`, or `preview_redeem`) and parses the
-/// result as a non-negative `i128`. `arg_name` is the CLI flag name for
-/// that function's sole argument (`"assets"` or `"shares"`).
-/// Resolves the wasm hash and underlying asset of `target_vault`, so the
-/// self-contained adversarial checks can deploy their own throwaway
-/// instances that match the code and asset of whatever vault is actually
-/// being audited, instead of a hardcoded reference. Returns a single
-/// combined error string on failure — e.g. if `target_vault` is a Stellar
-/// Asset Contract (which has no wasm hash) or otherwise not a valid
-/// Soroban vault contract — so callers can fail the check cleanly rather
-/// than panicking.
+/// Resolves the wasm hash, underlying asset, and actual `decimals_offset`
+/// of `target_vault`, so the self-contained adversarial checks can deploy
+/// their own throwaway instances that match the *exact* configuration of
+/// whatever vault is actually being audited, instead of a hardcoded
+/// reference (`decimals_offset = 0`).
+///
+/// The vault contract doesn't expose its decimals offset directly, so it's
+/// derived as `vault.decimals() - underlying_asset.decimals()` — this
+/// holds because the vault's `decimals()` is defined as the underlying
+/// asset's decimals plus the offset.
+///
+/// Returns a single combined error string on failure — e.g. if
+/// `target_vault` is a Stellar Asset Contract (which has no wasm hash) or
+/// otherwise not a valid Soroban vault contract — so callers can fail the
+/// check cleanly rather than panicking.
 async fn resolve_target_vault(
     target_vault: &str,
     caller_account: &str,
-) -> Result<(String, String), String> {
+) -> Result<(String, String, u32), String> {
     let wasm_hash = fetch_wasm_hash(target_vault)
         .await
         .map_err(|e| format!("could not fetch wasm hash from target vault {target_vault}: {e}"))?;
@@ -1725,9 +1765,48 @@ async fn resolve_target_vault(
             }
         };
 
-    Ok((wasm_hash, underlying_asset))
+    let vault_decimals = match invoke_contract(target_vault, "decimals", &[], caller_account).await
+    {
+        Ok(value) => parse_u32(&value).ok_or_else(|| {
+            format!("decimals() on {target_vault} returned an unexpected value: {value}")
+        })?,
+        Err(e) => {
+            return Err(format!(
+                "could not query decimals() from target vault {target_vault}: {e}"
+            ))
+        }
+    };
+
+    let asset_decimals =
+        match invoke_contract(&underlying_asset, "decimals", &[], caller_account).await {
+            Ok(value) => parse_u32(&value).ok_or_else(|| {
+                format!(
+                    "decimals() on underlying asset {underlying_asset} returned an unexpected \
+                     value: {value}"
+                )
+            })?,
+            Err(e) => {
+                return Err(format!(
+                    "could not query decimals() from underlying asset {underlying_asset}: {e}"
+                ))
+            }
+        };
+
+    let decimals_offset = vault_decimals.checked_sub(asset_decimals).ok_or_else(|| {
+        format!(
+            "target vault {target_vault} decimals ({vault_decimals}) is less than its \
+             underlying asset's decimals ({asset_decimals}) — cannot derive a valid \
+             decimals_offset"
+        )
+    })?;
+
+    Ok((wasm_hash, underlying_asset, decimals_offset))
 }
 
+/// Calls a single-argument preview function (`preview_deposit`,
+/// `preview_mint`, `preview_withdraw`, or `preview_redeem`) and parses the
+/// result as a non-negative `i128`. `arg_name` is the CLI flag name for
+/// that function's sole argument (`"assets"` or `"shares"`).
 async fn call_preview(
     contract_id: &str,
     source_account: &str,
@@ -1755,4 +1834,15 @@ fn parse_non_negative_i128(value: &Value) -> Option<i128> {
     };
 
     (amount >= 0).then_some(amount)
+}
+
+/// Parses a `u32` (e.g. `decimals()`'s return value) from a JSON value,
+/// which the stellar CLI encodes as a plain JSON number for types small
+/// enough not to risk precision loss.
+fn parse_u32(value: &Value) -> Option<u32> {
+    match value {
+        Value::Number(n) => u32::try_from(n.as_u64()?).ok(),
+        Value::String(s) => s.parse::<u32>().ok(),
+        _ => None,
+    }
 }

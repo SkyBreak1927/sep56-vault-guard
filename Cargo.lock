@@ -2175,6 +2175,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rounding-bug-vault"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+ "stellar-contract-utils",
+ "stellar-tokens",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

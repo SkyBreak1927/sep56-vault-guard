@@ -1750,7 +1750,7 @@ async fn call_preview(
 fn parse_non_negative_i128(value: &Value) -> Option<i128> {
     let amount = match value {
         Value::String(s) => s.parse::<i128>().ok()?,
-        Value::Number(n) => i128::try_from(n.as_i64()?).ok()?,
+        Value::Number(n) => i128::from(n.as_i64()?),
         _ => return None,
     };
 

@@ -2107,7 +2107,6 @@ name = "reference-vault"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
- "stellar-access",
  "stellar-tokens",
 ]
 
@@ -2765,15 +2764,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "stellar-access"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aae4c50000565b08e97241a06cfb2cff4c3dfde12bdafa0b5303aca22139f38"
-dependencies = [
- "soroban-sdk",
-]
 
 [[package]]
 name = "stellar-contract-utils"

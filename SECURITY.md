@@ -14,7 +14,7 @@ found — and, just as importantly, what a PASS result does and does not prove.
 | `rounding_direction` | ✅ PASS*** | — |
 | `access_control_probing` | ✅ PASS | — |
 
-\* See caveat below — this result does not confirm the vault's own overflow-protection logic.
+\* Which layer actually rejects `i128::MAX` depends on `decimals_offset` — see §2. At the reference vault's `decimals_offset=0`, this result does not confirm the vault's own overflow-protection logic.
 \*\* Still FAILs even at `decimals_offset=6` (Vault A, §1a) or with a real, code-level "dead shares" mitigation (Hardened Vault, §1b) — see those sections below.
 \*\*\* Confirmed to actually detect a real violation, not just pass vacuously — see the Vault B self-validation note in §3.
 
@@ -113,7 +113,7 @@ still requires sizing a mitigation (or a deployer-seeded initial deposit) to
 the donation size actually worth defending against, not a one-size-fits-all
 constant.
 
-## 2. Overflow Protection — PASS, with an important caveat
+## 2. Overflow Protection — PASS, with an important caveat (at `decimals_offset=0`)
 
 **Status:** PASS (clean failure, not a silent wrong result)
 
@@ -129,10 +129,41 @@ an internal `total_assets()` call inside `preview_deposit` executing without
 error).
 
 In other words: this check confirms failure is clean, not silent — it does
-**not** confirm the vault's own overflow-protection arithmetic, since that
-math was never actually pushed to its overflow point in this scenario. A more
-conclusive test would need an underlying asset without Stellar's native `i64`
-ceiling.
+**not** confirm the vault's own overflow-protection arithmetic at this
+`decimals_offset`, since that math was never actually pushed to its overflow
+point in this scenario.
+
+### 2a. Follow-up: at `decimals_offset >= 1`, this check DOES confirm the vault's own overflow protection
+
+We initially assumed a "more conclusive test would need an underlying asset
+without Stellar's native `i64` ceiling" (i.e. a non-SAC custom token) — but
+testing **Blind Vault** (`CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7`,
+an unmodified reference-vault clone, `decimals_offset=3`, underlying asset a
+custom non-SAC token from `contracts/blind-asset`) revealed the real
+distinguishing factor is `decimals_offset`, not the asset type. At
+`decimals_offset >= 1`, `preview_deposit()` computes `assets *
+10^decimals_offset` — for `assets = i128::MAX` this overflows `i128` and
+panics from `stellar-tokens`' own checked arithmetic
+(`mul_div_with_rounding`, `SorobanFixedPointError::Overflow`) *before any
+asset transfer is attempted*, regardless of what the underlying asset is.
+
+This means **Vault A** (`decimals_offset=6`, deployed back in §1a) had
+*already* been exercising the vault's own overflow protection this whole
+time — its `overflow_protection` PASS was never actually examined closely
+enough to notice, since its detail text (before this fix) unconditionally
+printed the same SAC/native-XLM explanation regardless of `decimals_offset`.
+The verdict was always correct; the explanation attached to it was not,
+for any vault with `decimals_offset >= 1`.
+
+**Revised conclusion:** the reference vault's own `overflow_protection`
+result (`decimals_offset=0`, above) genuinely does not exercise the vault's
+own arithmetic — that caveat stands. But the earlier claim that a
+*different asset* was needed to get a more conclusive test was wrong; a
+non-zero `decimals_offset` is what's actually required, and we already had
+one deployed. `cli/src/checks/mod.rs`'s check now identifies which of the
+two failure layers actually applies and says so explicitly, instead of
+guessing. Full detail strings for both cases are in
+[VAULT_CHECKS.md](./VAULT_CHECKS.md#9-overflow_protection).
 
 ## 3. Rounding Direction — PASS
 
@@ -172,15 +203,19 @@ These findings apply to the bundled reference vault implementation
 security of any third-party SEP-56 vault — running Aegis Vault against your
 own contract produces an equivalent report for it.
 
-Vault A, Vault B, and Hardened Vault (referenced above) are additional
-testnet deployments used only to validate that the checker's findings
-generalize correctly — Vault A confirms the `decimals_offset` follow-up
-finding isn't specific to offset `0`, Vault B is a deliberately buggy
-negative control confirming `rounding_direction` detects a real violation,
-and Hardened Vault is a real (not vacuous) attempt at fixing the donation
-attack, evaluated honestly rather than tuned to pass. None represents a
-third-party vault under audit. See [VAULT_CHECKS.md](./VAULT_CHECKS.md) for
-full per-check results on all of them.
+Vault A, Vault B, Hardened Vault, and Blind Vault (referenced above) are
+additional testnet deployments used only to validate that the checker's
+findings generalize correctly — Vault A confirms the `decimals_offset`
+follow-up finding isn't specific to offset `0`, Vault B is a deliberately
+buggy negative control confirming `rounding_direction` detects a real
+violation, Hardened Vault is a real (not vacuous) attempt at fixing the
+donation attack evaluated honestly rather than tuned to pass, and Blind
+Vault is an unmodified reference-vault clone deployed with a non-native
+custom asset and `decimals_offset=3` — parameters fixed before seeing any
+result — specifically to stress-test the checker itself, which is how §2a
+was found. None represents a third-party vault under audit. See
+[VAULT_CHECKS.md](./VAULT_CHECKS.md) for full per-check results on all of
+them.
 
 ## Reporting a Vulnerability
 

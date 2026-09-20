@@ -110,18 +110,21 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 9. `overflow_protection`
 
-- **Function**: `check_overflow_protection` — [cli/src/checks/mod.rs:996](cli/src/checks/mod.rs#L996)
+- **Function**: `check_overflow_protection` — [cli/src/checks/mod.rs:1017](cli/src/checks/mod.rs#L1017)
 - **Validates**: Calling `deposit(assets = i128::MAX)` on a fresh vault fails **cleanly** (returns an error, leaves `total_assets()` at `0`, no corrupted state) rather than silently succeeding with a wrong result.
 - **SEP-56 reference** (`## Security Concerns`):
   > "Overflow Protection - Using Rust checked arithmetic operations that fail on overflow."
 
   Also: *"Data Validation - Validation logic for i128 amounts, including zero value checks and upper/lower bounds where applicable."*
 - **Category**: Security/Adversarial
-- **Honest caveat** (see the check's own detail output and code comments): for a native-XLM (or any classic-asset) underlying asset, `i128::MAX` is actually rejected by the classic Stellar Asset Contract's own `int64` amount ceiling, *after* the vault's own share-conversion math has already run to completion without error. This check therefore validates clean-failure behavior end-to-end, but does not on its own prove that the vault's *own* checked-arithmetic overflow protection (as opposed to the underlying SAC's limits) is what's doing the rejecting in this specific scenario.
+- **Which layer actually fails, and why the detail string now says so explicitly** (updated during Blind Vault testing, see below): this depends on `decimals_offset`, not the underlying asset alone.
+  - **`decimals_offset >= 1`**: `preview_deposit()` computes `assets * 10^decimals_offset` before any transfer is attempted. For `assets = i128::MAX` this overflows `i128` regardless of the underlying asset — `stellar-tokens`' `mul_div_with_rounding` panics rather than truncating. This case **does** confirm the vault's own checked-arithmetic overflow protection.
+  - **`decimals_offset == 0`**: `i128::MAX * 1` fits in `i128` without overflowing, so the call proceeds to actually attempt transferring `i128::MAX` of the underlying asset. For a classic/native asset (a Stellar Asset Contract), that transfer is rejected by the SAC's own `int64` amount ceiling — a limit outside the vault's control, so this case does **not** confirm the vault's own overflow protection. For a genuine custom Soroban token asset, the rejection is instead an ordinary insufficient-balance error on the depositor's account — also not an overflow demonstration.
+  - **Earlier version of this check** unconditionally claimed the SAC/native-XLM explanation for every vault. That's simply wrong whenever `decimals_offset >= 1` — including the already-deployed [Vault A](#vault-a--decimals_offset--6) (`decimals_offset = 6`), whose `overflow_protection` PASS had never had its detail text actually examined until this was caught. See the [Blind Vault](#blind-vault--custom-non-native-asset-decimals_offset--3) section below for how this was found.
 
 ### 10. `rounding_direction`
 
-- **Function**: `check_rounding_direction` — [cli/src/checks/mod.rs:1128](cli/src/checks/mod.rs#L1128)
+- **Function**: `check_rounding_direction` — [cli/src/checks/mod.rs:1178](cli/src/checks/mod.rs#L1178)
 - **Validates**: At a deliberately fractional share:asset ratio, `deposit()` rounds shares **down** (floor, matching `preview_deposit()`), while `mint()` rounds the assets charged **up** (ceil, matching `preview_mint()` and strictly exceeding the always-floor `convert_to_assets()`) — i.e. rounding always favors the vault over the user, never the reverse.
 - **SEP-56 reference** (`## Security Concerns`):
   > "Rounding Errors and Precision Loss - Using Soroban fixed-point code for vault's 'muldiv' operations."
@@ -132,7 +135,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 11. `access_control_probing`
 
-- **Function**: `check_access_control_probing` — [cli/src/checks/mod.rs:1428](cli/src/checks/mod.rs#L1428)
+- **Function**: `check_access_control_probing` — [cli/src/checks/mod.rs:1478](cli/src/checks/mod.rs#L1478)
 - **Validates**: An operator withdrawing on an owner's behalf without any prior `approve()` is rejected; after the owner grants a limited share allowance, an operator withdrawal within that limit succeeds and decrements the allowance by exactly the amount spent (not reset to `0`, not left unchanged); a withdrawal exceeding the remaining allowance is rejected, and a rejected transaction leaves the allowance untouched.
 - **SEP-56 reference** (`### Authorization Pattern`, under `## Design Rationale`):
   > "This standard does not enforce any specific authorization patterns for vault operations. Implementations are expected to add appropriate access controls based on their requirements, typically by: Using `operator.require_auth()` to verify the caller's authorization [...]"
@@ -144,14 +147,18 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ## Demo/Validation Vaults
 
-Four additional testnet deployments exist alongside our own reference
+Five additional testnet deployments exist alongside our own reference
 deployment — none represent third-party audits. Vault A and Vault B exist
 purely to validate that the checks above actually generalize to vaults
 other than the reference deployment; Demo Vault exists as a public showcase
 target with a standard, unmodified configuration; Hardened Vault implements
 a real donation-attack mitigation in contract code, for honest before/after
-comparison against the reference vault's known finding. All four use the
-same underlying native XLM asset as the reference vault.
+comparison against the reference vault's known finding; Blind Vault is an
+unmodified reference-vault clone deployed with parameters chosen *before*
+seeing any result, specifically to stress the checker itself rather than
+any vault code. Vault A, Vault B, Demo Vault, and Hardened Vault all use
+the same underlying native XLM asset as the reference vault; Blind Vault
+deliberately does not (see below).
 
 ### Vault A — `decimals_offset = 6`
 
@@ -169,9 +176,11 @@ same underlying native XLM asset as the reference vault.
 | 6 | `convert_to_shares` | PASS |
 | 7 | `convert_to_assets` | PASS |
 | 8 | `donation_attack` | **FAIL** (see follow-up finding in check #8 above — offset alone didn't neutralize this specific fixed-size attack) |
-| 9 | `overflow_protection` | PASS |
+| 9 | `overflow_protection` | PASS\* |
 | 10 | `rounding_direction` | PASS |
 | 11 | `access_control_probing` | PASS |
+
+\* Re-examined after the [Blind Vault](#blind-vault--custom-non-native-asset-decimals_offset--3) finding below: at `decimals_offset = 6`, this PASS was *always* the vault's own checked-arithmetic overflow protection (`assets * 10^6` overflows `i128` before any transfer is attempted), not the classic-asset int64 ceiling the check's detail text used to unconditionally claim. The verdict never changed — only the explanation, which nobody had actually read closely until check #9 was fixed.
 
 **10 PASS, 1 FAIL** — identical pass/fail pattern to the reference vault, confirming the offset generalization didn't introduce any false positives/negatives on the other 10 checks.
 
@@ -251,6 +260,31 @@ Running the exact same automated attack (1-stroop dust deposit, 100,000,000-stro
 **Side effect discovered during testing — `convert_to_shares`/`convert_to_assets` checker fix:** the pre-existing exact-equality round-trip assertion in these two checks (`convert_to_assets(convert_to_shares(x)) == x` and the reverse) turned out to only ever hold by coincidence, at share:asset ratios that divide evenly (a fresh vault's 1:1 ratio, or Vault A's exact power-of-ten offset) — every vault tested before this one happened to stay at such a ratio. The hardened vault's dead-shares-influenced ratio is not a clean multiple, and composing two floor divisions there legitimately loses a few units on round-trip (verified: `4000000 → 3999999` and `4000000 → 3999994` in the two directions) — a true mathematical property of floor/floor conversions, not a defect. The checks (`cli/src/checks/mod.rs`) were updated from exact equality to the provably correct bound `floor(floor(x·n/d)·d/n) <= x`, which still fails a vault whose round trip *creates* value (impossible for a correct floor-rounding vault) and still fails `contracts/rounding-bug-vault`'s round trip (which is provably `>= x` instead, since it rounds up) — verified by re-running the full suite against the reference vault, Vault A, Vault B, and Demo Vault after the fix, with no change in any of their results.
 
 **Takeaway**: a "burn dead shares in the constructor" mitigation is real, implementable, on-chain-verifiable protection — and it measurably helps (0 → 100 shares here) — but like `decimals_offset`, it is a fixed constant and cannot be sized to neutralize an attacker whose donation is chosen to be large relative to it. Meaningful protection against a well-funded attacker still requires pairing a fixed mitigation like this with a deployment-time safeguard scaled to the vault's expected usage (e.g. a real, asset-backed initial deposit sized by the deployer), as already recommended in SECURITY.md §1a.
+
+### Blind Vault — custom, non-native asset, `decimals_offset = 3`
+
+- **Vault address**: `CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7`
+- **Asset address**: `CCNIPWVKCN225GVSFC77LBI6Y4TZLQRR3LUTS7JLGBXED3Y2PMDI6SSG` (`contracts/blind-asset` — a minimal custom SEP-41 token with an admin-gated `mint()`, 7 decimals, not a Stellar Asset Contract)
+- **Code**: `contracts/blind-vault` — an **unmodified** copy of `contracts/reference-vault`; confirmed byte-for-byte via Wasm hash (`8e9f12ca88a...`, identical to the reference vault's own hash) rather than just by source inspection.
+- **Purpose**: a *blind* generalization test. The deployment parameters — a real custom (non-SAC) underlying asset, and `decimals_offset = 3` — were fixed in advance, before running a single check, specifically to combine two conditions never tested together before: a non-native asset, and a non-zero, non-power-of-ten-friendly-in-every-other-way offset. The goal wasn't to test a new mitigation; it was to stress the *checker itself* against a vault/asset combination outside everything it had been validated against so far.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `total_assets` | PASS |
+| 2 | `deposit` | PASS |
+| 3 | `mint` | PASS |
+| 4 | `withdraw` | PASS |
+| 5 | `redeem` | PASS |
+| 6 | `convert_to_shares` | PASS |
+| 7 | `convert_to_assets` | PASS |
+| 8 | `donation_attack` | **FAIL** (baseline finding, unrelated to this vault being unmodified) |
+| 9 | `overflow_protection` | PASS\* |
+| 10 | `rounding_direction` | PASS |
+| 11 | `access_control_probing` | PASS |
+
+**10 PASS, 1 FAIL** — identical pattern to the reference vault, confirming the checker's core logic generalizes correctly to a real custom asset and a `decimals_offset` other than `0` or `6`.
+
+\* **This PASS is where the blind test actually found something** — not in the vault, in check #9's own detail text. Before investigating, the check unconditionally printed: *"for a native XLM underlying asset, this failure is triggered by the classic Stellar Asset Contract's own int64 amount ceiling..."* — for a vault whose asset is neither native XLM nor a Stellar Asset Contract at all. Tracing the actual cause in `stellar-contract-utils`' `mul_div_with_rounding` (`i128_fixed_point.rs:106`, `res.to_i128().unwrap_or_else(|| panic_with_error!(...Overflow))`) confirmed: at `decimals_offset = 3`, `preview_deposit(i128::MAX)` computes `i128::MAX * 10^3`, which overflows `i128` and panics from the **vault's own checked arithmetic**, before any asset transfer is ever attempted — completely independent of what the underlying asset is. The verdict (PASS) was always correct; the explanation was not. See check #9 above and SECURITY.md §2 for the fix and its knock-on effect on Vault A's own (previously unexamined) result.
 
 ---
 

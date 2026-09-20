@@ -15,7 +15,7 @@ found — and, just as importantly, what a PASS result does and does not prove.
 | `access_control_probing` | ✅ PASS | — |
 
 \* See caveat below — this result does not confirm the vault's own overflow-protection logic.
-\*\* Still FAILs even at `decimals_offset=6` (Vault A) — see §1a below.
+\*\* Still FAILs even at `decimals_offset=6` (Vault A, §1a) or with a real, code-level "dead shares" mitigation (Hardened Vault, §1b) — see those sections below.
 \*\*\* Confirmed to actually detect a real violation, not just pass vacuously — see the Vault B self-validation note in §3.
 
 ## 1. Donation / Inflation Attack — VULNERABLE
@@ -62,6 +62,56 @@ attack for the attacker (see the P&L analysis above) but is not on its own a
 guarantee of victim safety against a well-funded attacker. Pair it with a
 deployment-time safeguard — e.g. the deployer seeding a non-trivial initial
 deposit themselves — rather than relying on offset alone.
+
+### 1b. Follow-up: a real "dead shares" mitigation helps, but doesn't fix it either
+
+`decimals_offset` is a *virtual* mitigation — it scales share arithmetic but
+never actually locks up any real shares. To test the other mitigation SEP-56
+itself suggests — "burning a minimum initial deposit as dead shares" — we
+implemented it for real: **Hardened Vault**
+(`CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG`, source in
+`contracts/hardened-vault`) burns 1,000 vault shares to the vault's own
+contract address — which can never authorize spending them — at construction
+time, before any deposit is possible. This isn't a parameter tweak like
+Vault A; it's actual contract logic, verified on-chain (`total_supply() =
+1000` immediately after deployment, before any deposit).
+
+Re-running the exact same attack (1-stroop dust deposit, 100,000,000-stroop
+donation, 5,000,000-stroop victim deposit): the victim received **100 shares
+instead of 0** — a real, measurable improvement — but still **far below** the
+4,500,000 shares (90% of the 5,000,000 expected) this check requires to PASS.
+`donation_attack` still FAILs.
+
+Why: the same limitation as §1a, just for an additive constant instead of a
+multiplicative offset. 1,000 dead shares only meaningfully protects against a
+donation on roughly the same order of magnitude as itself. Our fixed
+donation (100,000,000 stroops) is five orders of magnitude larger. Scaling
+`DEAD_SHARES` up to the ~10⁹ range needed to neutralize this specific test
+would stop being "a small amount of dead shares" by any reasonable
+definition — we deliberately did not do this, since the goal was an honest
+evaluation of a realistic mitigation, not a value reverse-engineered to pass
+one fixed test.
+
+**Side finding:** testing Hardened Vault also exposed that the CLI's own
+`convert_to_shares`/`convert_to_assets` checks had an exact-equality
+round-trip assertion that only ever held by coincidence, at share:asset
+ratios that divide evenly — every vault tested before this one happened to
+stay at such a ratio. Hardened Vault's dead-shares-influenced ratio doesn't,
+and two floor-rounded conversions there legitimately lose a few units on
+round-trip (a true mathematical property, not a defect: composing two floor
+divisions can only ever lose precision, never gain it). The checks were
+fixed to assert the provably correct bound instead of exact equality — see
+[VAULT_CHECKS.md](./VAULT_CHECKS.md#6-convert_to_shares) for the full
+before/after and the regression testing done against every other vault in
+this document to confirm nothing else changed.
+
+**Combined recommendation (§1a + §1b):** neither `decimals_offset` nor a
+fixed dead-shares constant, alone or combined, guarantees safety against a
+sufficiently well-funded attacker — both are fixed-size defenses against a
+donation size the attacker chooses. Real protection for a given deployment
+still requires sizing a mitigation (or a deployer-seeded initial deposit) to
+the donation size actually worth defending against, not a one-size-fits-all
+constant.
 
 ## 2. Overflow Protection — PASS, with an important caveat
 
@@ -122,13 +172,15 @@ These findings apply to the bundled reference vault implementation
 security of any third-party SEP-56 vault — running Aegis Vault against your
 own contract produces an equivalent report for it.
 
-Vault A and Vault B (referenced above) are additional testnet deployments
-used only to validate that the checker's findings generalize correctly —
-Vault A confirms the `decimals_offset` follow-up finding isn't specific to
-offset `0`, and Vault B is a deliberately buggy negative control confirming
-`rounding_direction` detects a real violation. Neither represents a
+Vault A, Vault B, and Hardened Vault (referenced above) are additional
+testnet deployments used only to validate that the checker's findings
+generalize correctly — Vault A confirms the `decimals_offset` follow-up
+finding isn't specific to offset `0`, Vault B is a deliberately buggy
+negative control confirming `rounding_direction` detects a real violation,
+and Hardened Vault is a real (not vacuous) attempt at fixing the donation
+attack, evaluated honestly rather than tuned to pass. None represents a
 third-party vault under audit. See [VAULT_CHECKS.md](./VAULT_CHECKS.md) for
-full per-check results on both.
+full per-check results on all of them.
 
 ## Reporting a Vulnerability
 

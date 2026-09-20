@@ -65,16 +65,17 @@ These validate that the target vault correctly implements the seven core read/wr
 
 ### 6. `convert_to_shares`
 
-- **Function**: `check_convert_to_shares` — [cli/src/checks/mod.rs:508](cli/src/checks/mod.rs#L508)
-- **Validates**: Round-trip consistency — `convert_to_assets(convert_to_shares(x))` returns `x` again — rather than a hardcoded 1:1 expectation, so it stays meaningful on vaults at any share:asset ratio or `decimals_offset`; and that `convert_to_shares()` is read-only (does not change `total_assets()`).
+- **Function**: `check_convert_to_shares` — [cli/src/checks/mod.rs:527](cli/src/checks/mod.rs#L527)
+- **Validates**: Round-trip bound — `convert_to_assets(convert_to_shares(x))` does not *exceed* `x` — rather than a hardcoded 1:1 expectation, so it stays meaningful on vaults at any share:asset ratio or `decimals_offset`; and that `convert_to_shares()` is read-only (does not change `total_assets()`).
+  **Note (updated during hardened-vault testing):** this was originally an exact-equality check. Composing two floor divisions is only ever guaranteed to lose precision, never gain it — `floor(floor(x·n/d)·d/n) <= x` holds for any positive integers `x, n, d` — so exact equality only ever held by coincidence, at ratios that happen to divide evenly (a fresh 1:1 vault, or an exact power-of-ten `decimals_offset`). Testing `contracts/hardened-vault` (a non-1:1, non-power-of-ten ratio by design) exposed this: the round trip legitimately landed 1 unit below the original, which the old exact check flagged as a false FAIL. The bound is now `<=`, which still catches an actual defect — a round trip that *creates* value — and still fails a vault that rounds up instead of down (its round trip is provably `>= x` instead), just as `contracts/rounding-bug-vault` continues to demonstrate via [`rounding_direction`](#10-rounding_direction).
 - **SEP-56 reference** (`## Interface`, `fn convert_to_shares`):
   > "Converts an amount of underlying assets to the equivalent amount of vault shares (rounded down)."
 - **Category**: Positive Conformance
 
 ### 7. `convert_to_assets`
 
-- **Function**: `check_convert_to_assets` — [cli/src/checks/mod.rs:599](cli/src/checks/mod.rs#L599)
-- **Validates**: Round-trip consistency in the other direction — `convert_to_shares(convert_to_assets(x))` returns `x` again — and that `convert_to_assets()` is read-only (no change to `total_assets()`).
+- **Function**: `check_convert_to_assets` — [cli/src/checks/mod.rs:615](cli/src/checks/mod.rs#L615)
+- **Validates**: Round-trip bound in the other direction — `convert_to_shares(convert_to_assets(x))` does not *exceed* `x` — and that `convert_to_assets()` is read-only (no change to `total_assets()`). See the note under [`convert_to_shares`](#6-convert_to_shares) above for why this is `<=` rather than exact equality.
 - **SEP-56 reference** (`## Interface`, `fn convert_to_assets`):
   > "Converts an amount of vault shares to the equivalent amount of underlying assets (rounded down)."
 - **Category**: Positive Conformance
@@ -87,7 +88,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 8. `donation_attack` — ⚠️ Known Finding
 
-- **Function**: `check_donation_attack` — [cli/src/checks/mod.rs:754](cli/src/checks/mod.rs#L754)
+- **Function**: `check_donation_attack` — [cli/src/checks/mod.rs:767](cli/src/checks/mod.rs#L767)
 - **Validates**: Simulates the exact donation/inflation attack described in the spec — an attacker deposits a dust amount, then donates a large amount directly to the vault's contract address (bypassing `deposit()`), then a victim deposits normally. PASS requires the victim receive at least 90% of the shares they would proportionally be owed; attacker profit/loss is recorded as supplementary context only (see rationale below).
 - **SEP-56 reference** (`## Notes On Decimals Offset`), which describes this exact attack mechanism almost verbatim:
   > "Attacker deposits minimal amount (e.g. 1 token) → receives 1 share
@@ -109,7 +110,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 9. `overflow_protection`
 
-- **Function**: `check_overflow_protection` — [cli/src/checks/mod.rs:975](cli/src/checks/mod.rs#L975)
+- **Function**: `check_overflow_protection` — [cli/src/checks/mod.rs:996](cli/src/checks/mod.rs#L996)
 - **Validates**: Calling `deposit(assets = i128::MAX)` on a fresh vault fails **cleanly** (returns an error, leaves `total_assets()` at `0`, no corrupted state) rather than silently succeeding with a wrong result.
 - **SEP-56 reference** (`## Security Concerns`):
   > "Overflow Protection - Using Rust checked arithmetic operations that fail on overflow."
@@ -120,7 +121,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 10. `rounding_direction`
 
-- **Function**: `check_rounding_direction` — [cli/src/checks/mod.rs:1107](cli/src/checks/mod.rs#L1107)
+- **Function**: `check_rounding_direction` — [cli/src/checks/mod.rs:1128](cli/src/checks/mod.rs#L1128)
 - **Validates**: At a deliberately fractional share:asset ratio, `deposit()` rounds shares **down** (floor, matching `preview_deposit()`), while `mint()` rounds the assets charged **up** (ceil, matching `preview_mint()` and strictly exceeding the always-floor `convert_to_assets()`) — i.e. rounding always favors the vault over the user, never the reverse.
 - **SEP-56 reference** (`## Security Concerns`):
   > "Rounding Errors and Precision Loss - Using Soroban fixed-point code for vault's 'muldiv' operations."
@@ -131,7 +132,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 11. `access_control_probing`
 
-- **Function**: `check_access_control_probing` — [cli/src/checks/mod.rs:1404](cli/src/checks/mod.rs#L1404)
+- **Function**: `check_access_control_probing` — [cli/src/checks/mod.rs:1428](cli/src/checks/mod.rs#L1428)
 - **Validates**: An operator withdrawing on an owner's behalf without any prior `approve()` is rejected; after the owner grants a limited share allowance, an operator withdrawal within that limit succeeds and decrements the allowance by exactly the amount spent (not reset to `0`, not left unchanged); a withdrawal exceeding the remaining allowance is rejected, and a rejected transaction leaves the allowance untouched.
 - **SEP-56 reference** (`### Authorization Pattern`, under `## Design Rationale`):
   > "This standard does not enforce any specific authorization patterns for vault operations. Implementations are expected to add appropriate access controls based on their requirements, typically by: Using `operator.require_auth()` to verify the caller's authorization [...]"
@@ -143,12 +144,14 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ## Demo/Validation Vaults
 
-Three additional testnet deployments exist alongside our own reference
+Four additional testnet deployments exist alongside our own reference
 deployment — none represent third-party audits. Vault A and Vault B exist
 purely to validate that the checks above actually generalize to vaults
 other than the reference deployment; Demo Vault exists as a public showcase
-target with a standard, unmodified configuration. All three use the same
-underlying native XLM asset as the reference vault.
+target with a standard, unmodified configuration; Hardened Vault implements
+a real donation-attack mitigation in contract code, for honest before/after
+comparison against the reference vault's known finding. All four use the
+same underlying native XLM asset as the reference vault.
 
 ### Vault A — `decimals_offset = 6`
 
@@ -216,6 +219,38 @@ underlying native XLM asset as the reference vault.
 | 11 | `access_control_probing` | PASS |
 
 **10 PASS, 1 FAIL** — identical pass/fail pattern to the reference vault, confirming this showcase deployment behaves exactly as expected with no configuration drift.
+
+### Hardened Vault — real donation-attack mitigation (`decimals_offset = 0`)
+
+- **Address**: `CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG`
+- **Code**: `contracts/hardened-vault` — a copy of the reference vault whose constructor additionally burns `DEAD_SHARES = 1000` vault shares to the vault's own contract address (which can never authorize spending them), before any deposit is possible. `decimals_offset = 0`, same underlying native XLM asset as the reference vault.
+- **Purpose**: implement and honestly evaluate the SEP-56 spec's own recommended donation-attack mitigation — "burning a minimum initial deposit as dead shares" (SECURITY.md §1) — as real contract logic, not a parameter change like Vault A.
+- **Why the mint happens in the constructor, not lazily on the first `deposit()`/`mint()` call**: an earlier design minted the dead shares inside `deposit()`/`mint()`, guarded by `total_supply() == 0`. That breaks a different invariant: SEP-56 requires `deposit()`'s returned shares to exactly match a `preview_deposit()` computed immediately beforehand, which the CLI's own `deposit`/`mint` checks enforce. Minting the dead shares *inside* the call would move `total_supply` between an external caller's `preview_deposit()` and the actual `deposit()` — but only for the vault's very first transaction, i.e. exactly the transaction the CLI's own `deposit` check performs. Minting once in the constructor, before the vault can receive any call at all, avoids this: `total_supply` is already `1000` before any `preview_*`/execute pair is ever observed.
+- **Verified on-chain immediately after deployment, before any deposit**: `total_supply() = 1000` and `balance(<vault address>) = 1000` — confirming the mitigation is live, not just present in source.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `total_assets` | PASS |
+| 2 | `deposit` | PASS |
+| 3 | `mint` | PASS |
+| 4 | `withdraw` | PASS |
+| 5 | `redeem` | PASS |
+| 6 | `convert_to_shares` | PASS |
+| 7 | `convert_to_assets` | PASS |
+| 8 | `donation_attack` | **FAIL** — mitigated but not enough to pass this check's fixed attack size (see below) |
+| 9 | `overflow_protection` | PASS |
+| 10 | `rounding_direction` | PASS |
+| 11 | `access_control_probing` | PASS |
+
+**10 PASS, 1 FAIL** — same pattern as the reference vault. This was **not** the first result: before a follow-up checker fix (below), this vault produced **8 PASS, 3 FAIL**, with `convert_to_shares` and `convert_to_assets` also failing.
+
+**`donation_attack` — mitigation works, but not enough to flip this specific fixed-size attack to PASS:**
+
+Running the exact same automated attack (1-stroop dust deposit, 100,000,000-stroop donation, 5,000,000-stroop victim deposit) that leaves the reference vault's victim with 0 shares, the hardened vault's victim received **100 shares (still ~0% of the 5,000,000 expected, below the check's 90% threshold)** — a real, measurable improvement over 0, but nowhere near enough to pass. The reason is the same limitation already identified for `decimals_offset` in §1a: `DEAD_SHARES = 1000` is a *fixed* constant, and this check's donation (100,000,000 stroops) is five orders of magnitude larger than it. A dead-shares constant only meaningfully protects against a donation within roughly the same order of magnitude as itself; making `DEAD_SHARES` large enough to neutralize this specific 100,000,000-stroop donation (something on the order of 10⁹) would not be "a small amount of dead shares" by any reasonable definition, and was deliberately not done — the goal here was an honest evaluation of a realistic mitigation, not a value tuned to this one test.
+
+**Side effect discovered during testing — `convert_to_shares`/`convert_to_assets` checker fix:** the pre-existing exact-equality round-trip assertion in these two checks (`convert_to_assets(convert_to_shares(x)) == x` and the reverse) turned out to only ever hold by coincidence, at share:asset ratios that divide evenly (a fresh vault's 1:1 ratio, or Vault A's exact power-of-ten offset) — every vault tested before this one happened to stay at such a ratio. The hardened vault's dead-shares-influenced ratio is not a clean multiple, and composing two floor divisions there legitimately loses a few units on round-trip (verified: `4000000 → 3999999` and `4000000 → 3999994` in the two directions) — a true mathematical property of floor/floor conversions, not a defect. The checks (`cli/src/checks/mod.rs`) were updated from exact equality to the provably correct bound `floor(floor(x·n/d)·d/n) <= x`, which still fails a vault whose round trip *creates* value (impossible for a correct floor-rounding vault) and still fails `contracts/rounding-bug-vault`'s round trip (which is provably `>= x` instead, since it rounds up) — verified by re-running the full suite against the reference vault, Vault A, Vault B, and Demo Vault after the fix, with no change in any of their results.
+
+**Takeaway**: a "burn dead shares in the constructor" mitigation is real, implementable, on-chain-verifiable protection — and it measurably helps (0 → 100 shares here) — but like `decimals_offset`, it is a fixed constant and cannot be sized to neutralize an attacker whose donation is chosen to be large relative to it. Meaningful protection against a well-funded attacker still requires pairing a fixed mitigation like this with a deployment-time safeguard scaled to the vault's expected usage (e.g. a real, asset-backed initial deposit sized by the deployer), as already recommended in SECURITY.md §1a.
 
 ---
 

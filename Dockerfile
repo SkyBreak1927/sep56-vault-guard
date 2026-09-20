@@ -14,7 +14,7 @@ RUN cargo build --release -p sep56-vault-guard
 FROM node:20-bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the official prebuilt Stellar CLI binary (same version this

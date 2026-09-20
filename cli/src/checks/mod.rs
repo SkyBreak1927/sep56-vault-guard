@@ -502,12 +502,26 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
 
 /// Calls `convert_to_shares(assets = 4_000_000)` (a read-only conversion,
 /// no vault shares are actually minted) and checks that:
-/// 1. Round-trip consistency: `convert_to_assets(convert_to_shares(4_000_000))`
-///    returns `4_000_000` again. This is deliberately compared via a
-///    round trip rather than a hardcoded 1:1 expectation, since a vault's
-///    share:asset ratio depends on its `decimals_offset` and accrued
-///    activity — a hardcoded "shares == assets" assumption would only
-///    ever hold for a fresh `decimals_offset = 0` vault.
+/// 1. Round-trip bound: `convert_to_assets(convert_to_shares(4_000_000))`
+///    does not *exceed* `4_000_000`. This is compared via a round trip
+///    rather than a hardcoded 1:1 expectation, since a vault's share:asset
+///    ratio depends on its `decimals_offset` and accrued activity — a
+///    hardcoded "shares == assets" assumption would only ever hold for a
+///    fresh `decimals_offset = 0` vault.
+///
+///    The bound is `<=`, not `==`: SEP-56 requires both conversions to
+///    round DOWN, and composing two floor divisions is only guaranteed to
+///    ever lose precision, never gain it — `floor(floor(x·n/d)·d/n) <= x`
+///    holds for any positive integers `x, n, d`. Exact equality only ever
+///    holds by coincidence, at ratios that happen to divide evenly (e.g.
+///    a fresh vault's 1:1 ratio, or an exact power-of-ten
+///    `decimals_offset`); at any other ratio, two floor roundings can
+///    legitimately lose a few units without indicating a bug. A result
+///    that *exceeds* the original, however, would mean the vault created
+///    value out of a round trip — that's the actual defect this check
+///    exists to catch, and `<=` still catches it (as does a vault that
+///    rounds UP instead of down, like `contracts/rounding-bug-vault`,
+///    whose round-trip is provably `>= x` instead).
 /// 2. `total_assets()` is unchanged before/after the calls, since pure
 ///    conversions must not have any side effects on vault state.
 pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) -> CheckResult {
@@ -543,13 +557,14 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
         }
     };
 
-    if roundtrip_assets != CONVERT_ASSETS {
+    if roundtrip_assets > CONVERT_ASSETS {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "round-trip inconsistency: convert_to_assets(convert_to_shares({CONVERT_ASSETS})) \
-                 = convert_to_assets({shares}) = {roundtrip_assets}, expected {CONVERT_ASSETS}"
+                "round-trip violation: convert_to_assets(convert_to_shares({CONVERT_ASSETS})) \
+                 = convert_to_assets({shares}) = {roundtrip_assets}, which EXCEEDS \
+                 {CONVERT_ASSETS} — floor/floor round-tripping must never gain value"
             ),
         };
     }
@@ -581,18 +596,20 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
         passed: true,
         detail: format!(
             "convert_to_shares({CONVERT_ASSETS}) = {shares}, round-trip \
-             convert_to_assets({shares}) = {roundtrip_assets} (consistent), \
-             total_assets unchanged at {before}"
+             convert_to_assets({shares}) = {roundtrip_assets} (<= {CONVERT_ASSETS}, \
+             as required of floor/floor round-tripping), total_assets unchanged at {before}"
         ),
     }
 }
 
 /// Calls `convert_to_assets(shares = 4_000_000)` (a read-only conversion)
 /// and checks that:
-/// 1. Round-trip consistency: `convert_to_shares(convert_to_assets(4_000_000))`
-///    returns `4_000_000` again — compared via round trip, not a
+/// 1. Round-trip bound: `convert_to_shares(convert_to_assets(4_000_000))`
+///    does not *exceed* `4_000_000` — compared via round trip, not a
 ///    hardcoded 1:1 expectation, for the same reason as
-///    [`check_convert_to_shares`] (ratio depends on `decimals_offset`).
+///    [`check_convert_to_shares`] (ratio depends on `decimals_offset`); see
+///    that function's doc comment for why the bound is `<=` rather than
+///    exact equality.
 /// 2. `total_assets()` is unchanged before/after the calls, since pure
 ///    conversions must not have any side effects on vault state.
 pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) -> CheckResult {
@@ -628,13 +645,14 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
         }
     };
 
-    if roundtrip_shares != CONVERT_SHARES {
+    if roundtrip_shares > CONVERT_SHARES {
         return CheckResult {
             name,
             passed: false,
             detail: format!(
-                "round-trip inconsistency: convert_to_shares(convert_to_assets({CONVERT_SHARES})) \
-                 = convert_to_shares({assets}) = {roundtrip_shares}, expected {CONVERT_SHARES}"
+                "round-trip violation: convert_to_shares(convert_to_assets({CONVERT_SHARES})) \
+                 = convert_to_shares({assets}) = {roundtrip_shares}, which EXCEEDS \
+                 {CONVERT_SHARES} — floor/floor round-tripping must never gain value"
             ),
         };
     }
@@ -666,8 +684,8 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
         passed: true,
         detail: format!(
             "convert_to_assets({CONVERT_SHARES}) = {assets}, round-trip \
-             convert_to_shares({assets}) = {roundtrip_shares} (consistent), \
-             total_assets unchanged at {before}"
+             convert_to_shares({assets}) = {roundtrip_shares} (<= {CONVERT_SHARES}, \
+             as required of floor/floor round-tripping), total_assets unchanged at {before}"
         ),
     }
 }

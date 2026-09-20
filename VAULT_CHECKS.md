@@ -143,10 +143,12 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ## Demo/Validation Vaults
 
-Two additional testnet deployments exist purely to validate that the checks
-above actually generalize to vaults other than our own reference deployment
-— not to represent third-party audits. Both use the same underlying native
-XLM asset as the reference vault.
+Three additional testnet deployments exist alongside our own reference
+deployment — none represent third-party audits. Vault A and Vault B exist
+purely to validate that the checks above actually generalize to vaults
+other than the reference deployment; Demo Vault exists as a public showcase
+target with a standard, unmodified configuration. All three use the same
+underlying native XLM asset as the reference vault.
 
 ### Vault A — `decimals_offset = 6`
 
@@ -191,6 +193,29 @@ XLM asset as the reference vault.
 | 11 | `access_control_probing` | PASS |
 
 **9 PASS, 2 FAIL** — `rounding_direction` is the only *newly* failing check compared to the reference vault, isolating exactly the bug that was injected.
+
+### Demo Vault — public showcase (`decimals_offset = 0`)
+
+- **Address**: `CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ`
+- **Code**: identical to `contracts/reference-vault` (same Wasm hash `8e9f12ca88aa575eaa28fd959f124eeceb636a3bf28d053254ae1a3ed3f60b3d`), deployed with `--decimals_offset 0` — the standard configuration, not modified like Vault A or Vault B.
+- **On-chain metadata**: name `Demo Vault`, symbol `DEMO`; underlying asset is native XLM (testnet SAC `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`), same as the reference vault.
+- **Purpose**: a dedicated, publicly-referenceable deployment for demos and showcases, kept separate from the reference vault so the reference vault's own state isn't disturbed by public interaction.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `total_assets` | PASS |
+| 2 | `deposit` | PASS |
+| 3 | `mint` | PASS |
+| 4 | `withdraw` | PASS |
+| 5 | `redeem` | PASS |
+| 6 | `convert_to_shares` | PASS |
+| 7 | `convert_to_assets` | PASS |
+| 8 | `donation_attack` | **FAIL** (expected — same baseline finding as the reference vault at `decimals_offset = 0`) |
+| 9 | `overflow_protection` | PASS |
+| 10 | `rounding_direction` | PASS |
+| 11 | `access_control_probing` | PASS |
+
+**10 PASS, 1 FAIL** — identical pass/fail pattern to the reference vault, confirming this showcase deployment behaves exactly as expected with no configuration drift.
 
 ---
 

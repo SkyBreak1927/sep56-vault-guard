@@ -1,64 +1,92 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aegis Vault — SEP-56 Conformance Checker</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aegis Vault — SEP-56 Conformance Checker</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
-  <header class="site-header">
-    <div class="container">
+
+<header class="topbar">
+  <div class="wordmark"><span class="wordmark-mark">▣</span> aegis-vault</div>
+  <span class="topbar-tag">SEP-56 conformance &amp; security checker</span>
+  <a class="topbar-link" href="https://github.com/SkyBreak1927/sep56-vault-guard">source</a>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="terminal" id="hero-terminal">
+      <div class="terminal-titlebar">sep56-vault-guard --vault CAPH3...IJBNQ</div>
+      <pre class="terminal-body" id="hero-terminal-body">$ sep56-vault-guard --vault CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ
+
+<span class="line ok">✓ total_assets            PASS</span>
+<span class="line ok">✓ deposit                 PASS</span>
+<span class="line ok">✓ mint                    PASS</span>
+<span class="line ok">✓ withdraw                PASS</span>
+<span class="line ok">✓ redeem                  PASS</span>
+<span class="line ok">✓ convert_to_shares       PASS</span>
+<span class="line ok">✓ convert_to_assets       PASS</span>
+<span class="line bad">✗ donation_attack         FAIL  vulnerable to inflation attack</span>
+<span class="line ok">✓ overflow_protection     PASS</span>
+<span class="line ok">✓ rounding_direction      PASS</span>
+<span class="line ok">✓ access_control_probing  PASS</span>
+
+<span class="line summary">10 passed, 1 failed — 11 checks in 1m43s</span></pre>
+    </div>
+    <div class="hero-text">
       <h1>Aegis Vault</h1>
-      <p class="subtitle">SEP-56 Conformance Checker</p>
+      <p>An open-source checker for SEP-56 tokenized vaults on Stellar. Point it at a Soroban vault contract and it runs 11 conformance and security checks — the same ones shown above — and tells you exactly what passes and what doesn't.</p>
     </div>
-  </header>
+  </section>
 
-  <main class="container">
-    <section class="live-checker">
-      <h2>Run a Live Check</h2>
-      <p class="section-desc">Try our demo vault, or paste your own SEP-56 vault address</p>
+  <section class="run">
+    <p class="comment">// run a live check</p>
+    <p class="run-lede">Paste any deployed SEP-56 vault address, or try the demo vault.</p>
 
-      <form class="check-form" id="check-form">
-        <input
-          type="text"
-          id="vault-input"
-          name="vault"
-          value="CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ"
-          autocomplete="off"
-          spellcheck="false"
-          aria-label="Vault contract address"
-        />
-        <button type="submit" id="run-check-btn">Run Check</button>
-      </form>
-      <p class="input-hint">Stellar contract address — starts with "C", 56 characters.</p>
+    <div class="run-line">
+      <span class="prompt">$ sep56-vault-guard --vault</span>
+      <input id="vault-input" type="text" spellcheck="false" autocomplete="off"
+        placeholder="CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ" />
+      <button id="run-btn" type="button">run check</button>
+    </div>
 
-      <div class="live-status" id="live-status" hidden></div>
+    <p class="run-hint" id="run-hint">
+      <span id="run-hint-text">Stellar contract address — starts with "C", 56 characters.</span>
+      <button id="use-demo" type="button" class="link-btn">use demo vault</button>
+    </p>
 
-      <section class="run-summary" id="live-run-summary"></section>
-      <div class="check-list" id="live-check-list"></div>
-    </section>
+    <div id="run-output" class="run-output" hidden>
+      <div class="run-status" id="run-status"></div>
+      <div class="run-results" id="run-results"></div>
+    </div>
+  </section>
 
-    <section class="example-run">
-      <h2>Example Run <span class="example-tag">static reference</span></h2>
-      <p class="section-desc">A previously-run report against our reference vault, kept here as a worked example.</p>
-
-      <section class="run-summary" id="run-summary">
-        <!-- Filled in by app.js from results.json -->
-      </section>
-
-      <div class="check-list" id="check-list">
-        <!-- Check rows rendered by app.js -->
+  <section class="about">
+    <p class="comment">// how it works</p>
+    <div class="about-grid">
+      <div>
+        <h2>What it checks</h2>
+        <p>Seven checks confirm the vault behaves the way SEP-56 requires — deposits, withdrawals, and share math all matching what the contract itself previews. Four more probe it the way an attacker would: donation attacks, overflow, rounding direction, and access control.</p>
       </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="container">
-      <p>"Run a Live Check" above calls our backend at <code>aegis-vault-backend.onrender.com</code>, which runs <code>sep56-vault-guard --output json</code> against the address you provide on Stellar testnet. The "Example Run" section below it is a static snapshot from an earlier manual run against our reference vault — not a live connection.</p>
+      <div>
+        <h2>How a check runs</h2>
+        <p>Positive checks call your vault directly. Security checks deploy a disposable clone with the same code and parameters first, then attack the clone — your vault's live state is never touched.</p>
+      </div>
     </div>
-  </footer>
+    <p class="about-links">
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/README.md">Read the docs</a>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/SECURITY.md">Security findings</a>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard">View source</a>
+    </p>
+  </section>
 
-  <script src="app.js"></script>
+</main>
+
+<script src="app.js"></script>
 </body>
 </html>

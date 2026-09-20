@@ -979,20 +979,41 @@ pub async fn check_donation_attack(
 /// wasm hash and underlying asset): calling `deposit()` with `assets =
 /// i128::MAX`.
 ///
-/// # What this check actually validates
+/// # What this check actually validates, and which layer actually fails
 ///
 /// This check verifies that an extreme input fails **cleanly** — the call
 /// returns an error and leaves no partial/corrupted vault state behind
 /// (`total_assets()` stays `0`) — rather than silently succeeding with a
-/// wrong result. It does **not** specifically prove that the vault's own
-/// overflow-protection math (`stellar-tokens`' checked arithmetic and
-/// `mul_div_with_rounding`'s i256 phantom-overflow handling) is what
-/// rejects the call. For a native-XLM (or any classic-asset) underlying
-/// asset, `i128::MAX` is rejected by the classic Stellar Asset Contract's
-/// own `int64` amount ceiling *after* the vault's share-conversion math
-/// has already run to completion — so this check exercises the SAC layer,
-/// not necessarily the vault's overflow protection specifically. See the
-/// detail string for which layer actually triggered the failure.
+/// wrong result. *Which* layer rejects the call depends on
+/// `decimals_offset`, and the detail string identifies the actual layer
+/// rather than assuming one:
+///
+/// - **`decimals_offset >= 1`**: `preview_deposit()` computes
+///   `assets * 10^decimals_offset` before any asset transfer is
+///   attempted. For `assets = i128::MAX` this overflows `i128` regardless
+///   of the underlying asset — `stellar-tokens`' `mul_div_with_rounding`
+///   panics (`SorobanFixedPointError::Overflow`) rather than truncating.
+///   This *does* exercise the vault's own checked-arithmetic overflow
+///   protection.
+/// - **`decimals_offset == 0`**: the share computation is `i128::MAX * 1`,
+///   which fits in `i128` without overflowing, so the call proceeds to
+///   actually attempt transferring `i128::MAX` of the underlying asset.
+///   For a classic/native asset (a Stellar Asset Contract), that transfer
+///   is rejected by the SAC's own `int64` amount ceiling — a limit
+///   entirely outside the vault's control, so this case does **not**
+///   confirm the vault's own overflow protection. For a genuine custom
+///   Soroban token asset (confirmed by checking it has its own uploaded
+///   Wasm, i.e. it isn't a SAC), the rejection is instead an ordinary
+///   insufficient-balance error on the depositor's account — also not an
+///   overflow demonstration.
+///
+/// An earlier version of this check's detail string unconditionally
+/// claimed the SAC/native-XLM explanation regardless of `decimals_offset`
+/// or the actual underlying asset — which is simply wrong for any vault
+/// with `decimals_offset >= 1` (this was true even for the already-tested
+/// Vault A, `decimals_offset = 6`) or one using a non-SAC custom asset.
+/// This was caught by testing a vault combining both (`decimals_offset =
+/// 3`, a custom Soroban token) as a deliberate blind generalization test.
 pub async fn check_overflow_protection(target_vault: &str, deployer_account: &str) -> CheckResult {
     let name = "overflow_protection".to_string();
 
@@ -1008,7 +1029,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
         "--symbol".to_string(),
         "OVFCHK".to_string(),
         "--asset".to_string(),
-        underlying_asset,
+        underlying_asset.clone(),
         "--decimals_offset".to_string(),
         decimals_offset.to_string(),
     ];
@@ -1081,21 +1102,50 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
                  transaction left behind corrupted/partial state"
             ),
         },
-        Err(e) => CheckResult {
-            name,
-            passed: true,
-            detail: format!(
-                "deposit(assets=i128::MAX) on fresh vault {vault_id} failed cleanly ({e}), and \
-                 total_assets remained 0 — no silent-wrong-result observed. HONEST CAVEAT: for a \
-                 native XLM underlying asset, this failure is triggered by the classic Stellar \
-                 Asset Contract's own int64 amount ceiling (\"spent amount is too large for an \
-                 i64\"), reached AFTER the vault's own share-conversion math already completed \
-                 successfully (confirmed via the total_assets() call inside preview_deposit \
-                 executing without error). So this validates clean-failure behavior, NOT \
-                 specifically the vault's own overflow-protection math, which was never actually \
-                 pushed to its overflow point in this scenario."
-            ),
-        },
+        Err(e) => {
+            let layer_detail = if decimals_offset >= 1 {
+                format!(
+                    "this vault's decimals_offset={decimals_offset} means preview_deposit() \
+                     computes assets * 10^{decimals_offset}, which overflows i128 for \
+                     assets=i128::MAX regardless of the underlying asset — so this IS the \
+                     vault's own checked-arithmetic overflow protection (stellar-tokens' \
+                     mul_div_with_rounding, which panics rather than truncating), confirmed \
+                     before any asset transfer was even attempted"
+                )
+            } else {
+                // decimals_offset == 0: assets * 10^0 = assets, so i128::MAX fits without
+                // overflowing the vault's own math, and the call proceeds to actually attempt
+                // transferring i128::MAX of the underlying asset. Whether that transfer itself
+                // hits a ceiling depends on whether the asset is a classic Stellar Asset
+                // Contract (has no Wasm of its own) or a genuine custom Soroban token.
+                match fetch_wasm_hash(&underlying_asset).await {
+                    Err(_) => "at decimals_offset=0, the vault's own share math does not \
+                        overflow for i128::MAX (shares = assets exactly), so this failure is \
+                        instead triggered by the classic Stellar Asset Contract's own int64 \
+                        amount ceiling (\"spent amount is too large for an i64\") on the \
+                        underlying asset transfer — a limit outside the vault's control, NOT a \
+                        demonstration of the vault's own overflow protection"
+                        .to_string(),
+                    Ok(_) => "at decimals_offset=0, the vault's own share math does not \
+                        overflow for i128::MAX (shares = assets exactly), and the underlying \
+                        asset is a genuine custom Soroban token (confirmed to have its own \
+                        uploaded Wasm, i.e. not a Stellar Asset Contract) rather than one with \
+                        an int64 ceiling — so this failure is most likely an ordinary \
+                        insufficient-balance rejection on the depositor's account, NOT an \
+                        overflow demonstration of any kind"
+                        .to_string(),
+                }
+            };
+
+            CheckResult {
+                name,
+                passed: true,
+                detail: format!(
+                    "deposit(assets=i128::MAX) on fresh vault {vault_id} failed cleanly ({e}), \
+                     and total_assets remained 0 — no silent-wrong-result observed. {layer_detail}."
+                ),
+            }
+        }
     }
 }
 

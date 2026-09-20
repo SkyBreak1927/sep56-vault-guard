@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: aegis-vault-server
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://skybreak1927.github.io
+      - key: CHECK_TIMEOUT_MS
+        value: "180000"
+    autoDeployTrigger: commit

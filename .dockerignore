@@ -1,0 +1,6 @@
+.git
+target
+server/node_modules
+web
+docs
+*.md

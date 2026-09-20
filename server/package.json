@@ -1,0 +1,18 @@
+{
+  "name": "aegis-vault-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend service that runs the Aegis Vault SEP-56 CLI on demand for web requests.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1"
+  }
+}

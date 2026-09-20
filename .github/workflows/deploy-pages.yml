@@ -1,0 +1,47 @@
+name: Sync web/ to gh-pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync web/ into gh-pages
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin gh-pages
+          git worktree add gh-pages-wt origin/gh-pages
+
+          # Mirror web/ into the gh-pages root, overwriting old files and
+          # removing ones no longer present in web/. .nojekyll lives only on
+          # gh-pages (it's a GitHub Pages marker, not part of web/), so it's
+          # explicitly preserved rather than wiped with everything else.
+          find gh-pages-wt -mindepth 1 -maxdepth 1 ! -name .git ! -name .nojekyll -exec rm -rf {} +
+          cp -r web/. gh-pages-wt/
+
+          cd gh-pages-wt
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "web/ already in sync with gh-pages — nothing to deploy."
+            exit 0
+          fi
+
+          git commit -m "Sync web/ from main@${GITHUB_SHA}"
+          git push origin HEAD:gh-pages

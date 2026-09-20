@@ -15,12 +15,38 @@
   </header>
 
   <main class="container">
-    <section class="run-summary" id="run-summary">
-      <!-- Filled in by app.js from results.json -->
+    <section class="live-checker">
+      <h2>Run a Live Check</h2>
+      <p class="section-desc">Try our demo vault, or paste your own SEP-56 vault address</p>
+
+      <form class="check-form" id="check-form">
+        <input
+          type="text"
+          id="vault-input"
+          name="vault"
+          value="CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Vault contract address"
+        />
+        <button type="submit" id="run-check-btn">Run Check</button>
+      </form>
+      <p class="input-hint">Stellar contract address — starts with "C", 56 characters.</p>
+
+      <div class="live-status" id="live-status" hidden></div>
+
+      <section class="run-summary" id="live-run-summary"></section>
+      <div class="check-list" id="live-check-list"></div>
     </section>
 
-    <section class="checks">
-      <h2>Check Results</h2>
+    <section class="example-run">
+      <h2>Example Run <span class="example-tag">static reference</span></h2>
+      <p class="section-desc">A previously-run report against our reference vault, kept here as a worked example.</p>
+
+      <section class="run-summary" id="run-summary">
+        <!-- Filled in by app.js from results.json -->
+      </section>
+
       <div class="check-list" id="check-list">
         <!-- Check rows rendered by app.js -->
       </div>
@@ -29,7 +55,7 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p>Results shown are from the most recent CLI run against the reference vault, generated manually (<code>sep56-vault-guard --output json</code>) — not a live/real-time connection.</p>
+      <p>"Run a Live Check" above calls our backend at <code>aegis-vault-backend.onrender.com</code>, which runs <code>sep56-vault-guard --output json</code> against the address you provide on Stellar testnet. The "Example Run" section below it is a static snapshot from an earlier manual run against our reference vault — not a live connection.</p>
     </div>
   </footer>
 

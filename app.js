@@ -1,60 +1,141 @@
-// Loads real check results produced by the CLI (`sep56-vault-guard --output
-// json > web/results.json`). Shape per entry: { name, category, status, detail },
-// where status is "PASS" or "FAIL".
+// Drives the "run a live check" section: POST /api/check on the backend,
+// poll GET /api/check/:jobId until it settles, and render the result.
+// The hero terminal above it is static markup — no JS involved there.
 
-function renderSummary(results) {
-  const total = results.length;
-  const passed = results.filter((r) => r.status === "PASS").length;
-  const failed = total - passed;
+const API_BASE = "https://aegis-vault-backend.onrender.com";
+const DEMO_VAULT_ADDRESS = "CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ";
+const VAULT_ADDRESS_RE = /^C[A-Z2-7]{55}$/;
+const POLL_INTERVAL_MS = 5000;
+const MAX_POLL_ATTEMPTS = 90; // ~7.5 minutes, comfortably above the backend's own timeout
+const DEFAULT_HINT = 'Stellar contract address — starts with "C", 56 characters.';
 
-  const summary = document.getElementById("run-summary");
-  summary.innerHTML = `
-    <div class="summary-stat">
-      <div class="value">${total}</div>
-      <div class="label">Total Checks</div>
-    </div>
-    <div class="summary-stat pass">
-      <div class="value">${passed}</div>
-      <div class="label">Passed</div>
-    </div>
-    <div class="summary-stat fail">
-      <div class="value">${failed}</div>
-      <div class="label">Failed</div>
-    </div>
-  `;
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
 }
 
-function renderChecks(results) {
-  const list = document.getElementById("check-list");
-  list.innerHTML = results
+const vaultInput = document.getElementById("vault-input");
+const runBtn = document.getElementById("run-btn");
+const useDemoBtn = document.getElementById("use-demo");
+const runHint = document.getElementById("run-hint");
+const runHintText = document.getElementById("run-hint-text");
+const runOutput = document.getElementById("run-output");
+const runStatus = document.getElementById("run-status");
+const runResults = document.getElementById("run-results");
+
+function setHintError(message) {
+  runHintText.textContent = message;
+  runHint.classList.add("error");
+}
+
+function clearHintError() {
+  runHintText.textContent = DEFAULT_HINT;
+  runHint.classList.remove("error");
+}
+
+function renderRunResults(results) {
+  const rows = results
     .map((r) => {
       const passed = r.status === "PASS";
       return `
       <div class="check-row">
-        <div class="check-row-head">
-          <span class="badge ${passed ? "pass" : "fail"}">${r.status}</span>
-          <span class="check-name">${r.name}</span>
-          <span class="check-category">${r.category}</span>
+        <span class="check-status ${passed ? "pass" : "fail"}">${passed ? "✓" : "✗"}</span>
+        <div class="check-body">
+          <div class="check-name">${escapeHtml(r.name)}</div>
+          <div class="check-detail">${escapeHtml(r.detail)}</div>
         </div>
-        <p class="check-detail">${r.detail}</p>
-      </div>
-    `;
+      </div>`;
     })
     .join("");
+
+  const passedCount = results.filter((r) => r.status === "PASS").length;
+  const failedCount = results.length - passedCount;
+  const summary = `<div class="check-summary">${passedCount} passed, ${failedCount} failed</div>`;
+
+  runResults.innerHTML = rows + summary;
 }
 
-function renderError(message) {
-  const list = document.getElementById("check-list");
-  list.innerHTML = `<p class="check-detail">Failed to load results.json: ${message}</p>`;
+function endRun(statusText, { failed } = {}) {
+  runStatus.textContent = statusText;
+  runStatus.classList.remove("processing");
+  runBtn.disabled = false;
+  if (failed) runResults.innerHTML = "";
 }
 
-fetch("results.json")
-  .then((res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
+function pollJob(jobId, attempt) {
+  if (attempt > MAX_POLL_ATTEMPTS) {
+    endRun("Gave up waiting for a result — the check is taking unusually long. Please try again later.", { failed: true });
+    return;
+  }
+
+  fetch(`${API_BASE}/api/check/${jobId}`)
+    .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+    .then(({ body }) => {
+      if (body.status === "processing") {
+        setTimeout(() => pollJob(jobId, attempt + 1), POLL_INTERVAL_MS);
+        return;
+      }
+
+      if (body.status === "complete") {
+        renderRunResults(body.result);
+        endRun("Done.");
+        return;
+      }
+
+      // status === "error", or an unexpected shape
+      endRun(body.error || "The check failed for an unknown reason.", { failed: true });
+    })
+    .catch((err) => {
+      endRun(`Lost connection while checking job status: ${err.message}`, { failed: true });
+    });
+}
+
+function runCheck() {
+  const vault = vaultInput.value.trim();
+
+  if (!VAULT_ADDRESS_RE.test(vault)) {
+    setHintError('Invalid address — must start with "C" and be 56 characters long.');
+    return;
+  }
+  clearHintError();
+
+  runBtn.disabled = true;
+  runOutput.hidden = false;
+  runResults.innerHTML = "";
+  runStatus.textContent = "Processing... (usually 1-2 minutes)";
+  runStatus.classList.add("processing");
+
+  fetch(`${API_BASE}/api/check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vault }),
   })
-  .then((results) => {
-    renderSummary(results);
-    renderChecks(results);
-  })
-  .catch((err) => renderError(err.message));
+    .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+    .then(({ ok, body }) => {
+      if (!ok || !body.jobId) {
+        endRun(body.error || "Failed to start the check.", { failed: true });
+        return;
+      }
+      pollJob(body.jobId, 1);
+    })
+    .catch((err) => {
+      endRun(`Could not reach the backend: ${err.message}`, { failed: true });
+    });
+}
+
+runBtn.addEventListener("click", runCheck);
+
+vaultInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") runCheck();
+});
+
+vaultInput.addEventListener("input", () => {
+  if (runHint.classList.contains("error")) clearHintError();
+});
+
+useDemoBtn.addEventListener("click", () => {
+  vaultInput.value = DEMO_VAULT_ADDRESS;
+  clearHintError();
+  vaultInput.focus();
+});

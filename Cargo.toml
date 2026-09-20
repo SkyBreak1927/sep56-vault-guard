@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cli", "contracts/reference-vault", "contracts/rounding-bug-vault", "contracts/hardened-vault"]
+members = ["cli", "contracts/reference-vault", "contracts/rounding-bug-vault", "contracts/hardened-vault", "contracts/blind-asset", "contracts/blind-vault"]
 
 [profile.release]
 overflow-checks = true

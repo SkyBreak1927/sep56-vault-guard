@@ -1,10 +1,12 @@
 mod rpc;
 mod checks;
+mod status;
 
 use clap::Parser;
 use serde::Serialize;
 
 use checks::CheckResult;
+use status::{run_tracked, StatusReporter};
 
 const REFERENCE_VAULT_CONTRACT_ID: &str = "CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF";
 const SOURCE_ACCOUNT: &str = "alice";
@@ -32,6 +34,14 @@ struct Cli {
     /// programmatic consumption (e.g. by the web UI).
     #[arg(long, value_enum, default_value = "text")]
     output: OutputFormat,
+
+    /// Optional path to write a live-updating JSON status file to, as each
+    /// check starts and finishes — for a caller (e.g. a backend polling on
+    /// behalf of a web client) that wants real-time, per-check progress
+    /// instead of waiting for the full run to finish. When omitted, no
+    /// status file is written and behavior is otherwise unchanged.
+    #[arg(long)]
+    status_file: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, clap::ValueEnum)]
@@ -68,19 +78,45 @@ async fn main() {
     let cli = Cli::parse();
     let vault = cli.vault.as_str();
 
+    let status_reporter = StatusReporter::new(cli.status_file.clone(), vault).await;
+
     // The 7 Positive Conformance checks all read and mutate the SAME live
     // target vault, each one's expected before-state being the previous
     // check's resulting after-state (e.g. deposit's total_assets delta is
     // checked against mint's starting point) — they are genuinely
     // sequential, not just conservatively run one at a time, and must stay
     // in this exact order on this one shared account.
-    let total_assets_result = checks::check_total_assets(vault, SOURCE_ACCOUNT).await;
-    let deposit_result = checks::check_deposit(vault, SOURCE_ACCOUNT).await;
-    let mint_result = checks::check_mint(vault, SOURCE_ACCOUNT).await;
-    let withdraw_result = checks::check_withdraw(vault, SOURCE_ACCOUNT).await;
-    let redeem_result = checks::check_redeem(vault, SOURCE_ACCOUNT).await;
-    let convert_to_shares_result = checks::check_convert_to_shares(vault, SOURCE_ACCOUNT).await;
-    let convert_to_assets_result = checks::check_convert_to_assets(vault, SOURCE_ACCOUNT).await;
+    let total_assets_result = run_tracked(
+        &status_reporter,
+        "total_assets",
+        checks::check_total_assets(vault, SOURCE_ACCOUNT),
+    )
+    .await;
+    let deposit_result =
+        run_tracked(&status_reporter, "deposit", checks::check_deposit(vault, SOURCE_ACCOUNT))
+            .await;
+    let mint_result =
+        run_tracked(&status_reporter, "mint", checks::check_mint(vault, SOURCE_ACCOUNT)).await;
+    let withdraw_result = run_tracked(
+        &status_reporter,
+        "withdraw",
+        checks::check_withdraw(vault, SOURCE_ACCOUNT),
+    )
+    .await;
+    let redeem_result =
+        run_tracked(&status_reporter, "redeem", checks::check_redeem(vault, SOURCE_ACCOUNT)).await;
+    let convert_to_shares_result = run_tracked(
+        &status_reporter,
+        "convert_to_shares",
+        checks::check_convert_to_shares(vault, SOURCE_ACCOUNT),
+    )
+    .await;
+    let convert_to_assets_result = run_tracked(
+        &status_reporter,
+        "convert_to_assets",
+        checks::check_convert_to_assets(vault, SOURCE_ACCOUNT),
+    )
+    .await;
 
     // The 4 Security/Adversarial checks are the opposite: each deploys and
     // operates entirely on its own throwaway vault clone, so none of them
@@ -89,17 +125,39 @@ async fn main() {
     // sequential network round trips (deploy + a handful of invokes), and
     // that I/O wait time is exactly what concurrency overlaps. See the
     // account constants above for how the sequence-number race that would
-    // otherwise cause is avoided.
+    // otherwise cause is avoided. Each is wrapped in `run_tracked`, so its
+    // status file entry updates the instant *that* check finishes, not
+    // when the whole group does.
     let (
         donation_attack_result,
         overflow_protection_result,
         rounding_direction_result,
         access_control_probing_result,
     ) = tokio::join!(
-        checks::check_donation_attack(vault, SOURCE_ACCOUNT, VICTIM_ACCOUNT),
-        checks::check_overflow_protection(vault, OVERFLOW_DEPLOYER_ACCOUNT),
-        checks::check_rounding_direction(vault, ROUNDING_DEPLOYER_ACCOUNT),
-        checks::check_access_control_probing(vault, ACCESS_OWNER_ACCOUNT, ACCESS_OPERATOR_ACCOUNT),
+        run_tracked(
+            &status_reporter,
+            "donation_attack",
+            checks::check_donation_attack(vault, SOURCE_ACCOUNT, VICTIM_ACCOUNT),
+        ),
+        run_tracked(
+            &status_reporter,
+            "overflow_protection",
+            checks::check_overflow_protection(vault, OVERFLOW_DEPLOYER_ACCOUNT),
+        ),
+        run_tracked(
+            &status_reporter,
+            "rounding_direction",
+            checks::check_rounding_direction(vault, ROUNDING_DEPLOYER_ACCOUNT),
+        ),
+        run_tracked(
+            &status_reporter,
+            "access_control_probing",
+            checks::check_access_control_probing(
+                vault,
+                ACCESS_OWNER_ACCOUNT,
+                ACCESS_OPERATOR_ACCOUNT
+            ),
+        ),
     );
 
     let results: Vec<CheckResult> = vec![

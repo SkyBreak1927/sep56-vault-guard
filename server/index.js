@@ -1,5 +1,9 @@
 const { randomUUID } = require('crypto');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const fsp = require('fs/promises');
+const os = require('os');
+const path = require('path');
 
 const express = require('express');
 const cors = require('cors');
@@ -19,15 +23,25 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://skybreak1927.gi
 // (56 chars total, e.g. CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ).
 const VAULT_ADDRESS_RE = /^C[A-Z2-7]{55}$/;
 
+// Where the CLI's --status-file JSON snapshots (one per in-flight job) are
+// written. Created up front so the first job doesn't race directory
+// creation with its own spawn.
+const STATUS_DIR = path.join(os.tmpdir(), 'aegis-vault-status');
+fs.mkdirSync(STATUS_DIR, { recursive: true });
+
 // In-memory job store: jobId -> { status: 'processing'|'complete'|'error',
-// result?, error?, createdAt }. Fine for this scale — a single instance,
-// no need to survive restarts, and swept on a timer below.
+// result?, checks?, error?, createdAt, statusFilePath }. Fine for this
+// scale — a single instance, no need to survive restarts, and swept on a
+// timer below.
 const jobs = new Map();
 
 setInterval(() => {
   const cutoff = Date.now() - JOB_MAX_AGE_MS;
   for (const [jobId, job] of jobs) {
-    if (job.createdAt < cutoff) jobs.delete(jobId);
+    if (job.createdAt < cutoff) {
+      jobs.delete(jobId);
+      if (job.statusFilePath) fsp.unlink(job.statusFilePath).catch(() => {});
+    }
   }
 }, JOB_SWEEP_INTERVAL_MS).unref();
 
@@ -58,17 +72,38 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Reads and parses a CLI --status-file snapshot, returning its `checks`
+// array or null if the file doesn't exist yet (e.g. a brief race right
+// after the job was created, before the CLI's first write) or can't be
+// parsed. Never throws.
+async function readStatusFile(statusFilePath) {
+  try {
+    const raw = await fsp.readFile(statusFilePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.checks) ? parsed.checks : null;
+  } catch {
+    return null;
+  }
+}
+
 // Runs the CLI in the background against `vault` and writes the outcome
 // into `jobs.get(jobId)` — never touches `res`, since the HTTP response for
 // this job was already sent by the time this settles.
-function runCheckJob(jobId, vault) {
+function runCheckJob(jobId, vault, statusFilePath) {
   const startedAt = Date.now();
   const elapsed = () => `${Date.now() - startedAt}ms`;
   const log = (msg) => console.log(`[${new Date().toISOString()}] [job ${jobId}] ${msg}`);
 
   log(`started for vault=${vault}`);
 
-  const child = spawn(CLI_BINARY, ['--vault', vault, '--output', 'json']);
+  const child = spawn(CLI_BINARY, [
+    '--vault',
+    vault,
+    '--output',
+    'json',
+    '--status-file',
+    statusFilePath,
+  ]);
   log(`subprocess spawned (pid=${child.pid})`);
 
   let stdout = '';
@@ -103,17 +138,27 @@ function runCheckJob(jobId, vault) {
     settled = true;
     clearTimeout(timer);
     log(`subprocess failed to start at ${elapsed()}: ${error.message}`);
-    jobs.set(jobId, { status: 'error', error: 'Failed to start check process.', createdAt: startedAt });
+    jobs.set(jobId, {
+      status: 'error',
+      error: 'Failed to start check process.',
+      createdAt: startedAt,
+      statusFilePath,
+    });
   });
 
-  child.on('close', (code, signal) => {
+  child.on('close', async (code, signal) => {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
     log(`subprocess closed at ${elapsed()} (exitCode=${code}, signal=${signal})`);
 
     if (timedOut) {
-      jobs.set(jobId, { status: 'error', error: 'Check timed out.', createdAt: startedAt });
+      jobs.set(jobId, {
+        status: 'error',
+        error: 'Check timed out.',
+        createdAt: startedAt,
+        statusFilePath,
+      });
       return;
     }
 
@@ -125,7 +170,14 @@ function runCheckJob(jobId, vault) {
       try {
         const result = JSON.parse(stdout);
         log(`parsed ${result.length} check results successfully`);
-        jobs.set(jobId, { status: 'complete', result, createdAt: startedAt });
+        // Cache the final per-check status snapshot too (best-effort — the
+        // authoritative outcome is `result`, parsed straight from the
+        // CLI's own stdout above; `checks` is read back from the same
+        // file GET already polls during 'processing', purely so a client
+        // that was rendering the granular list doesn't lose it on the
+        // final poll).
+        const checks = await readStatusFile(statusFilePath);
+        jobs.set(jobId, { status: 'complete', result, checks, createdAt: startedAt, statusFilePath });
         return;
       } catch (parseError) {
         log(`failed to parse stdout as JSON: ${parseError.message}`);
@@ -136,6 +188,7 @@ function runCheckJob(jobId, vault) {
       status: 'error',
       error: (stderr || `process exited with code ${code}`).trim(),
       createdAt: startedAt,
+      statusFilePath,
     });
   });
 }
@@ -150,17 +203,18 @@ app.post('/api/check', checkLimiter, (req, res) => {
   }
 
   const jobId = randomUUID();
-  jobs.set(jobId, { status: 'processing', createdAt: Date.now() });
+  const statusFilePath = path.join(STATUS_DIR, `${jobId}.json`);
+  jobs.set(jobId, { status: 'processing', createdAt: Date.now(), statusFilePath });
 
   // Deliberately not awaited — the check suite can take minutes, so the
   // response below returns immediately and the caller polls GET
   // /api/check/:jobId for the outcome.
-  runCheckJob(jobId, vault);
+  runCheckJob(jobId, vault, statusFilePath);
 
   res.status(202).json({ jobId, status: 'processing' });
 });
 
-app.get('/api/check/:jobId', (req, res) => {
+app.get('/api/check/:jobId', async (req, res) => {
   const job = jobs.get(req.params.jobId);
 
   if (!job) {
@@ -168,14 +222,20 @@ app.get('/api/check/:jobId', (req, res) => {
   }
 
   if (job.status === 'processing') {
-    return res.json({ status: 'processing' });
+    // Best-effort: the granular per-check list from the CLI's
+    // --status-file. Right after the job is created there's a brief window
+    // before the CLI has written anything yet, so `checks` may be absent
+    // for the first poll or two — callers should treat a missing `checks`
+    // field the same as an all-"pending" list, not an error.
+    const checks = await readStatusFile(job.statusFilePath);
+    return checks ? res.json({ status: 'processing', checks }) : res.json({ status: 'processing' });
   }
 
   if (job.status === 'error') {
-    return res.status(502).json({ status: 'error', error: job.error });
+    return res.status(502).json({ status: 'error', error: job.error, checks: job.checks });
   }
 
-  return res.json({ status: 'complete', result: job.result });
+  return res.json({ status: 'complete', result: job.result, checks: job.checks });
 });
 
 app.listen(PORT, () => {

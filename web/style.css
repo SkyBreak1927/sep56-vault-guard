@@ -70,6 +70,19 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
+/* Column gutters per DESIGN.md: 24px desktop, 16px tablet, 12px mobile. */
+@media (max-width: 1023px) {
+  :root {
+    --gutter: 1rem;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --gutter: var(--gutter-mobile);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -412,7 +425,7 @@ select:focus-visible {
 .risk-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-md);
+  gap: var(--gutter);
 }
 
 @media (max-width: 1023px) {

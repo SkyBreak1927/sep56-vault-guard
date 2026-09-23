@@ -210,7 +210,7 @@ A soft, controlled corner radius (`roundedness: 1` / base 4px) is utilized acros
 ## Components
 
 ### Buttons
-- **Primary:** Background `#D97706`, text `#FFFFFF`, 4px radius, 0 1px shadow. Hover: `#B45309`. Focus: 2px offset ring with `#D97706`. Height: 36px (desktop standard).
+- **Primary:** Background `#D97706`, text `#4D2600` (dark on-primary, 4.14:1; white on this amber is only 3.19:1), 4px radius, 0 1px shadow. Hover: lightens to `#E8900C` so the dark text stays legible (5.29:1, passes WCAG AA); darkening the fill instead would drop contrast. Focus: 2px offset ring with `#D97706`. Height: 36px (desktop standard).
 - **Secondary / Outline:** Background `#141618`, border `1px solid rgba(255, 255, 255, 0.08)`, text `#F3F4F6`. Hover: Background `#1C1E22`, border `rgba(255, 255, 255, 0.16)`.
 - **Destructive:** Background `rgba(239, 68, 68, 0.12)`, border `1px solid rgba(239, 68, 68, 0.24)`, text `#F87171`. Hover: Background `rgba(239, 68, 68, 0.20)`.
 

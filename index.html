@@ -3,89 +3,201 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aegis Vault — SEP-56 Conformance Checker</title>
+<title>Aegis Vault — SEP-56 Conformance &amp; Security Checker</title>
+<meta name="description" content="Automated conformance and security checker for SEP-56 tokenized vaults on Stellar/Soroban.">
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 
 <header class="topbar">
-  <div class="wordmark"><span class="wordmark-mark">▣</span> aegis-vault</div>
-  <span class="topbar-tag">SEP-56 conformance &amp; security checker</span>
-  <a class="topbar-link" href="https://github.com/SkyBreak1927/sep56-vault-guard">source</a>
+  <div class="container topbar-inner">
+    <a class="brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 3L6 7V15C6 21.5 10.3 27.5 16 29C21.7 27.5 26 21.5 26 15V7L16 3Z" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#141618"/>
+        <path d="M16 10V22" stroke="#F3F4F6" stroke-width="2" stroke-linecap="round"/>
+        <path d="M11 15L16 10L21 15" stroke="#F3F4F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="22" r="1.5" fill="#D97706"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-name">Aegis Vault</span>
+        <span class="brand-tag">SEP-56 checker</span>
+      </span>
+    </a>
+    <nav class="topbar-nav">
+      <a href="#why-it-matters">Why It Matters</a>
+      <a href="#try-it">Try It</a>
+      <a href="#results">Results</a>
+    </nav>
+    <a class="topbar-github" href="https://github.com/SkyBreak1927/sep56-vault-guard" target="_blank" rel="noreferrer">
+      <span>GitHub</span>
+    </a>
+  </div>
 </header>
 
-<main>
+<main id="top">
 
-  <section class="hero">
-    <div class="terminal" id="hero-terminal">
-      <div class="terminal-titlebar">sep56-vault-guard --vault CAPH3...IJBNQ</div>
-      <pre class="terminal-body" id="hero-terminal-body">$ sep56-vault-guard --vault CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ
-
-<span class="line ok">✓ total_assets            PASS</span>
-<span class="line ok">✓ deposit                 PASS</span>
-<span class="line ok">✓ mint                    PASS</span>
-<span class="line ok">✓ withdraw                PASS</span>
-<span class="line ok">✓ redeem                  PASS</span>
-<span class="line ok">✓ convert_to_shares       PASS</span>
-<span class="line ok">✓ convert_to_assets       PASS</span>
-<span class="line bad">✗ donation_attack         FAIL  vulnerable to inflation attack</span>
-<span class="line ok">✓ overflow_protection     PASS</span>
-<span class="line ok">✓ rounding_direction      PASS</span>
-<span class="line ok">✓ access_control_probing  PASS</span>
-
-<span class="line summary">10 passed, 1 failed — 11 checks in 1m43s</span></pre>
+  <!-- 1. HERO -->
+  <section class="hero container">
+    <h1>Know if your Soroban vault is safe, before mainnet finds out.</h1>
+    <p class="hero-lede">Aegis Vault runs 11 automated checks against any SEP-56 tokenized vault contract and tells you exactly what passes, what fails, and why — usually in about a minute.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#try-it">Try it now</a>
+      <a class="btn btn-secondary" href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" target="_blank" rel="noreferrer">Read the SEP-56 spec ↗</a>
     </div>
-    <div class="hero-text">
-      <h1>Aegis Vault</h1>
-      <p>An open-source checker for SEP-56 tokenized vaults on Stellar. Point it at a Soroban vault contract and it runs 11 conformance and security checks — the same ones shown above — and tells you exactly what passes and what doesn't.</p>
+    <div class="stat-strip">
+      <div class="stat accent">
+        <span class="stat-value">11 Automated Checks</span>
+        <span class="stat-label">Deterministic verification</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">Conformance + Security Suite</span>
+        <span class="stat-label">Real vault behavior tested</span>
+      </div>
+      <div class="stat mint">
+        <span class="stat-value">Live on Soroban Testnet</span>
+        <span class="stat-label">Soroban v21+ environment</span>
+      </div>
     </div>
   </section>
 
-  <section class="run">
-    <p class="comment">// run a live check</p>
-    <p class="run-lede">Paste any deployed SEP-56 vault address, or try the demo vault.</p>
-
-    <div class="run-line">
-      <span class="prompt">$ sep56-vault-guard --vault</span>
-      <input id="vault-input" type="text" spellcheck="false" autocomplete="off"
-        placeholder="CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ" />
-      <button id="run-btn" type="button">run check</button>
-    </div>
-
-    <p class="run-hint" id="run-hint">
-      <span id="run-hint-text">Stellar contract address — starts with "C", 56 characters.</span>
-      <button id="use-demo" type="button" class="link-btn">use demo vault</button>
-    </p>
-
-    <div id="run-output" class="run-output" hidden>
-      <div class="run-status" id="run-status"></div>
-      <div class="run-results" id="run-results"></div>
+  <!-- 2. WHY IT MATTERS -->
+  <section class="section" id="why-it-matters">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Why it matters</div>
+        <h2>Vault math is easy to get wrong, and expensive when it is</h2>
+        <p class="section-lede">A tokenized vault holds user funds behind a handful of arithmetic and authorization rules. Getting any one of them slightly wrong can let an attacker walk away with someone else's deposit.</p>
+      </div>
+      <div class="risk-grid">
+        <div class="risk-card">
+          <div class="risk-icon">01</div>
+          <h3>Donation / inflation attacks</h3>
+          <p>An attacker donates assets directly to an empty vault to inflate the share price, so the next real depositor's shares round down toward zero and their deposit is absorbed.</p>
+        </div>
+        <div class="risk-card">
+          <div class="risk-icon">02</div>
+          <h3>Rounding the wrong way</h3>
+          <p>Share math must round in the vault's favor on every operation. If it ever rounds toward the user instead, that's a slow, repeatable drain — not a one-time bug.</p>
+        </div>
+        <div class="risk-card">
+          <div class="risk-icon">03</div>
+          <h3>Missing overflow protection</h3>
+          <p>Extreme inputs should fail cleanly. A vault that panics into a corrupted state, or silently wraps a huge number, can leave funds unrecoverable or wrongly accounted for.</p>
+        </div>
+        <div class="risk-card">
+          <div class="risk-icon">04</div>
+          <h3>Loose access control</h3>
+          <p>Soroban requires explicit authorization checks. A vault that lets an unapproved operator move someone else's shares has no access control, no matter what the interface promises.</p>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section class="about">
-    <p class="comment">// how it works</p>
-    <div class="about-grid">
-      <div>
-        <h2>What it checks</h2>
-        <p>Seven checks confirm the vault behaves the way SEP-56 requires — deposits, withdrawals, and share math all matching what the contract itself previews. Four more probe it the way an attacker would: donation attacks, overflow, rounding direction, and access control.</p>
+  <!-- 3. TRY IT YOURSELF -->
+  <section class="section" id="try-it">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Try it yourself</div>
+        <h2>Run the full check suite against any SEP-56 vault</h2>
+        <p class="section-lede">Paste a deployed vault contract address, or load one of the vaults we use to validate the checker itself.</p>
       </div>
-      <div>
-        <h2>How a check runs</h2>
-        <p>Positive checks call your vault directly. Security checks deploy a disposable clone with the same code and parameters first, then attack the clone — your vault's live state is never touched.</p>
+
+      <div class="panel run-panel">
+        <div class="run-grid">
+          <div class="field field-address">
+            <label for="vault-input">Contract address</label>
+            <input id="vault-input" type="text" spellcheck="false" autocomplete="off" placeholder="CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ" />
+          </div>
+          <div class="field field-network">
+            <label for="network-select">Network</label>
+            <select id="network-select">
+              <option value="testnet" selected>Testnet</option>
+              <option value="mainnet" disabled>Mainnet (coming soon)</option>
+              <option value="futurenet" disabled>Futurenet (coming soon)</option>
+            </select>
+          </div>
+          <div class="field field-run">
+            <button id="run-btn" type="button" class="btn btn-primary btn-run">Run check suite</button>
+          </div>
+        </div>
+
+        <p class="run-hint" id="run-hint">
+          <span id="run-hint-text">Stellar contract address — starts with "C", 56 characters.</span>
+        </p>
+
+        <div class="preset-row">
+          <span class="preset-label">Load a showcase vault:</span>
+          <button class="preset-btn" type="button" data-vault="CAPH3KBZTQQCCP6QD5DRXFFFRAMTQVAGBTW5TLHEHLNJMXY7GKGIJBNQ" title="Reference vault config, deployed for public demos">Demo Vault</button>
+          <button class="preset-btn" type="button" data-vault="CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG" title="Reference vault + a real dead-shares donation-attack mitigation">Hardened Vault</button>
+          <button class="preset-btn" type="button" data-vault="CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7" title="Unmodified vault clone with a custom non-native asset, decimals_offset=3">Blind Vault</button>
+          <button class="preset-btn" type="button" data-vault="CAWUBSRHD4DUDWAJENO7XHI3QVEXKIU3ZZ4HRM3RFZ4PNBSCCYXH4VTA" title="Reference vault with decimals_offset=6">Vault A</button>
+          <button class="preset-btn" type="button" data-vault="CAZBXMYP5TQWEHCFMUD6ZEON7DUWAC2BCKNCKKVBIRX7GZN7M6I2P6HV" title="Deliberately buggy vault — rounds in the user's favor">Vault B</button>
+        </div>
       </div>
     </div>
-    <p class="about-links">
-      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/README.md">Read the docs</a>
-      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/SECURITY.md">Security findings</a>
-      <a href="https://github.com/SkyBreak1927/sep56-vault-guard">View source</a>
-    </p>
+  </section>
+
+  <!-- 4. RESULTS -->
+  <section class="section" id="results">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Results</div>
+        <h2>Check results</h2>
+        <p class="section-lede" id="results-lede">Run a check above to see live results here — all 11 checks appear immediately and update as each one finishes.</p>
+      </div>
+
+      <div id="results-panel" hidden>
+        <div class="results-summary" id="results-summary">
+          <span class="dot" id="results-dot"></span>
+          <span id="results-summary-text"></span>
+        </div>
+
+        <div class="check-group">
+          <div class="check-group-head">
+            <span class="check-group-title">Conformance Checks</span>
+            <span class="check-group-count">7 checks</span>
+          </div>
+          <div class="check-list" id="conformance-list"></div>
+        </div>
+
+        <div class="check-group">
+          <div class="check-group-head">
+            <span class="check-group-title">Security Checks</span>
+            <span class="check-group-count">4 checks</span>
+          </div>
+          <div class="check-list" id="security-list"></div>
+        </div>
+      </div>
+    </div>
   </section>
 
 </main>
+
+<footer class="footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <span class="brand-name">Aegis Vault</span>
+      <p>Open-source conformance and security checker for SEP-56 tokenized vaults on Stellar/Soroban.</p>
+    </div>
+    <div class="footer-col">
+      <div class="footer-col-title">Repository</div>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard" target="_blank" rel="noreferrer">Source code</a>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/README.md" target="_blank" rel="noreferrer">README</a>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/VAULT_CHECKS.md" target="_blank" rel="noreferrer">Check documentation</a>
+    </div>
+    <div class="footer-col">
+      <div class="footer-col-title">Security</div>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Findings &amp; scope</a>
+      <a href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" target="_blank" rel="noreferrer">SEP-56 spec ↗</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>Aegis Vault — MIT licensed. Not a substitute for a formal audit.</span>
+  </div>
+</footer>
 
 <script src="app.js"></script>
 </body>

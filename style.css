@@ -65,6 +65,7 @@
   --margin-mobile: 1rem;
 
   --max-width: 1440px;
+  --topbar-height: 64px;
 
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -146,7 +147,7 @@ select:focus-visible {
 }
 
 .topbar-inner {
-  height: 64px;
+  height: var(--topbar-height);
   display: flex;
   align-items: center;
   gap: var(--space-lg);
@@ -388,6 +389,8 @@ select:focus-visible {
 .section {
   border-top: 1px solid var(--border);
   padding: var(--space-xl) 0;
+  /* Keep in-page anchor targets clear of the sticky topbar. */
+  scroll-margin-top: var(--topbar-height);
 }
 
 .section-head {
@@ -639,6 +642,30 @@ select:focus-visible {
 .preset-btn.active {
   border-color: var(--primary-strong);
   color: var(--primary);
+}
+
+/* Touch-sized form controls (44px min target) on phones and any touch
+   pointer; mouse users on desktop keep the compact 36px / 26px sizes. */
+@media (max-width: 767px), (pointer: coarse) {
+  .field input[type="text"],
+  .field select,
+  .btn-run {
+    height: 44px;
+  }
+
+  .preset-row {
+    gap: var(--space-sm);
+  }
+
+  .preset-label {
+    flex-basis: 100%;
+    margin-right: 0;
+  }
+
+  .preset-btn {
+    height: 44px;
+    padding: 0 var(--space-md);
+  }
 }
 
 /* ---------- Results ---------- */

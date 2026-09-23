@@ -1,0 +1,719 @@
+<!DOCTYPE html><html class="dark" lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_standard" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"surface-variant":"#333537","inverse-primary":"#904d00","secondary-container":"#00a572","inverse-surface":"#e2e2e5","on-surface":"#e2e2e5","surface-container-low":"#1a1c1e","surface-container":"#1e2022","inverse-on-surface":"#2f3133","tertiary-container":"#ff5451","on-surface-variant":"#dbc2b0","on-tertiary-container":"#5c0008","error-container":"#93000a","outline-variant":"#554336","tertiary":"#ffb3ad","surface-container-lowest":"#0c0e10","surface-container-highest":"#333537","on-secondary-container":"#00311f","on-primary":"#4d2600","on-error-container":"#ffdad6","on-primary-fixed-variant":"#6e3900","primary-container":"#d97707","on-background":"#e2e2e5","primary-fixed-dim":"#ffb77d","on-tertiary-fixed-variant":"#930013","primary-fixed":"#ffdcc3","outline":"#a38c7c","surface":"#121416","secondary-fixed-dim":"#4edea3","error":"#ffb4ab","on-tertiary-fixed":"#410004","surface-dim":"#121416","on-primary-container":"#432100","primary":"#ffb77d","on-error":"#690005","background":"#121416","secondary":"#4edea3","on-secondary":"#003824","on-tertiary":"#68000a","tertiary-fixed-dim":"#ffb3ad","on-secondary-fixed-variant":"#005236","tertiary-fixed":"#ffdad7","secondary-fixed":"#6ffbbe","surface-bright":"#37393b","on-primary-fixed":"#2f1500","on-secondary-fixed":"#002113","surface-container-high":"#282a2c","surface-tint":"#ffb77d"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"margin-mobile":"1rem","space-md":"1rem","gutter-mobile":"0.75rem","space-lg":"1.5rem","margin":"2rem","gutter":"1.5rem","space-sm":"0.5rem","space-xl":"2.5rem","space-xs":"0.25rem"},"fontFamily":{"headline-lg":["Geist"],"label-sm":["Geist"],"code-md":["JetBrains Mono"],"label-md":["Geist"],"body-lg":["Geist"],"body-sm":["Geist"],"headline-lg-mobile":["Geist"],"code-sm":["JetBrains Mono"],"headline-md":["Geist"],"headline-xl-mobile":["Geist"],"body-md":["Geist"],"headline-xl":["Geist"]},"fontSize":{"headline-lg":["24px",{"lineHeight":"32px","fontWeight":"600"}],"label-sm":["11px",{"lineHeight":"14px","fontWeight":"600"}],"code-md":["13px",{"lineHeight":"18px","fontWeight":"400"}],"label-md":["13px",{"lineHeight":"18px","fontWeight":"500"}],"body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],"body-sm":["12px",{"lineHeight":"16px","fontWeight":"400"}],"headline-lg-mobile":["20px",{"lineHeight":"28px","fontWeight":"600"}],"code-sm":["11px",{"lineHeight":"16px","fontWeight":"400"}],"headline-md":["18px",{"lineHeight":"24px","fontWeight":"600"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","fontWeight":"600"}],"body-md":["14px",{"lineHeight":"20px","fontWeight":"400"}],"headline-xl":["32px",{"lineHeight":"40px","fontWeight":"600"}]}}}};</script></head><body class="bg-surface-container-lowest font-body-md text-body-md text-on-surface antialiased"><header class="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-md border-b border-surface-container-highest/60"><div class="h-16 max-w-[1080px] mx-auto px-margin-mobile md:px-margin flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md shrink-0"><img alt="Aegis Vault Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1VRZNyFN8NK8IR_LVKgoIFSr0RW8rnF6sG6Gy-GYlnc-0-0iWh3QGiXJh3Ysf2q5nbvye5StPzmUzR1jsAJ_HoTBtftI2sXCLOjofQhjYA6_8NcDDdLq1l7YcfpBc6kM1dl9o2FUoeSSUFYUEN9x0S9a4RyDmVOCCSJ6wMnTVNFOSWm31R7ZhCTfqSeNqIZodf-GLFHSow6c6wj1Hb7lbfyti6ZBHAxRtPHYHhtDF6d0HwVNzNCuFD_CKQ"><div class="flex flex-col"><span class="font-headline-md text-headline-md tracking-tight text-on-surface leading-none">Aegis Vault</span><span class="font-code-sm text-code-sm text-outline tracking-wider uppercase mt-0.5">SEP-56 Engine</span></div></div><nav class="hidden lg:flex items-center gap-space-lg" data-active-classes="text-primary font-label-md"><a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="why-it-matters" href="#">Why It Matters</a><a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="conformance-suite" href="#">Conformance Suite</a><a aria-current="page" class="transition-colors text-primary font-label-md" data-path="live-inspector" href="#">Live Inspector</a><a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="documentation" href="#">Documentation</a><a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="github" href="#">GitHub</a></nav><div class="flex items-center gap-space-md shrink-0"><div class="hidden sm:flex items-center gap-space-xs px-2.5 py-1 rounded bg-surface-container-low border border-surface-container-high"><span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span><span class="font-code-sm text-code-sm text-on-surface-variant">Soroban Mainnet / Testnet v21.2</span></div><a class="h-9 px-space-md rounded bg-primary-container hover:bg-inverse-primary text-on-primary font-label-md text-label-md flex items-center justify-center transition-colors shadow-sm" data-path="live-inspector" href="#">Test Vault</a><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="w-full pt-16 bg-surface-container-lowest min-h-screen"><div class="flex flex-col w-full text-on-surface">
+<!-- ========================================== -->
+<!-- 1. HERO SECTION                            -->
+<!-- ========================================== -->
+<section class="relative w-full max-w-[1080px] mx-auto px-margin-mobile md:px-margin pt-space-xl pb-space-xl">
+<!-- Subtle Ambient Ambient Tone (contained) -->
+<div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[580px] h-[280px] bg-primary-container/10 blur-[120px] pointer-events-none rounded-full"></div>
+<div class="relative flex flex-col items-start gap-space-lg">
+<!-- Eyebrow Badge -->
+<p class="font-body-sm text-body-sm text-outline tracking-normal font-normal">SEP-56 conformance and security suite for Soroban</p>
+<!-- Main Headline -->
+<h1 class="font-headline-xl text-headline-xl md:text-[44px] md:leading-[52px] tracking-tight font-semibold text-on-surface max-w-4xl">
+        Automated Conformance &amp; Economic Security for Stellar Tokenized Vaults
+      </h1>
+<!-- Value Proposition -->
+<p class="font-body-lg text-body-lg text-outline max-w-3xl leading-relaxed">
+        Verify that your Soroban vault implements the SEP-56 standard correctly, resists mathematical inflation exploits, and protects user capital before deploying to mainnet.
+      </p>
+<!-- Primary Action Controls -->
+<div class="flex flex-wrap items-center gap-space-md pt-space-xs w-full sm:w-auto">
+<a class="h-10 px-6 rounded-lg bg-primary-container hover:bg-inverse-primary text-on-primary font-label-md text-label-md flex items-center justify-center transition-all duration-150 shadow-sm font-semibold tracking-wide" href="#inspector">
+          Try it now
+        </a>
+<a class="h-10 px-5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-surface-variant/40 text-on-surface font-label-md text-label-md flex items-center gap-2 justify-center transition-colors" href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" rel="noreferrer" target="_blank">
+<span class="">Read SEP-56 Spec</span>
+<span class="material-symbols-outlined text-[16px] text-outline">north_east</span>
+</a>
+<a class="h-10 px-4 rounded-lg text-outline hover:text-on-surface font-label-md text-label-md flex items-center gap-1.5 transition-colors" href="#results-anchor">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+<span class="">View Sample Audit</span>
+</a>
+</div>
+<!-- Live Metric Summary Strip -->
+<div class="w-full mt-space-md grid grid-cols-1 md:grid-cols-3 gap-space-sm bg-surface-container-low border border-surface-variant/40 rounded-xl p-space-md"><div class="flex flex-col md:border-r border-surface-variant/30 pr-2"><span class="font-code-md text-code-md text-primary font-medium">11 Automated Checks</span><span class="font-body-sm text-body-sm text-outline mt-0.5">Deterministic verification</span></div><div class="flex flex-col md:border-r border-surface-variant/30 pr-2"><span class="font-code-md text-code-md text-on-surface font-medium">Positive + Security Suite</span><span class="font-body-sm text-body-sm text-outline mt-0.5">Economic attack resistance</span></div><div class="flex flex-col"><span class="font-code-md text-code-md text-secondary font-medium">Live on Soroban Testnet</span><span class="font-body-sm text-body-sm text-outline mt-0.5">Soroban v21+ environment</span></div></div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- 2. WHY IT MATTERS SECTION                   -->
+<!-- ========================================== -->
+<section class="w-full max-w-[1080px] mx-auto px-margin-mobile md:px-margin py-space-xl border-t border-surface-variant/40" id="why-it-matters">
+<div class="flex flex-col gap-space-lg">
+<!-- Section Header -->
+<div class="max-w-2xl space-y-2">
+<div class="font-label-sm text-label-sm uppercase tracking-wider text-outline">Risk Vector Analysis</div>
+<h2 class="font-headline-lg text-headline-lg font-semibold text-on-surface tracking-tight">
+          Why Vault Conformance Matters
+        </h2>
+<p class="font-body-md text-body-md text-outline">
+          Tokenized yield vaults represent the single largest target for mathematical precision drift, rounding arbitrage, and capital dilution exploits across modern decentralized finance.
+        </p>
+</div>
+<!-- 3 Restrained Risk Panels -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+<!-- Point 1 -->
+<div class="flex flex-col justify-between bg-surface-container-low border border-surface-variant/40 rounded-xl p-space-lg hover:border-surface-variant/80 transition-colors">
+<div class="space-y-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[20px]">trending_up</span>
+</div>
+<h3 class="font-headline-md text-headline-md font-semibold text-on-surface">First-Depositor &amp; Inflation Attacks</h3>
+<p class="font-body-sm text-body-sm text-outline leading-relaxed">
+              Malicious actors can artificially inflate share values in empty vaults by donating underlying assets, causing subsequent users' deposits to round down to zero shares and forfeit their funds.
+            </p>
+</div>
+<div class="mt-6 pt-3 border-t border-surface-variant/30">
+<div class="font-code-sm text-code-sm text-on-surface-variant/90 font-medium">
+              SEP-56 virtual offset mitigations &amp; dead shares validation.
+            </div>
+</div>
+</div>
+<!-- Point 2 -->
+<div class="flex flex-col justify-between bg-surface-container-low border border-surface-variant/40 rounded-xl p-space-lg hover:border-surface-variant/80 transition-colors">
+<div class="space-y-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[20px]">swap_horiz</span>
+</div>
+<h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Rounding Direction Vulnerabilities</h3>
+<p class="font-body-sm text-body-sm text-outline leading-relaxed">
+              Vault contracts that round in favor of the depositor rather than the vault enable arbitrageurs to drain funds incrementally through high-frequency micro-transactions.
+            </p>
+</div>
+<div class="mt-6 pt-3 border-t border-surface-variant/30">
+<div class="font-code-sm text-code-sm text-on-surface-variant/90 font-medium">
+              Checks deposit/mint (round up) vs. redeem/withdraw (round down).
+            </div>
+</div>
+</div>
+<!-- Point 3 -->
+<div class="flex flex-col justify-between bg-surface-container-low border border-surface-variant/40 rounded-xl p-space-lg hover:border-surface-variant/80 transition-colors">
+<div class="space-y-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[20px]">shield</span>
+</div>
+<h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Cross-Contract Auth &amp; Invariant Drift</h3>
+<p class="font-body-sm text-body-sm text-outline leading-relaxed">
+              Unlike EVM vaults, Soroban requires explicit authorization trees. Missing <code class="font-code-sm text-code-sm text-on-surface-variant">require_auth</code> boundaries can allow unauthorized asset liquidations.
+            </p>
+</div>
+<div class="mt-6 pt-3 border-t border-surface-variant/30">
+<div class="font-code-sm text-code-sm text-on-surface-variant/90 font-medium">
+              Validates Address::require_auth caller scoping under all execution paths.
+            </div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- 3. TRY IT YOURSELF (INSPECTOR & SIMULATION) -->
+<!-- ========================================== -->
+<section class="w-full max-w-[1080px] mx-auto px-margin-mobile md:px-margin py-space-xl border-t border-surface-variant/40" id="inspector">
+<div class="flex flex-col gap-space-lg">
+<!-- Section Title -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+<div class="space-y-2 max-w-2xl">
+<div class="font-label-sm text-label-sm uppercase tracking-wider text-outline">Real-Time Verification Engine</div>
+<h2 class="font-headline-lg text-headline-lg font-semibold text-on-surface tracking-tight">Interactive Vault Inspector</h2>
+<p class="font-body-md text-body-md text-outline">
+            Provide a compiled Soroban SEP-56 vault contract address on Stellar Testnet or Mainnet. Our test harness performs real-time fuzz testing, invariant checking, and standard validation.
+          </p>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">Sandbox Host:</span>
+<span class="font-code-sm text-code-sm px-2 py-1 rounded bg-surface-container text-on-surface border border-surface-variant/40">Soroban-env-host v21.2.0</span>
+</div>
+</div>
+<!-- Inspector Panel Container -->
+<div class="bg-surface-container-low border border-surface-variant/40 rounded-xl p-space-lg flex flex-col gap-space-lg shadow-sm">
+<!-- Input Bar Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-sm items-center">
+<!-- Monospace Address Input -->
+<div class="lg:col-span-7 flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-outline uppercase tracking-wider" for="vault-address-input">Contract Address</label>
+<div class="relative flex items-center">
+<input class="w-full h-10 px-3.5 pr-10 rounded-lg bg-surface-container-lowest border border-surface-variant/50 font-code-md text-code-md text-on-surface placeholder:text-outline focus:outline-none focus:border-primary-container transition-colors" id="vault-address-input" placeholder="e.g. CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" type="text" value="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC">
+<span class="material-symbols-outlined absolute right-3 text-outline text-[18px] pointer-events-none">token</span>
+</div>
+</div>
+<!-- Network Select -->
+<div class="lg:col-span-2 flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-outline uppercase tracking-wider" for="network-select">Network Target</label>
+<select class="w-full h-10 px-3 rounded-lg bg-surface-container-lowest border border-surface-variant/50 font-label-md text-label-md text-on-surface focus:outline-none focus:border-primary-container transition-colors cursor-pointer" id="network-select">
+<option value="testnet">Testnet v21</option>
+<option value="mainnet">Stellar Mainnet</option>
+<option value="futurenet">Futurenet</option>
+</select>
+</div>
+<!-- Run Conformance Button -->
+<div class="lg:col-span-3 flex flex-col justify-end pt-5 lg:pt-0">
+<button class="w-full h-10 px-4 rounded-lg bg-primary-container hover:bg-inverse-primary text-on-primary font-label-md text-label-md flex items-center justify-center gap-2 transition-all font-semibold shadow-sm" id="btn-run-conformance">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+<span class="">Run Conformance Check</span>
+</button>
+</div>
+</div>
+<!-- Quick Demo Switcher Buttons -->
+<div class="flex flex-wrap items-center gap-2 pt-2 border-t border-surface-variant/30">
+<span class="font-body-sm text-body-sm text-outline">Load preset vectors:</span>
+<button class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-variant/50 border border-surface-variant/40 font-code-sm text-code-sm text-on-surface transition-colors flex items-center gap-1.5" id="demo-vulnerable">
+<span class="w-1.5 h-1.5 rounded-full bg-[#C54644]"></span>
+<span class="">Load Example Vulnerable Vault</span>
+</button>
+<button class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-variant/50 border border-surface-variant/40 font-code-sm text-code-sm text-on-surface transition-colors flex items-center gap-1.5" id="demo-secure">
+<span class="w-1.5 h-1.5 rounded-full bg-[#2E7D5A]"></span>
+<span class="">Load Example Secure SEP-56 Vault</span>
+</button>
+</div>
+<!-- Async Polling & Simulation Progress Area -->
+<div class="bg-surface-container-lowest border border-surface-variant/40 rounded-lg p-space-md flex flex-col gap-space-md" id="polling-container">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+<div class="flex items-center gap-2.5">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-pulse shrink-0" id="polling-pulse"></span>
+<span class="font-headline-md text-headline-md text-on-surface font-medium" id="polling-title">
+                Simulation Pipeline: Active Sandbox Session
+              </span>
+</div>
+<div class="flex items-center gap-3">
+<span class="font-code-sm text-code-sm text-outline">Elapsed:</span>
+<span class="font-code-sm text-code-sm px-2 py-0.5 rounded bg-surface-container text-primary font-medium" id="timer-display">00:38 / ~2m max</span>
+</div>
+</div>
+<!-- Step Progression Bar -->
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-space-sm pt-2">
+<!-- Step 1 -->
+<div class="flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-surface-variant/30" id="step-1">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-outline">Step 01</span>
+<span class="material-symbols-outlined text-[16px] text-[#2E7D5A]">check_circle</span>
+</div>
+<span class="font-body-sm text-body-sm font-medium text-on-surface leading-snug">Bytecode &amp; Interface</span>
+<span class="font-code-sm text-code-sm text-[#2E7D5A]">Verified</span>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-primary-container/40" id="step-2">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-primary">Step 02</span>
+<span class="w-2 h-2 rounded-full bg-primary-container animate-ping"></span>
+</div>
+<span class="font-body-sm text-body-sm font-medium text-on-surface leading-snug">Inflation Vectors</span>
+<span class="font-code-sm text-code-sm text-primary">Polling 1,000,000 runs</span>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-col gap-1 p-2.5 rounded bg-surface-container/50 border border-surface-variant/20 opacity-70" id="step-3">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-outline">Step 03</span>
+<span class="material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+</div>
+<span class="font-body-sm text-body-sm font-medium text-on-surface leading-snug">Boundary Fuzzing</span>
+<span class="font-code-sm text-code-sm text-outline">Queued (10k inputs)</span>
+</div>
+<!-- Step 4 -->
+<div class="flex flex-col gap-1 p-2.5 rounded bg-surface-container/50 border border-surface-variant/20 opacity-70" id="step-4">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-outline">Step 04</span>
+<span class="material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+</div>
+<span class="font-body-sm text-body-sm font-medium text-on-surface leading-snug">Cryptographic Proof</span>
+<span class="font-code-sm text-code-sm text-outline">Queued</span>
+</div>
+</div>
+<!-- Sandbox notice -->
+<div class="flex items-center gap-2 pt-2 border-t border-surface-variant/20 text-outline font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[16px] text-outline">info</span>
+<span class="">Executing async Soroban WASM test harness in isolated sandbox. Can take up to ~2 minutes.</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- 4. RESULTS REPORT (11 PASS/FAIL CHECKS)     -->
+<!-- ========================================== -->
+<section class="w-full max-w-[1080px] mx-auto px-margin-mobile md:px-margin py-space-xl border-t border-surface-variant/40" id="results-anchor">
+<div class="flex flex-col gap-space-lg">
+<!-- Section Title & Meta Header -->
+<div class="flex flex-col gap-space-sm">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+<div>
+<div class="font-label-sm text-label-sm uppercase tracking-wider text-outline">Automated Conformance Audit</div>
+<h2 class="font-headline-lg text-headline-lg font-semibold text-on-surface">Conformance Verification Report</h2>
+</div>
+<!-- Actions: Export Proof -->
+<div class="flex flex-wrap items-center gap-2">
+<button class="h-8 px-3 rounded bg-surface-container hover:bg-surface-container-high border border-surface-variant/40 text-on-surface font-code-sm text-code-sm flex items-center gap-1.5 transition-colors" onclick="alert('Exporting JSON / Markdown cryptographic proof bundle (SHA256: 9e3f...a28c)...');">
+<span class="material-symbols-outlined text-[14px]">download</span>
+<span class="">Export Proof (JSON / MD)</span>
+</button>
+<button class="h-8 px-3 rounded bg-surface-container hover:bg-surface-container-high border border-surface-variant/40 text-on-surface font-code-sm text-code-sm flex items-center gap-1.5 transition-colors" onclick="alert('Generating Verified SEP-56 Grant Committee PDF Certificate...');">
+<span class="material-symbols-outlined text-[14px]">verified</span>
+<span class="">Grant Review Certificate</span>
+</button>
+</div>
+</div>
+<!-- Telemetry Summary Bar -->
+<div class="mt-2 bg-surface-container-low border border-surface-variant/40 rounded-lg p-space-md grid grid-cols-2 md:grid-cols-4 gap-space-sm">
+<div>
+<span class="font-label-sm text-label-sm uppercase text-outline">Target Contract</span>
+<div class="font-code-sm text-code-sm text-on-surface font-medium truncate mt-0.5" id="report-target-address">
+              CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
+            </div>
+</div>
+<div>
+<span class="font-label-sm text-label-sm uppercase text-outline">Execution Duration</span>
+<div class="font-code-sm text-code-sm text-on-surface font-medium mt-0.5" id="report-exec-time">
+              48.2s (WASM deterministic)
+            </div>
+</div>
+<div>
+<span class="font-label-sm text-label-sm uppercase text-outline">Verification State</span>
+<div class="flex items-center gap-1.5 mt-0.5 flex-wrap" id="report-status-badges">
+<span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">9 PASS</span>
+<span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C28B38]/15 text-[#C28B38] border border-[#C28B38]/30">1 WARN</span>
+<span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C54644]/15 text-[#C54644] border border-[#C54644]/30">1 FAIL</span>
+</div>
+</div>
+<div>
+<span class="font-label-sm text-label-sm uppercase text-outline">SEP-56 Compliance</span>
+<div class="font-code-md text-code-md text-primary font-semibold mt-0.5" id="report-score">
+              82.0% (Remediation Needed)
+            </div>
+</div>
+</div>
+</div>
+<!-- Restrained List Table for Checks -->
+<div class="bg-surface-container-low border border-surface-variant/40 rounded-xl overflow-hidden shadow-sm">
+<!-- Group 1: SEP-56 Standard Interface Checks -->
+<div class="px-space-md py-3 bg-surface-container border-b border-surface-variant/40 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-primary">rule</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface uppercase tracking-wider">
+              Group 1: SEP-56 Specification &amp; Interface Standards
+            </span>
+</div>
+<span class="font-code-sm text-code-sm text-outline">5 of 5 Passed</span>
+</div>
+<div class="divide-y divide-surface-variant/30">
+<!-- Check 1 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">01</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">SEP-56 Interface Registration</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Verifies vault exposes mandatory Soroban traits: <code class="font-code-sm text-code-sm text-on-surface-variant">deposit</code>, <code class="font-code-sm text-code-sm text-on-surface-variant">mint</code>, <code class="font-code-sm text-code-sm text-on-surface-variant">withdraw</code>, <code class="font-code-sm text-code-sm text-on-surface-variant">redeem</code>, <code class="font-code-sm text-code-sm text-on-surface-variant">total_assets</code>, <code class="font-code-sm text-code-sm text-on-surface-variant">convert_to_shares</code>.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+<!-- Check 2 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">02</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Asset &amp; Share Decimal Scale Equivalence</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Confirms 1:1 decimal scale or deterministic conversion factor between underlying asset and vault share.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+<!-- Check 3 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">03</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Rounding Direction Precision</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Asserts redeem/withdraw operations round down to favor the vault and deposit/mint round up.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+<!-- Check 4 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">04</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Slippage &amp; Min-Output Guardrails</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Validates <code class="font-code-sm text-code-sm text-on-surface-variant">max_shares</code> and <code class="font-code-sm text-code-sm text-on-surface-variant">min_assets</code> slippage boundaries are enforced on batch operations.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+<!-- Check 5 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">05</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Zero-Deposit &amp; Zero-Share Rejection</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Confirms contract explicitly reverts or safely rejects zero-value input vectors without state corruption.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+</div>
+<!-- Group 2: Economic & Invariant Security Checks -->
+<div class="px-space-md py-3 bg-surface-container border-t border-b border-surface-variant/40 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-primary">security</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface uppercase tracking-wider">
+              Group 2: Economic &amp; Security Invariant Checks
+            </span>
+</div>
+<span class="font-code-sm text-code-sm text-outline">4 Passed, 1 Warning, 1 Failed</span>
+</div>
+<div class="divide-y divide-surface-variant/30">
+<!-- Check 6 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">06</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">First-Depositor Frontrunning Protection</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Audits virtual offset shares or dead-share burning to neutralize first-depositor price manipulation.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+<!-- Check 7 (FAIL) -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-3 bg-[#C54644]/5 hover:bg-[#C54644]/10 transition-colors" id="check-inflation">
+<div class="flex flex-col gap-1.5 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-[#C54644] font-medium">07</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Inflation &amp; Donation Attack Resistance</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface/90" id="check-7-desc">
+                Simulates direct asset donation of 1,000,000 units before user deposit. Yielded 12.4% share dilution error due to missing virtual reserve offset.
+              </p>
+<div class="font-code-sm text-code-sm text-[#C54644] bg-surface-container-lowest/80 px-2 py-1 rounded border border-[#C54644]/20 inline-block w-fit" id="check-7-remedy">
+                VULN_SEP56_INFLATE_01: Virtual offset missing on convert_to_shares (offset=0).
+              </div>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C54644]/15 text-[#C54644] border border-[#C54644]/30" id="check-7-badge">FAIL</span>
+</div>
+</div>
+<!-- Check 8 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">08</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Soroban Auth Context Scoping</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Verifies strict <code class="font-code-sm text-code-sm text-on-surface-variant">Address::require_auth</code> enforcement across all asset transfer invocations.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+<!-- Check 9 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">09</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Reentrancy &amp; Cross-Contract Lock Invariant</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Simulates reentrant token hooks to verify state lock persistence during multi-hop operations.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+<!-- Check 10 (WARN) -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-3 bg-[#C28B38]/5 hover:bg-[#C28B38]/10 transition-colors" id="check-fee">
+<div class="flex flex-col gap-1.5 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-[#C28B38] font-medium">10</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Fee Dilution &amp; Performance Math</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface/90" id="check-10-desc">
+                Protocol takes 2.0% performance fee; detected slight precision truncation on odd-lot asset amounts.
+              </p>
+<div class="font-code-sm text-code-sm text-[#C28B38] bg-surface-container-lowest/80 px-2 py-1 rounded border border-[#C28B38]/20 inline-block w-fit" id="check-10-remedy">
+                WARN_FEE_TRUNC_02: Rounding remainder (0.0000003 XLM) drops rather than compounding.
+              </div>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C28B38]/15 text-[#C28B38] border border-[#C28B38]/30" id="check-10-badge">WARN</span>
+</div>
+</div>
+<!-- Check 11 -->
+<div class="px-space-md py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container/50 transition-colors">
+<div class="flex flex-col gap-1 max-w-2xl">
+<div class="flex items-center gap-2">
+<span class="font-code-sm text-code-sm text-outline">11</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Emergency Quarantine &amp; Deterministic Recovery</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+                Validates administrator pause toggle permits deterministic asset withdraw by authenticated depositors.
+              </p>
+</div>
+<div class="shrink-0 flex items-center gap-3">
+<span class="px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">PASS</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- 5. DEVELOPER RESOURCES & METHODOLOGY       -->
+<!-- ========================================== -->
+<section class="w-full max-w-[1080px] mx-auto px-margin-mobile md:px-margin py-space-xl border-t border-surface-variant/40">
+<div class="flex flex-col gap-space-lg">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-lg items-center">
+<!-- Technical Methodology -->
+<div class="space-y-3">
+<div class="font-label-sm text-label-sm uppercase tracking-wider text-outline">Reproducibility Guarantee</div>
+<h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Zero-Drift Deterministic Sandbox</h3>
+<p class="font-body-sm text-body-sm text-outline leading-relaxed">
+            All checks are executed deterministically using <code class="font-code-sm text-code-sm text-on-surface-variant">soroban-env-host v21.2.0</code>. We spin up an isolated WASM instance with synthetic ledger sequences, preventing external network interference while verifying state tree invariants at machine speed.
+          </p>
+<div class="pt-2">
+<span class="font-code-sm text-code-sm text-outline">Host Engine SHA256: </span>
+<span class="font-code-sm text-code-sm text-primary">b7194602e3b2e5cc092b77...a8109</span>
+</div>
+</div>
+<!-- Quick Links Card -->
+<div class="bg-surface-container-low border border-surface-variant/40 rounded-xl p-space-md space-y-3">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-outline block">Official Developer Endpoints</span>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+<a class="p-2.5 rounded bg-surface-container hover:bg-surface-container-high border border-surface-variant/30 flex items-center justify-between group transition-colors" href="https://soroban.stellar.org" rel="noreferrer" target="_blank">
+<span class="font-code-sm text-code-sm text-on-surface">Soroban CLI Harness</span>
+<span class="material-symbols-outlined text-[14px] text-outline group-hover:text-primary transition-colors">terminal</span>
+</a>
+<a class="p-2.5 rounded bg-surface-container hover:bg-surface-container-high border border-surface-variant/30 flex items-center justify-between group transition-colors" href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" rel="noreferrer" target="_blank">
+<span class="font-code-sm text-code-sm text-on-surface">SEP-56 Standard Proposal</span>
+<span class="material-symbols-outlined text-[14px] text-outline group-hover:text-primary transition-colors">description</span>
+</a>
+<a class="p-2.5 rounded bg-surface-container hover:bg-surface-container-high border border-surface-variant/30 flex items-center justify-between group transition-colors" href="https://github.com" rel="noreferrer" target="_blank">
+<span class="font-code-sm text-code-sm text-on-surface">GitHub Repository</span>
+<span class="material-symbols-outlined text-[14px] text-outline group-hover:text-primary transition-colors">code</span>
+</a>
+<a class="p-2.5 rounded bg-surface-container hover:bg-surface-container-high border border-surface-variant/30 flex items-center justify-between group transition-colors" href="https://discord.gg/stellar" rel="noreferrer" target="_blank">
+<span class="font-code-sm text-code-sm text-on-surface">Stellar Developer Discord</span>
+<span class="material-symbols-outlined text-[14px] text-outline group-hover:text-primary transition-colors">forum</span>
+</a>
+</div>
+<div class="pt-2 text-center sm:text-left">
+<span class="font-code-sm text-code-sm text-outline">Aegis Vault Conformance System — Open Source Security for Stellar Ecosystem.</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Client-side Interactive Simulation Script -->
+<script>
+  (function() {
+    const inputAddress = document.getElementById('vault-address-input');
+    const btnRun = document.getElementById('btn-run-conformance');
+    const demoVulnerable = document.getElementById('demo-vulnerable');
+    const demoSecure = document.getElementById('demo-secure');
+    const timerDisplay = document.getElementById('timer-display');
+    const pollingPulse = document.getElementById('polling-pulse');
+    const pollingTitle = document.getElementById('polling-title');
+    
+    // Steps
+    const step1 = document.getElementById('step-1');
+    const step2 = document.getElementById('step-2');
+    const step3 = document.getElementById('step-3');
+    const step4 = document.getElementById('step-4');
+
+    // Report nodes
+    const reportTarget = document.getElementById('report-target-address');
+    const reportExecTime = document.getElementById('report-exec-time');
+    const reportStatusBadges = document.getElementById('report-status-badges');
+    const reportScore = document.getElementById('report-score');
+    
+    const check7Desc = document.getElementById('check-7-desc');
+    const check7Badge = document.getElementById('check-7-badge');
+    const check7Remedy = document.getElementById('check-7-remedy');
+    const checkInflationRow = document.getElementById('check-inflation');
+
+    const check10Desc = document.getElementById('check-10-desc');
+    const check10Badge = document.getElementById('check-10-badge');
+    const check10Remedy = document.getElementById('check-10-remedy');
+    const checkFeeRow = document.getElementById('check-fee');
+
+    let isSimulating = false;
+    let timerInterval = null;
+    let seconds = 38;
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      seconds = 0;
+      timerInterval = setInterval(() => {
+        seconds++;
+        const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const secs = String(seconds % 60).padStart(2, '0');
+        timerDisplay.textContent = `${mins}:${secs} / ~2m max`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
+
+    function runSimulation(isSecure) {
+      if (isSimulating) return;
+      isSimulating = true;
+      btnRun.disabled = true;
+      btnRun.classList.add('opacity-60', 'cursor-not-allowed');
+
+      startTimer();
+      pollingPulse.className = 'w-2.5 h-2.5 rounded-full bg-primary-container animate-ping shrink-0';
+      pollingTitle.textContent = 'Simulating Soroban Sandbox: Invariant Trace In Progress...';
+
+      // Reset step visual status
+      step2.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-primary-container/40';
+      step2.querySelector('span:last-child').className = 'font-code-sm text-code-sm text-primary';
+      step2.querySelector('span:last-child').textContent = 'Fuzzing Inflation Vectors...';
+
+      step3.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container/50 border border-surface-variant/20 opacity-70';
+      step3.querySelector('span:last-child').textContent = 'Queued (10k inputs)';
+
+      step4.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container/50 border border-surface-variant/20 opacity-70';
+
+      setTimeout(() => {
+        // Step 2 completes, step 3 active
+        step2.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-surface-variant/30';
+        step2.querySelector('span:last-child').className = 'font-code-sm text-code-sm text-[#2E7D5A]';
+        step2.querySelector('span:last-child').textContent = '1,000,000 vectors evaluated';
+
+        step3.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-primary-container/40 opacity-100';
+        step3.querySelector('span:last-child').className = 'font-code-sm text-code-sm text-primary';
+        step3.querySelector('span:last-child').textContent = 'Running 10,000 fuzz permutations...';
+      }, 1400);
+
+      setTimeout(() => {
+        // Step 3 completes, step 4 active
+        step3.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-surface-variant/30';
+        step3.querySelector('span:last-child').className = 'font-code-sm text-code-sm text-[#2E7D5A]';
+        step3.querySelector('span:last-child').textContent = 'Zero edge mutations found';
+
+        step4.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-primary-container/40 opacity-100';
+        step4.querySelector('span:last-child').className = 'font-code-sm text-code-sm text-primary';
+        step4.querySelector('span:last-child').textContent = 'Emitting cryptographic audit tree...';
+      }, 2600);
+
+      setTimeout(() => {
+        // All complete
+        stopTimer();
+        isSimulating = false;
+        btnRun.disabled = false;
+        btnRun.classList.remove('opacity-60', 'cursor-not-allowed');
+
+        pollingPulse.className = 'w-2.5 h-2.5 rounded-full bg-[#2E7D5A] shrink-0';
+        pollingTitle.textContent = 'Sandbox Verification Completed: Cryptographic State Proof Ready';
+
+        step4.className = 'flex flex-col gap-1 p-2.5 rounded bg-surface-container border border-surface-variant/30';
+        step4.querySelector('span:last-child').className = 'font-code-sm text-code-sm text-[#2E7D5A]';
+        step4.querySelector('span:last-child').textContent = 'Report Signed (v21.2)';
+
+        // Populate results
+        reportTarget.textContent = inputAddress.value.trim() || 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+        reportExecTime.textContent = `${(seconds * 1.1).toFixed(1)}s (WASM deterministic)`;
+
+        if (isSecure) {
+          reportStatusBadges.innerHTML = `
+            <span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">11 PASS</span>
+            <span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-surface-variant text-outline">0 WARN</span>
+            <span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-surface-variant text-outline">0 FAIL</span>
+          `;
+          reportScore.className = 'font-code-md text-code-md text-[#2E7D5A] font-semibold mt-0.5';
+          reportScore.textContent = '100% (Production Certified SEP-56)';
+
+          // Check 7 PASS
+          checkInflationRow.className = 'px-space-md py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-3 hover:bg-surface-container/50 transition-colors';
+          check7Badge.className = 'px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30';
+          check7Badge.textContent = 'PASS';
+          check7Desc.textContent = 'Simulated direct asset donation of 1,000,000 units before user deposit. Virtual offset neutralized frontrunning without loss.';
+          check7Remedy.className = 'font-code-sm text-code-sm text-[#2E7D5A] bg-surface-container-lowest/80 px-2 py-1 rounded border border-[#2E7D5A]/20 inline-block w-fit';
+          check7Remedy.textContent = 'SECURE_SEP56: Virtual offset active (1000 shares burned to null address).';
+
+          // Check 10 PASS
+          checkFeeRow.className = 'px-space-md py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-3 hover:bg-surface-container/50 transition-colors';
+          check10Badge.className = 'px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30';
+          check10Badge.textContent = 'PASS';
+          check10Desc.textContent = 'Protocol takes 0.0% unrounded performance fee; full precision conserved through 128-bit fixed point.';
+          check10Remedy.className = 'font-code-sm text-code-sm text-[#2E7D5A] bg-surface-container-lowest/80 px-2 py-1 rounded border border-[#2E7D5A]/20 inline-block w-fit';
+          check10Remedy.textContent = 'PASS_FEE_CONSERVE: Zero truncation across all tested mantissas.';
+
+        } else {
+          // Vulnerable
+          reportStatusBadges.innerHTML = `
+            <span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#2E7D5A]/15 text-[#2E7D5A] border border-[#2E7D5A]/30">9 PASS</span>
+            <span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C28B38]/15 text-[#C28B38] border border-[#C28B38]/30">1 WARN</span>
+            <span class="px-1.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C54644]/15 text-[#C54644] border border-[#C54644]/30">1 FAIL</span>
+          `;
+          reportScore.className = 'font-code-md text-code-md text-primary font-semibold mt-0.5';
+          reportScore.textContent = '82.0% (Remediation Needed)';
+
+          // Check 7 FAIL
+          checkInflationRow.className = 'px-space-md py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-3 bg-[#C54644]/5 hover:bg-[#C54644]/10 transition-colors';
+          check7Badge.className = 'px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C54644]/15 text-[#C54644] border border-[#C54644]/30';
+          check7Badge.textContent = 'FAIL';
+          check7Desc.textContent = 'Simulated direct asset donation of 1,000,000 units before user deposit. Yielded 12.4% share dilution error due to missing virtual reserve offset.';
+          check7Remedy.className = 'font-code-sm text-code-sm text-[#C54644] bg-surface-container-lowest/80 px-2 py-1 rounded border border-[#C54644]/20 inline-block w-fit';
+          check7Remedy.textContent = 'VULN_SEP56_INFLATE_01: Virtual offset missing on convert_to_shares (offset=0).';
+
+          // Check 10 WARN
+          checkFeeRow.className = 'px-space-md py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-3 bg-[#C28B38]/5 hover:bg-[#C28B38]/10 transition-colors';
+          check10Badge.className = 'px-2.5 py-0.5 rounded font-code-sm text-code-sm font-semibold bg-[#C28B38]/15 text-[#C28B38] border border-[#C28B38]/30';
+          check10Badge.textContent = 'WARN';
+          check10Desc.textContent = 'Protocol takes 2.0% performance fee; detected slight precision truncation on odd-lot asset amounts.';
+          check10Remedy.className = 'font-code-sm text-code-sm text-[#C28B38] bg-surface-container-lowest/80 px-2 py-1 rounded border border-[#C28B38]/20 inline-block w-fit';
+          check10Remedy.textContent = 'WARN_FEE_TRUNC_02: Rounding remainder (0.0000003 XLM) drops rather than compounding.';
+        }
+
+        // Smooth scroll to report
+        document.getElementById('results-anchor').scrollIntoView({ behavior: 'smooth' });
+
+      }, 3500);
+    }
+
+    btnRun.addEventListener('click', () => {
+      runSimulation(false);
+    });
+
+    demoVulnerable.addEventListener('click', () => {
+      inputAddress.value = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+      runSimulation(false);
+    });
+
+    demoSecure.addEventListener('click', () => {
+      inputAddress.value = 'CAEGIS56SECUREVOFFSET7291ZXMNLKPOIUYTR4568QAZWSXEDCRFVTG';
+      runSimulation(true);
+    });
+
+  })();
+</script></main><footer class="w-full bg-surface-container-low border-t border-surface-container-highest/60"><div class="max-w-[1080px] mx-auto px-margin-mobile md:px-margin py-space-xl"><div class="grid grid-cols-1 md:grid-cols-4 gap-space-lg mb-space-xl"><div class="space-y-space-sm"><div class="flex items-center gap-space-xs"><img alt="Aegis Vault Logo" class="h-6 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1VRZNyFN8NK8IR_LVKgoIFSr0RW8rnF6sG6Gy-GYlnc-0-0iWh3QGiXJh3Ysf2q5nbvye5StPzmUzR1jsAJ_HoTBtftI2sXCLOjofQhjYA6_8NcDDdLq1l7YcfpBc6kM1dl9o2FUoeSSUFYUEN9x0S9a4RyDmVOCCSJ6wMnTVNFOSWm31R7ZhCTfqSeNqIZodf-GLFHSow6c6wj1Hb7lbfyti6ZBHAxRtPHYHhtDF6d0HwVNzNCuFD_CKQ"><span class="font-headline-md text-headline-md text-on-surface">Aegis</span></div><p class="font-body-sm text-body-sm text-outline max-w-xs">Cryptographic invariant verification and automated test vector conformance for Stellar Soroban SEP-56 smart vault architectures.</p></div><div><div class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-space-sm">Protocol Standards</div><ul class="space-y-space-xs"><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">SEP-0056 Specification</a></li><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Soroban Smart Vault Standard</a></li><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">SEP-0041 Token Interface</a></li></ul></div><div><div class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-space-sm">Security &amp; Auditing</div><ul class="space-y-space-xs"><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Soroban SDK Security Docs</a></li><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Smart Contract Audit Guidelines</a></li><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Invariant Fuzzing Vectors</a></li></ul></div><div><div class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-space-sm">Resources</div><ul class="space-y-space-xs"><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Open Source Repository</a></li><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">CLI Verification Toolkit</a></li><li class="font-code-sm text-code-sm"><a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Release Notes v21.2</a></li></ul></div></div><div class="pt-space-md border-t border-surface-container-high flex flex-col md:flex-row items-center justify-between gap-space-sm"><span class="font-code-sm text-code-sm text-outline">© 2025 Aegis Vault Architecture. Dual licensed MIT &amp; Apache-2.0.</span><div class="flex items-center gap-space-md"><span class="font-code-sm text-code-sm text-outline">Stellar / Soroban Core 21.2</span><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-secondary"></span><span class="font-code-sm text-code-sm text-on-surface-variant">Mainnet Online</span></div></div></div></div></footer>
+
+</body></html>

@@ -64,7 +64,7 @@
   --margin: 2rem;
   --margin-mobile: 1rem;
 
-  --max-width: 1080px;
+  --max-width: 1440px;
 
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -862,7 +862,7 @@ select:focus-visible {
 }
 
 .footer-bottom {
-  padding: var(--space-md) var(--margin) var(--space-lg);
+  padding: var(--space-md) 0 var(--space-lg);
   border-top: 1px solid var(--border);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -880,8 +880,7 @@ select:focus-visible {
   .section {
     padding: var(--space-lg) 0;
   }
-  .footer-grid,
-  .footer-bottom {
+  .footer-grid {
     padding-left: var(--margin-mobile);
     padding-right: var(--margin-mobile);
   }

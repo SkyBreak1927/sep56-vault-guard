@@ -366,6 +366,12 @@ select:focus-visible {
   padding: 0 var(--space-lg);
 }
 
+@media (max-width: 767px), (pointer: coarse) {
+  .hero-actions .btn {
+    height: 44px;
+  }
+}
+
 /* One page-load sequence: hero pieces fade up in order. */
 @keyframes hero-fade-up {
   from { opacity: 0; transform: translateY(14px); }

@@ -15,16 +15,7 @@
 <header class="topbar">
   <div class="container topbar-inner">
     <a class="brand" href="#top">
-      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <path d="M16 3L6 7V15C6 21.5 10.3 27.5 16 29C21.7 27.5 26 21.5 26 15V7L16 3Z" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#141618"/>
-        <path d="M16 10V22" stroke="#F3F4F6" stroke-width="2" stroke-linecap="round"/>
-        <path d="M11 15L16 10L21 15" stroke="#F3F4F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="16" cy="22" r="1.5" fill="#D97706"/>
-      </svg>
-      <span class="brand-text">
-        <span class="brand-name">Aegis Vault</span>
-        <span class="brand-tag">SEP-56 checker</span>
-      </span>
+      <img class="brand-logo" src="assets/logo.svg" alt="Aegis Vault" width="1871" height="418">
     </a>
     <nav class="topbar-nav">
       <a href="#why-it-matters">Why It Matters</a>
@@ -32,6 +23,7 @@
       <a href="#results">Results</a>
     </nav>
     <a class="topbar-github" href="https://github.com/SkyBreak1927/sep56-vault-guard" target="_blank" rel="noreferrer">
+      <span class="github-icon" aria-hidden="true"></span>
       <span>GitHub</span>
     </a>
   </div>
@@ -41,7 +33,8 @@
 
   <!-- 1. HERO -->
   <section class="hero container">
-    <h1>Know if your Soroban vault is safe, before mainnet finds out.</h1>
+    <p class="hero-eyebrow">SEP-56 conformance and security suite for Soroban</p>
+    <h1>Automated Conformance &amp; Economic Security<br>for Stellar Tokenized Vaults</h1>
     <p class="hero-lede">Aegis Vault runs 11 automated checks against any SEP-56 tokenized vault contract and tells you exactly what passes, what fails, and why — usually in about a minute.</p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#try-it">Try it now</a>
@@ -49,16 +42,31 @@
     </div>
     <div class="stat-strip">
       <div class="stat accent">
-        <span class="stat-value">11 Automated Checks</span>
-        <span class="stat-label">Deterministic verification</span>
+        <span class="icon-badge">
+          <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,56v56c0,96-88,120-88,120S40,208,40,112V56a8,8,0,0,1,8-8H208A8,8,0,0,1,216,56Z" opacity="0.28"/><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg>
+        </span>
+        <span class="stat-text">
+          <span class="stat-value">11 Automated Checks</span>
+          <span class="stat-label">Deterministic verification</span>
+        </span>
       </div>
       <div class="stat">
-        <span class="stat-value">Conformance + Security Suite</span>
-        <span class="stat-label">Real vault behavior tested</span>
+        <span class="icon-badge">
+          <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,56v56c0,96-88,120-88,120S40,208,40,112V56a8,8,0,0,1,8-8H208A8,8,0,0,1,216,56Z" opacity="0.28"/><path d="M80.57,117A8,8,0,0,1,91,112.57l29,11.61V96a8,8,0,0,1,16,0v28.18l29-11.61A8,8,0,1,1,171,127.43l-30.31,12.12L158.4,163.2a8,8,0,1,1-12.8,9.6L128,149.33,110.4,172.8a8,8,0,1,1-12.8-9.6l17.74-23.65L85,127.43A8,8,0,0,1,80.57,117ZM224,56v56c0,52.72-25.52,84.67-46.93,102.19-23.06,18.86-46,25.27-47,25.53a8,8,0,0,1-4.2,0c-1-.26-23.91-6.67-47-25.53C57.52,196.67,32,164.72,32,112V56A16,16,0,0,1,48,40H208A16,16,0,0,1,224,56Zm-16,0L48,56l0,56c0,37.3,13.82,67.51,41.07,89.81A128.25,128.25,0,0,0,128,223.62a129.3,129.3,0,0,0,39.41-22.2C194.34,179.16,208,149.07,208,112Z"/></svg>
+        </span>
+        <span class="stat-text">
+          <span class="stat-value">Conformance + Security<br>Suite</span>
+          <span class="stat-label">Real vault behavior tested</span>
+        </span>
       </div>
       <div class="stat mint">
-        <span class="stat-value">Live on Soroban Testnet</span>
-        <span class="stat-label">Soroban v21+ environment</span>
+        <span class="icon-badge">
+          <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M160,128a32,32,0,1,1-32-32A32,32,0,0,1,160,128Z" opacity="0.28"/><path d="M128,88a40,40,0,1,0,40,40A40,40,0,0,0,128,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,152Zm73.71,7.14a80,80,0,0,1-14.08,22.2,8,8,0,0,1-11.92-10.67,63.95,63.95,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67,80.08,80.08,0,0,1,14.08,84.47ZM69,103.09a64,64,0,0,0,11.26,67.58,8,8,0,0,1-11.92,10.67,79.93,79.93,0,0,1,0-106.67A8,8,0,1,1,80.29,85.34,63.77,63.77,0,0,0,69,103.09ZM248,128a119.58,119.58,0,0,1-34.29,84,8,8,0,1,1-11.42-11.2,103.9,103.9,0,0,0,0-145.56A8,8,0,1,1,213.71,44,119.58,119.58,0,0,1,248,128ZM53.71,200.78A8,8,0,1,1,42.29,212a119.87,119.87,0,0,1,0-168,8,8,0,1,1,11.42,11.2,103.9,103.9,0,0,0,0,145.56Z"/></svg>
+        </span>
+        <span class="stat-text">
+          <span class="stat-value"><span class="live-dot" aria-hidden="true"></span>Live on Soroban Testnet</span>
+          <span class="stat-label">Soroban v21+ environment</span>
+        </span>
       </div>
     </div>
   </section>
@@ -75,11 +83,9 @@
         <div class="risk-card">
           <div class="risk-card-head">
             <div class="risk-icon">01</div>
-            <svg class="risk-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="9" cy="10" r="6.5"/>
-              <circle cx="9" cy="10" r="3"/>
-              <path d="M19 9v11M16 17l3 3 3-3"/>
-            </svg>
+            <span class="icon-badge">
+              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M232,56v64L168,56Z" opacity="0.28"/><path d="M232,48H168a8,8,0,0,0-5.66,13.66L188.69,88,136,140.69l-34.34-34.35a8,8,0,0,0-11.32,0l-72,72a8,8,0,0,0,11.32,11.32L96,123.31l34.34,34.35a8,8,0,0,0,11.32,0L200,99.31l26.34,26.35A8,8,0,0,0,240,120V56A8,8,0,0,0,232,48Zm-8,52.69L187.31,64H224Z"/></svg>
+            </span>
           </div>
           <h3>Donation / inflation attacks</h3>
           <p>An attacker donates assets directly to an empty vault to inflate the share price, so the next real depositor's shares round down toward zero and their deposit is absorbed.</p>
@@ -87,11 +93,9 @@
         <div class="risk-card">
           <div class="risk-card-head">
             <div class="risk-icon">02</div>
-            <svg class="risk-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="5" y="3" width="14" height="18" rx="2"/>
-              <path d="M8.5 7h7"/>
-              <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01M8.5 15h.01M12 15h.01M15.5 15h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/>
-            </svg>
+            <span class="icon-badge">
+              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M208,80v96H48V80Z" opacity="0.28"/><path d="M213.66,181.66l-32,32a8,8,0,0,1-11.32-11.32L188.69,184H48a8,8,0,0,1,0-16H188.69l-18.35-18.34a8,8,0,0,1,11.32-11.32l32,32A8,8,0,0,1,213.66,181.66Zm-139.32-64a8,8,0,0,0,11.32-11.32L67.31,88H208a8,8,0,0,0,0-16H67.31L85.66,53.66A8,8,0,0,0,74.34,42.34l-32,32a8,8,0,0,0,0,11.32Z"/></svg>
+            </span>
           </div>
           <h3>Rounding the wrong way</h3>
           <p>Share math must round in the vault's favor on every operation. If it ever rounds toward the user instead, that's a slow, repeatable drain — not a one-time bug.</p>
@@ -99,11 +103,9 @@
         <div class="risk-card">
           <div class="risk-card-head">
             <div class="risk-icon">03</div>
-            <svg class="risk-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>
-              <path d="M12 9v4.5"/>
-              <path d="M12 17h.01"/>
-            </svg>
+            <span class="icon-badge">
+              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M215.46,216H40.54C27.92,216,20,202.79,26.13,192.09L113.59,40.22c6.3-11,22.52-11,28.82,0l87.46,151.87C236,202.79,228.08,216,215.46,216Z" opacity="0.28"/><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z"/></svg>
+            </span>
           </div>
           <h3>Missing overflow protection</h3>
           <p>Extreme inputs should fail cleanly. A vault that panics into a corrupted state, or silently wraps a huge number, can leave funds unrecoverable or wrongly accounted for.</p>
@@ -111,11 +113,9 @@
         <div class="risk-card">
           <div class="risk-card-head">
             <div class="risk-icon">04</div>
-            <svg class="risk-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="4.5" y="11" width="15" height="10" rx="2"/>
-              <path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>
-              <path d="M12 15v2"/>
-            </svg>
+            <span class="icon-badge">
+              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M208,88H48a8,8,0,0,0-8,8V208a8,8,0,0,0,8,8H208a8,8,0,0,0,8-8V96A8,8,0,0,0,208,88Zm-80,72a20,20,0,1,1,20-20A20,20,0,0,1,128,160Z" opacity="0.28"/><path d="M208,80H96V56a32,32,0,0,1,32-32c15.37,0,29.2,11,32.16,25.59a8,8,0,0,0,15.68-3.18C171.32,24.15,151.2,8,128,8A48.05,48.05,0,0,0,80,56V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm0,128H48V96H208V208Zm-80-96a28,28,0,0,0-8,54.83V184a8,8,0,0,0,16,0V166.83A28,28,0,0,0,128,112Zm0,40a12,12,0,1,1,12-12A12,12,0,0,1,128,152Z"/></svg>
+            </span>
           </div>
           <h3>Loose access control</h3>
           <p>Soroban requires explicit authorization checks. A vault that lets an unapproved operator move someone else's shares has no access control, no matter what the interface promises.</p>
@@ -127,10 +127,13 @@
   <!-- 3. TRY IT YOURSELF -->
   <section class="section" id="try-it">
     <div class="container">
-      <div class="section-head">
-        <div class="eyebrow">Try it yourself</div>
-        <h2>Run the full check suite against any SEP-56 vault</h2>
-        <p class="section-lede">Paste a deployed vault contract address, or load one of the vaults we use to validate the checker itself.</p>
+      <div class="section-head-row">
+        <div class="section-head">
+          <div class="eyebrow">Try it yourself</div>
+          <h2>Run the full check suite against any SEP-56 vault</h2>
+          <p class="section-lede">Paste a deployed vault contract address, or load one of the vaults we use to validate the checker itself.</p>
+        </div>
+        <div class="env-chip"><span class="env-chip-label">Environment:</span><span class="env-chip-value"><span class="live-dot" aria-hidden="true"></span>Soroban v21+ Testnet</span></div>
       </div>
 
       <div class="panel run-panel">
@@ -177,27 +180,89 @@
         <p class="section-lede" id="results-lede">Run a check above to see live results here — all 11 checks appear immediately and update as each one finishes.</p>
       </div>
 
-      <div id="results-panel" hidden>
-        <div class="results-summary" id="results-summary">
-          <span class="dot" id="results-dot"></span>
-          <span id="results-summary-text"></span>
+      <div class="run-panel-results" id="results-panel" hidden>
+        <div class="run-head">
+          <div class="results-summary" id="results-summary">
+            <span class="dot" id="results-dot"></span>
+            <span id="results-summary-text"></span>
+          </div>
+          <div class="run-elapsed">Elapsed <span id="results-elapsed">00:00</span></div>
         </div>
 
         <div class="check-group">
           <div class="check-group-head">
-            <span class="check-group-title">Conformance Checks</span>
-            <span class="check-group-count">7 checks</span>
+            <span class="check-group-title">Conformance Checks (7)</span>
+            <span class="check-group-count" id="conformance-summary" aria-live="polite"></span>
           </div>
-          <div class="check-list" id="conformance-list"></div>
+          <div class="check-grid" id="conformance-list"></div>
         </div>
 
         <div class="check-group">
           <div class="check-group-head">
-            <span class="check-group-title">Security Checks</span>
-            <span class="check-group-count">4 checks</span>
+            <span class="check-group-title">Security Checks (4)</span>
+            <span class="check-group-count" id="security-summary" aria-live="polite"></span>
           </div>
-          <div class="check-list" id="security-list"></div>
+          <div class="check-grid" id="security-list"></div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. VERIFICATION REPORT (filled in by app.js once a run completes) -->
+  <section class="section" id="report" hidden>
+    <div class="container">
+      <div class="report-head">
+        <div class="section-head">
+          <div class="eyebrow">Verification report</div>
+          <h2>Conformance Verification Report</h2>
+          <p class="report-meta" id="report-meta"></p>
+        </div>
+        <div class="report-actions">
+          <div class="segmented" role="group" aria-label="Export format">
+            <button type="button" class="segmented-btn" data-format="json" aria-pressed="true">JSON</button>
+            <button type="button" class="segmented-btn" data-format="md" aria-pressed="false">Markdown</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="export-btn">Export Proof (JSON / MD)</button>
+          <button type="button" class="btn btn-secondary btn-sm" disabled aria-disabled="true">Grant Review Certificate (Coming Soon)</button>
+        </div>
+      </div>
+
+      <div class="report-stats">
+        <div class="report-stat report-env">
+          <div class="report-stat-label">Test environment</div>
+          <h3>Live Soroban testnet execution</h3>
+          <p>Checks run against the target contract on Soroban testnet through the Stellar CLI, using freshly funded test accounts. Each check reports its own result as soon as it finishes.</p>
+        </div>
+        <div class="report-stat">
+          <div class="report-stat-label">Execution duration</div>
+          <div class="report-stat-value" id="report-duration"></div>
+          <div class="report-stat-note">Measured in this browser, ±5 s</div>
+        </div>
+        <div class="report-stat">
+          <div class="report-stat-label">Verification state</div>
+          <div class="report-badges" id="report-state"></div>
+        </div>
+        <div class="report-stat">
+          <div class="report-stat-label">SEP-56 checks passed</div>
+          <div class="report-stat-value" id="report-score"></div>
+          <div class="report-stat-note" id="report-score-label"></div>
+        </div>
+      </div>
+
+      <div class="report-group">
+        <div class="report-group-head">
+          <span class="report-group-title">Group 1: Conformance Checks</span>
+          <span class="report-group-count" id="report-conformance-count"></span>
+        </div>
+        <ol class="report-list" id="report-conformance"></ol>
+      </div>
+
+      <div class="report-group">
+        <div class="report-group-head">
+          <span class="report-group-title">Group 2: Security Checks</span>
+          <span class="report-group-count" id="report-security-count"></span>
+        </div>
+        <ol class="report-list" id="report-security" start="8"></ol>
       </div>
     </div>
   </section>
@@ -207,24 +272,30 @@
 <footer class="footer">
   <div class="container footer-grid">
     <div class="footer-brand">
-      <span class="brand-name">Aegis Vault</span>
+      <img class="footer-logo" src="assets/logo.svg" alt="Aegis Vault" width="1871" height="418">
       <p>Open-source conformance and security checker for SEP-56 tokenized vaults on Stellar/Soroban.</p>
     </div>
     <div class="footer-col">
-      <div class="footer-col-title">Repository</div>
-      <a href="https://github.com/SkyBreak1927/sep56-vault-guard" target="_blank" rel="noreferrer">Source code</a>
-      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/README.md" target="_blank" rel="noreferrer">README</a>
+      <div class="footer-col-title">Protocol standards</div>
+      <a href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" target="_blank" rel="noreferrer">SEP-0056 Specification ↗</a>
+      <a href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md" target="_blank" rel="noreferrer">SEP-0041 Token Interface ↗</a>
+    </div>
+    <div class="footer-col">
+      <div class="footer-col-title">Security &amp; auditing</div>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Findings &amp; scope</a>
       <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/VAULT_CHECKS.md" target="_blank" rel="noreferrer">Check documentation</a>
     </div>
     <div class="footer-col">
-      <div class="footer-col-title">Security</div>
-      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Findings &amp; scope</a>
-      <a href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" target="_blank" rel="noreferrer">SEP-56 spec ↗</a>
+      <div class="footer-col-title">Resources</div>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard" target="_blank" rel="noreferrer">Source code</a>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/tree/main/cli" target="_blank" rel="noreferrer">CLI</a>
+      <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/README.md" target="_blank" rel="noreferrer">README</a>
     </div>
   </div>
   <div class="footer-bottom">
-    <div class="container">
-      <span>Aegis Vault — MIT licensed. Not a substitute for a formal audit.</span>
+    <div class="container footer-bottom-inner">
+      <span>© 2026 Aegis Vault</span>
+      <span>Not a substitute for a formal audit.</span>
     </div>
   </div>
 </footer>

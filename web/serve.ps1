@@ -13,6 +13,7 @@ $mime = @{
     ".html" = "text/html"
     ".css"  = "text/css"
     ".js"   = "application/javascript"
+    ".svg"  = "image/svg+xml"
 }
 
 while ($listener.IsListening) {

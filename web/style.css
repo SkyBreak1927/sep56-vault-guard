@@ -1247,23 +1247,14 @@ select:focus-visible {
   background: var(--surface);
 }
 
+/* Brand on the left, link groups in one compact row on the right. */
 .footer-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr;
-  gap: var(--space-lg);
-  padding: var(--space-xl) var(--margin);
-}
-
-@media (max-width: 1023px) {
-  .footer-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 767px) {
-  .footer-grid {
-    grid-template-columns: 1fr;
-  }
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-lg) var(--cluster-gap);
+  padding: var(--space-lg) var(--margin);
 }
 
 .footer-logo {
@@ -1276,8 +1267,14 @@ select:focus-visible {
   margin: var(--space-sm) 0 0;
   max-width: 24rem;
   font-size: 12px;
-  line-height: 18px;
+  line-height: 16px;
   color: var(--text-secondary);
+}
+
+.footer-links {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: var(--space-md) var(--space-xl);
 }
 
 .footer-col-title {
@@ -1286,16 +1283,17 @@ select:focus-visible {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
 }
 
 .footer-col a {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--text-secondary);
   text-decoration: none;
-  margin-bottom: var(--space-xs);
   transition: color 0.15s ease;
 }
 
@@ -1303,11 +1301,24 @@ select:focus-visible {
   color: var(--primary);
 }
 
+@media (max-width: 767px) {
+  .footer-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .footer-col a {
+    min-height: 44px;
+  }
+}
+
 .footer-bottom {
-  padding: var(--space-md) 0 var(--space-lg);
+  padding: var(--space-md) 0;
   border-top: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   color: var(--text-secondary);
 }
 

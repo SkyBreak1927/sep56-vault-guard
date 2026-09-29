@@ -385,23 +385,6 @@ select:focus-visible {
   color: var(--text-secondary);
 }
 
-/* 6px connection-state dot (DESIGN.md's one allowed round badge). */
-.live-dot {
-  width: 6px;
-  height: 6px;
-  flex-shrink: 0;
-  margin-right: 6px;
-  border-radius: var(--radius-full);
-  background: var(--pass);
-  animation: pulse 2.8s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .live-dot {
-    animation: none;
-  }
-}
-
 @media (max-width: 767px) {
   .stat-strip {
     grid-template-columns: 1fr;
@@ -436,26 +419,6 @@ select:focus-visible {
 
 .section-head-row .section-head {
   margin-bottom: 0;
-}
-
-.env-chip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--text-secondary);
-}
-
-.env-chip-value {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius);
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
 }
 
 .section-head {

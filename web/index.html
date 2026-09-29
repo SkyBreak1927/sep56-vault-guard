@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aegis Vault — SEP-56 Conformance &amp; Security Checker</title>
+<title>Aegis Vault: SEP-56 Conformance &amp; Security Checker</title>
 <meta name="description" content="Automated conformance and security checker for SEP-56 tokenized vaults on Stellar/Soroban.">
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,7 +34,7 @@
   <!-- 1. HERO -->
   <section class="hero container">
     <h1>Automated Conformance &amp; Economic Security<br>for Stellar Tokenized Vaults</h1>
-    <p class="hero-lede">Aegis Vault runs 11 automated checks against any SEP-56 tokenized vault contract and tells you exactly what passes, what fails, and why, usually in about a minute.</p>
+    <p class="hero-lede">Aegis Vault runs 11 automated checks against any SEP-56 tokenized vault contract and tells you exactly what passes, what fails, and why.</p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#try-it">Try it now</a>
       <a class="btn btn-secondary" href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" target="_blank" rel="noreferrer">Read the SEP-56 spec</a>
@@ -102,11 +102,9 @@
     <div class="container">
       <div class="section-head-row">
         <div class="section-head">
-          <div class="eyebrow">Try it yourself</div>
-          <h2>Run the full check suite against any SEP-56 vault</h2>
-          <p class="section-lede">Paste a deployed vault contract address, or load one of the vaults we use to validate the checker itself.</p>
+          <h2>Run the check suite against a deployed SEP-56 vault</h2>
+          <p class="section-lede">Paste a deployed vault contract address, or load one of the testnet vaults documented in VAULT_CHECKS.md.</p>
         </div>
-        <div class="env-chip"><span class="env-chip-label">Environment:</span><span class="env-chip-value"><span class="live-dot" aria-hidden="true"></span>Soroban v21+ Testnet</span></div>
       </div>
 
       <div class="panel run-panel">
@@ -119,8 +117,8 @@
             <label for="network-select">Network</label>
             <select id="network-select">
               <option value="testnet" selected>Testnet</option>
-              <option value="mainnet" disabled>Mainnet (coming soon)</option>
-              <option value="futurenet" disabled>Futurenet (coming soon)</option>
+              <option value="mainnet" disabled>Mainnet (not supported)</option>
+              <option value="futurenet" disabled>Futurenet (not supported)</option>
             </select>
           </div>
           <div class="field field-run">
@@ -129,7 +127,7 @@
         </div>
 
         <p class="run-hint" id="run-hint">
-          <span id="run-hint-text">Stellar contract address — starts with "C", 56 characters.</span>
+          <span id="run-hint-text">Stellar contract address: starts with "C", 56 characters.</span>
         </p>
 
         <div class="preset-row">
@@ -138,7 +136,7 @@
           <button class="preset-btn" type="button" data-vault="CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG" title="Reference vault + a real dead-shares donation-attack mitigation">Hardened Vault</button>
           <button class="preset-btn" type="button" data-vault="CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7" title="Unmodified vault clone with a custom non-native asset, decimals_offset=3">Blind Vault</button>
           <button class="preset-btn" type="button" data-vault="CAWUBSRHD4DUDWAJENO7XHI3QVEXKIU3ZZ4HRM3RFZ4PNBSCCYXH4VTA" title="Reference vault with decimals_offset=6">Vault A</button>
-          <button class="preset-btn" type="button" data-vault="CAZBXMYP5TQWEHCFMUD6ZEON7DUWAC2BCKNCKKVBIRX7GZN7M6I2P6HV" title="Deliberately buggy vault — rounds in the user's favor">Vault B</button>
+          <button class="preset-btn" type="button" data-vault="CAZBXMYP5TQWEHCFMUD6ZEON7DUWAC2BCKNCKKVBIRX7GZN7M6I2P6HV" title="Deliberately buggy vault: rounds in the user's favor">Vault B</button>
         </div>
       </div>
     </div>
@@ -148,9 +146,8 @@
   <section class="section" id="results">
     <div class="container">
       <div class="section-head">
-        <div class="eyebrow">Results</div>
         <h2>Check results</h2>
-        <p class="section-lede" id="results-lede">Run a check above to see live results here — all 11 checks appear immediately and update as each one finishes.</p>
+        <p class="section-lede" id="results-lede">Run a check above to see live results here. Every check appears as soon as the run starts and updates when it finishes.</p>
       </div>
 
       <div class="run-panel-results" id="results-panel" hidden>
@@ -164,7 +161,7 @@
 
         <div class="check-group">
           <div class="check-group-head">
-            <span class="check-group-title">Conformance Checks (7)</span>
+            <span class="check-group-title">Conformance checks</span>
             <span class="check-group-count" id="conformance-summary" aria-live="polite"></span>
           </div>
           <div class="check-grid" id="conformance-list"></div>
@@ -172,7 +169,7 @@
 
         <div class="check-group">
           <div class="check-group-head">
-            <span class="check-group-title">Security Checks (4)</span>
+            <span class="check-group-title">Security checks</span>
             <span class="check-group-count" id="security-summary" aria-live="polite"></span>
           </div>
           <div class="check-grid" id="security-list"></div>
@@ -186,7 +183,6 @@
     <div class="container">
       <div class="report-head">
         <div class="section-head">
-          <div class="eyebrow">Verification report</div>
           <h2>Conformance Verification Report</h2>
           <p class="report-meta" id="report-meta"></p>
         </div>
@@ -195,16 +191,15 @@
             <button type="button" class="segmented-btn" data-format="json" aria-pressed="true">JSON</button>
             <button type="button" class="segmented-btn" data-format="md" aria-pressed="false">Markdown</button>
           </div>
-          <button type="button" class="btn btn-secondary btn-sm" id="export-btn">Export Proof (JSON / MD)</button>
-          <button type="button" class="btn btn-secondary btn-sm" disabled aria-disabled="true">Grant Review Certificate (Coming Soon)</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="export-btn">Export results</button>
         </div>
       </div>
 
       <div class="report-stats">
         <div class="report-stat report-env">
           <div class="report-stat-label">Test environment</div>
-          <h3>Live Soroban testnet execution</h3>
-          <p>Checks run against the target contract on Soroban testnet through the Stellar CLI, using freshly funded test accounts. Each check reports its own result as soon as it finishes.</p>
+          <h3>Soroban testnet execution</h3>
+          <p>Checks run against the target contract on Soroban testnet through the Stellar CLI, using testnet accounts funded through Friendbot. Each check reports its own result as soon as it finishes.</p>
         </div>
         <div class="report-stat">
           <div class="report-stat-label">Execution duration</div>

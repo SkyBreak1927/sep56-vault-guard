@@ -68,11 +68,6 @@
   --topbar-height: 64px;
   --cluster-gap: 2rem;
 
-  /* Icon badges: dark amber gradient with an amber border and glow */
-  --badge-bg: linear-gradient(135deg, #1a1006, #2a1a0a);
-  --badge-border: rgba(217, 119, 6, 0.25);
-  --badge-glow: rgba(217, 119, 6, 0.65);
-
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
@@ -421,28 +416,6 @@ select:focus-visible {
   }
 }
 
-/* ---------- Icon badges (stat strip + risk cards) ---------- */
-
-.icon-badge {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  background: var(--badge-bg);
-  border: 1px solid var(--badge-border);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(217, 119, 6, 0.15);
-  color: var(--primary-strong);
-}
-
-.icon-badge svg {
-  width: 18px;
-  height: 18px;
-  filter: drop-shadow(0 0 5px var(--badge-glow));
-}
-
 /* ---------- Sections ---------- */
 
 .section {
@@ -545,27 +518,6 @@ select:focus-visible {
 
 .risk-card:hover {
   border-color: var(--border-strong);
-}
-
-.risk-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-md);
-}
-
-.risk-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  background: var(--surface-3);
-  color: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 600;
 }
 
 .risk-card h3 {

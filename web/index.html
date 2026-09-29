@@ -59,48 +59,23 @@
   <section class="section" id="why-it-matters">
     <div class="container">
       <div class="section-head">
-        <div class="eyebrow">Why it matters</div>
         <h2>Vault math is easy to get wrong, and expensive when it is</h2>
         <p class="section-lede">A tokenized vault holds user funds behind a handful of arithmetic and authorization rules. Getting any one of them slightly wrong can let an attacker walk away with someone else's deposit.</p>
       </div>
       <div class="risk-grid">
         <div class="risk-card">
-          <div class="risk-card-head">
-            <div class="risk-icon">01</div>
-            <span class="icon-badge">
-              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M232,56v64L168,56Z" opacity="0.28"/><path d="M232,48H168a8,8,0,0,0-5.66,13.66L188.69,88,136,140.69l-34.34-34.35a8,8,0,0,0-11.32,0l-72,72a8,8,0,0,0,11.32,11.32L96,123.31l34.34,34.35a8,8,0,0,0,11.32,0L200,99.31l26.34,26.35A8,8,0,0,0,240,120V56A8,8,0,0,0,232,48Zm-8,52.69L187.31,64H224Z"/></svg>
-            </span>
-          </div>
           <h3>Donation / inflation attacks</h3>
           <p>An attacker donates assets directly to an empty vault to inflate the share price, so the next real depositor's shares round down toward zero and their deposit is absorbed.</p>
         </div>
         <div class="risk-card">
-          <div class="risk-card-head">
-            <div class="risk-icon">02</div>
-            <span class="icon-badge">
-              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M208,80v96H48V80Z" opacity="0.28"/><path d="M213.66,181.66l-32,32a8,8,0,0,1-11.32-11.32L188.69,184H48a8,8,0,0,1,0-16H188.69l-18.35-18.34a8,8,0,0,1,11.32-11.32l32,32A8,8,0,0,1,213.66,181.66Zm-139.32-64a8,8,0,0,0,11.32-11.32L67.31,88H208a8,8,0,0,0,0-16H67.31L85.66,53.66A8,8,0,0,0,74.34,42.34l-32,32a8,8,0,0,0,0,11.32Z"/></svg>
-            </span>
-          </div>
           <h3>Rounding the wrong way</h3>
-          <p>Share math must round in the vault's favor on every operation. If it ever rounds toward the user instead, that's a slow, repeatable drain — not a one-time bug.</p>
+          <p>Share math must round in the vault's favor on every operation. If it ever rounds toward the user instead, that's a slow, repeatable drain, not a one-time bug.</p>
         </div>
         <div class="risk-card">
-          <div class="risk-card-head">
-            <div class="risk-icon">03</div>
-            <span class="icon-badge">
-              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M215.46,216H40.54C27.92,216,20,202.79,26.13,192.09L113.59,40.22c6.3-11,22.52-11,28.82,0l87.46,151.87C236,202.79,228.08,216,215.46,216Z" opacity="0.28"/><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z"/></svg>
-            </span>
-          </div>
           <h3>Missing overflow protection</h3>
           <p>Extreme inputs should fail cleanly. A vault that panics into a corrupted state, or silently wraps a huge number, can leave funds unrecoverable or wrongly accounted for.</p>
         </div>
         <div class="risk-card">
-          <div class="risk-card-head">
-            <div class="risk-icon">04</div>
-            <span class="icon-badge">
-              <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M208,88H48a8,8,0,0,0-8,8V208a8,8,0,0,0,8,8H208a8,8,0,0,0,8-8V96A8,8,0,0,0,208,88Zm-80,72a20,20,0,1,1,20-20A20,20,0,0,1,128,160Z" opacity="0.28"/><path d="M208,80H96V56a32,32,0,0,1,32-32c15.37,0,29.2,11,32.16,25.59a8,8,0,0,0,15.68-3.18C171.32,24.15,151.2,8,128,8A48.05,48.05,0,0,0,80,56V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm0,128H48V96H208V208Zm-80-96a28,28,0,0,0-8,54.83V184a8,8,0,0,0,16,0V166.83A28,28,0,0,0,128,112Zm0,40a12,12,0,1,1,12-12A12,12,0,0,1,128,152Z"/></svg>
-            </span>
-          </div>
           <h3>Loose access control</h3>
           <p>Soroban requires explicit authorization checks. A vault that lets an unapproved operator move someone else's shares has no access control, no matter what the interface promises.</p>
         </div>

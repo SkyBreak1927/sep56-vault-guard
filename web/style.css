@@ -290,43 +290,9 @@ select:focus-visible {
 /* ---------- Hero ---------- */
 
 .hero {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
   padding-top: var(--space-xl);
   padding-bottom: var(--space-xl);
   text-align: center;
-}
-
-/* Dot grid behind the headline: 24px pitch, brightest behind the
-   headline and fading out toward the hero's edges. */
-.hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 0);
-  background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
-  mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
-}
-
-/* Soft amber ambient tone behind the headline. */
-.hero::after {
-  content: "";
-  position: absolute;
-  top: 25%;
-  left: 50%;
-  width: 580px;
-  max-width: 90%;
-  height: 280px;
-  z-index: -1;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: var(--primary-subtle-bg);
-  filter: blur(120px);
 }
 
 .hero-eyebrow {
@@ -433,10 +399,6 @@ select:focus-visible {
   line-height: 20px;
   font-weight: 500;
   color: var(--text-primary);
-}
-
-.stat.mint .stat-value {
-  color: var(--pass);
 }
 
 .stat-label {

@@ -488,51 +488,99 @@ select:focus-visible {
   color: var(--text-secondary);
 }
 
-/* ---------- Why it matters: risk cards ---------- */
+/* ---------- Why it matters: one lead finding, then secondary rows ---------- */
 
-.risk-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--gutter);
-}
-
-@media (max-width: 1023px) {
-  .risk-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 767px) {
-  .risk-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.risk-card {
+.risk-lead {
+  margin-bottom: var(--space-lg);
+  padding: var(--space-lg);
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 2px solid var(--fail);
   border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  transition: border-color 0.15s ease;
 }
 
-.risk-card:hover {
-  border-color: var(--border-strong);
+.risk-lead-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
 }
 
-.risk-card h3 {
-  margin: 0 0 var(--space-xs);
+.risk-lead h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.risk-lead p {
+  margin: 0 0 var(--space-sm);
+  max-width: 48rem;
   font-size: 16px;
-  line-height: 22px;
+  line-height: 24px;
+  color: var(--text-secondary);
+}
+
+.risk-lead p:last-child {
+  margin-bottom: 0;
+}
+
+.risk-list {
+  border-top: 1px solid var(--border);
+}
+
+.risk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  gap: var(--gutter);
+  padding: var(--space-md) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.risk-row h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.risk-card p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 19px;
+.risk-row-body p {
+  margin: 0 0 var(--space-xs);
+  max-width: 48rem;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--text-secondary);
+}
+
+.risk-row-body p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 767px) {
+  .risk-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-xs);
+  }
+}
+
+/* The lead's status label keeps its approved casing ("FAIL on the
+   reference vault") instead of the badge's default uppercase. */
+.risk-lead .badge {
+  text-transform: none;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Machine representations inside prose (function names, types, fields). */
+#why-it-matters code {
+  font-size: 13px;
+  color: var(--text-primary);
 }
 
 /* ---------- Try it / run panel ---------- */

@@ -59,25 +59,39 @@
   <section class="section" id="why-it-matters">
     <div class="container">
       <div class="section-head">
-        <h2>Vault math is easy to get wrong, and expensive when it is</h2>
-        <p class="section-lede">A tokenized vault holds user funds behind a handful of arithmetic and authorization rules. Getting any one of them slightly wrong can let an attacker walk away with someone else's deposit.</p>
+        <h2>Four of the security risks <span class="nowrap">SEP-56</span> calls out</h2>
+        <p class="section-lede">SEP-56 lists rounding, overflow, and access control among its security concerns, and describes a donation attack on share price. When the donation attack succeeds, the victim can lose their entire deposit.</p>
       </div>
-      <div class="risk-grid">
-        <div class="risk-card">
-          <h3>Donation / inflation attacks</h3>
-          <p>An attacker donates assets directly to an empty vault to inflate the share price, so the next real depositor's shares round down toward zero and their deposit is absorbed.</p>
+
+      <article class="risk-lead">
+        <div class="risk-lead-head">
+          <h3>Donation / inflation attack</h3>
+          <span class="badge badge-fail">FAIL on the reference vault</span>
         </div>
-        <div class="risk-card">
-          <h3>Rounding the wrong way</h3>
-          <p>Share math must round in the vault's favor on every operation. If it ever rounds toward the user instead, that's a slow, repeatable drain, not a one-time bug.</p>
+        <p>An attacker first deposits 1 stroop, then donates 100,000,000 stroops straight to the vault, bypassing <code>deposit()</code>. A depositor who then puts in 5,000,000 stroops receives 0 shares, and their deposit is absorbed into the vault.</p>
+        <p>Raising <code>decimals_offset</code> to 6 or burning dead shares at construction did not make the check pass. Protection has to be sized to the donation worth defending against, for example with a deployer-seeded initial deposit.</p>
+      </article>
+
+      <div class="risk-list">
+        <div class="risk-row">
+          <h3>Rounding direction</h3>
+          <div class="risk-row-body">
+            <p>Share math must round in the vault's favor: <code>deposit()</code> rounds shares down and <code>mint()</code> rounds assets up, as SEP-56 specifies.</p>
+            <p>The check caught a rounding bug deliberately injected into a test vault.</p>
+          </div>
         </div>
-        <div class="risk-card">
-          <h3>Missing overflow protection</h3>
-          <p>Extreme inputs should fail cleanly. A vault that panics into a corrupted state, or silently wraps a huge number, can leave funds unrecoverable or wrongly accounted for.</p>
+        <div class="risk-row">
+          <h3>Extreme inputs</h3>
+          <div class="risk-row-body">
+            <p>A deposit of <code>i128::MAX</code> must fail cleanly, leaving <code>total_assets</code> at 0 instead of producing a wrong result.</p>
+          </div>
         </div>
-        <div class="risk-card">
-          <h3>Loose access control</h3>
-          <p>Soroban requires explicit authorization checks. A vault that lets an unapproved operator move someone else's shares has no access control, no matter what the interface promises.</p>
+        <div class="risk-row">
+          <h3>Access control</h3>
+          <div class="risk-row-body">
+            <p>An operator without approval cannot withdraw an owner's shares.</p>
+            <p>With an allowance, the operator can withdraw within it, the allowance drops by exactly the amount spent, and a withdrawal beyond it is rejected.</p>
+          </div>
         </div>
       </div>
     </div>

@@ -1487,3 +1487,29 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* Risk card hover, matching the Stitch reference: the border turns amber
+   at 50% (derived from the existing --primary-strong token; browsers without
+   color-mix() fall back to the full token) and the icon badge grows to 1.1.
+   Brightness and color only, no lift or new shadow. */
+.risk-card:hover {
+  border-color: var(--primary-strong);
+  border-color: color-mix(in srgb, var(--primary-strong) 50%, transparent);
+}
+
+.risk-card .icon-badge {
+  transition: transform 200ms ease-out;
+}
+
+.risk-card:hover .icon-badge {
+  transform: scale(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .risk-card .icon-badge {
+    transition: none;
+  }
+  .risk-card:hover .icon-badge {
+    transform: none;
+  }
+}

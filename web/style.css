@@ -1426,3 +1426,64 @@ select:focus-visible {
     padding-right: var(--margin-mobile);
   }
 }
+
+/* ---------- Polish: scroll-in reveal and hover transitions ---------- */
+
+/* Scroll-in reveal. app.js adds `.reveal` only when IntersectionObserver is
+   available and reduced motion is not requested, so without JS (or with
+   reduced motion) every element stays fully visible. The same transition
+   list keeps the cards' existing hover color changes smooth. */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease-out,
+    background-color 200ms ease-out;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hover: smoother color changes, and cards gain surface luminosity
+   (DESIGN.md: interactive states brighten rather than float). */
+.btn,
+.preset-btn,
+.topbar-github,
+.topbar-nav a,
+.footer-col a {
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+}
+
+.risk-card:hover {
+  background-color: var(--surface-3);
+}
+
+.check-card {
+  transition: border-color 200ms ease-out, background-color 200ms ease-out;
+}
+
+.check-card:hover {
+  background-color: var(--surface-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .btn,
+  .preset-btn,
+  .topbar-github,
+  .topbar-nav a,
+  .footer-col a,
+  .risk-card,
+  .check-card {
+    transition: none;
+  }
+}

@@ -9,23 +9,23 @@ const API_BASE = "https://aegis-vault-backend.onrender.com";
 const VAULT_ADDRESS_RE = /^C[A-Z2-7]{55}$/;
 const POLL_INTERVAL_MS = 5000;
 const MAX_POLL_ATTEMPTS = 90; // ~7.5 minutes, comfortably above the backend's own timeout
-const DEFAULT_HINT = 'Stellar contract address: starts with "C", 56 characters.';
+const DEFAULT_HINT = 'Stellar contract address — starts with "C", 56 characters.';
 
-// Display names come from design-reference/CORRECTED_CONTENT.md; each
-// description states what the check verifies, per VAULT_CHECKS.md. The
-// backend only ever supplies id/group/status/detail, not human-readable copy.
+// Display names and descriptions are the corrected copy from
+// design-reference/CORRECTED_CONTENT.md, used verbatim — the backend only
+// ever supplies id/group/status/detail, not human-readable copy.
 const CHECK_DEFS = [
-  { id: "total_assets", group: "conformance", name: "Total Assets Accounting", description: "total_assets() returns a valid, non-negative value." },
-  { id: "deposit", group: "conformance", name: "Deposit Conformance", description: "Minted shares match preview_deposit(), and total_assets() rises by the deposit." },
-  { id: "mint", group: "conformance", name: "Mint Conformance", description: "Assets pulled match preview_mint(), and total_assets() rises by that amount." },
-  { id: "withdraw", group: "conformance", name: "Withdraw Conformance", description: "Burned shares match preview_withdraw(), and total_assets() falls by the withdrawal." },
-  { id: "redeem", group: "conformance", name: "Redeem Conformance", description: "Returned assets match preview_redeem(), and total_assets() falls by that amount." },
-  { id: "convert_to_shares", group: "conformance", name: "Convert to Shares Accuracy", description: "A round trip through convert_to_assets() never exceeds the input, and the call is read-only." },
-  { id: "convert_to_assets", group: "conformance", name: "Convert to Assets Accuracy", description: "A round trip through convert_to_shares() never exceeds the input, and the call is read-only." },
-  { id: "donation_attack", group: "security", name: "Donation/Inflation Attack Resistance", description: "After a dust deposit and a large donation, a later depositor must still get at least 90% of their fair shares." },
-  { id: "overflow_protection", group: "security", name: "Overflow Protection", description: "A deposit of i128::MAX must fail cleanly, leaving total_assets() at 0." },
-  { id: "rounding_direction", group: "security", name: "Rounding Direction Safety", description: "At a fractional ratio, deposit() rounds shares down and mint() rounds assets up." },
-  { id: "access_control_probing", group: "security", name: "Access Control Probing", description: "Operator withdrawals need approval and must stay within the allowance." },
+  { id: "total_assets", group: "conformance", name: "Total Assets Accounting", description: "Vault reports total assets accurately and consistently." },
+  { id: "deposit", group: "conformance", name: "Deposit Conformance", description: "Deposit function behaves per SEP-56 spec." },
+  { id: "mint", group: "conformance", name: "Mint Conformance", description: "Mint function behaves per SEP-56 spec." },
+  { id: "withdraw", group: "conformance", name: "Withdraw Conformance", description: "Withdraw function behaves per SEP-56 spec." },
+  { id: "redeem", group: "conformance", name: "Redeem Conformance", description: "Redeem function behaves per SEP-56 spec." },
+  { id: "convert_to_shares", group: "conformance", name: "Convert to Shares Accuracy", description: "Asset→share conversion math is correct." },
+  { id: "convert_to_assets", group: "conformance", name: "Convert to Assets Accuracy", description: "Share→asset conversion math is correct." },
+  { id: "donation_attack", group: "security", name: "Donation/Inflation Attack Resistance", description: "Tests vulnerability to direct-donation share-price manipulation." },
+  { id: "overflow_protection", group: "security", name: "Overflow Protection", description: "Tests handling of extreme values without overflow/crash." },
+  { id: "rounding_direction", group: "security", name: "Rounding Direction Safety", description: "Confirms rounding always favors the vault, never the attacker." },
+  { id: "access_control_probing", group: "security", name: "Access Control Probing", description: "Confirms sensitive functions are properly authorization-gated." },
 ];
 
 const BADGE_LABEL = { pending: "Pending", running: "Running", pass: "Pass", fail: "Fail", warn: "Warn" };
@@ -99,11 +99,11 @@ function countStatuses(defs) {
   return counts;
 }
 
-// "3 Passed, 2 Running, 2 Pending"; zero counts are left out.
+// "3 Passed · 2 Running · 2 Pending" — zero counts are left out.
 function groupSummaryText(group) {
   const counts = countStatuses(CHECK_DEFS.filter((def) => def.group === group));
   const labels = [["pass", "Passed"], ["fail", "Failed"], ["warn", "Warned"], ["running", "Running"], ["pending", "Pending"]];
-  return labels.filter(([key]) => counts[key] > 0).map(([key, label]) => `${counts[key]} ${label}`).join(", ");
+  return labels.filter(([key]) => counts[key] > 0).map(([key, label]) => `${counts[key]} ${label}`).join(" · ");
 }
 
 function renderCheckList(listEl, group) {
@@ -139,18 +139,18 @@ function renderSummary(kind) {
   resultsDot.className = `dot ${kind}`;
 
   if (kind === "error") {
-    resultsSummaryText.textContent = "Run failed. See the message above.";
+    resultsSummaryText.textContent = "Run failed — see message above.";
     return;
   }
 
   if (settled < CHECK_DEFS.length) {
-    resultsSummaryText.textContent = `Running: ${settled} of ${CHECK_DEFS.length} checks complete`;
+    resultsSummaryText.textContent = `Running — ${settled} of ${CHECK_DEFS.length} checks complete`;
     return;
   }
 
   const parts = [`${counts.pass} passed`, `${counts.fail} failed`];
   if (counts.warn > 0) parts.push(`${counts.warn} warned`);
-  resultsSummaryText.textContent = `Run complete: ${parts.join(", ")}`;
+  resultsSummaryText.textContent = `Run complete — ${parts.join(", ")}`;
 }
 
 function recordSettled(id, status) {
@@ -268,7 +268,7 @@ function renderReport() {
   const s = data.summary;
 
   document.getElementById("report-meta").innerHTML =
-    `<span class="mono">${escapeHtml(run.vault)}</span>, Testnet, completed ${escapeHtml(new Date(run.completedAt).toLocaleString())}`;
+    `<span class="mono">${escapeHtml(run.vault)}</span> · Testnet · Completed ${escapeHtml(new Date(run.completedAt).toLocaleString())}`;
   document.getElementById("report-duration").textContent = `${data.duration_seconds} s`;
   document.getElementById("report-state").innerHTML = [
     `<span class="badge badge-pass">${s.pass} Pass</span>`,
@@ -291,7 +291,7 @@ function renderReport() {
 
 function reportMarkdown(data) {
   const lines = [
-    "# Aegis Vault: Conformance Verification Report",
+    "# Aegis Vault — Conformance Verification Report",
     "",
     `- Vault: \`${data.vault}\``,
     `- Network: ${data.network}`,
@@ -305,7 +305,7 @@ function reportMarkdown(data) {
     lines.push(`## ${title}`, "", "| # | Check | Status | Settled at | Detail |", "|---|---|---|---|---|");
     data.checks.filter((c) => c.group === group).forEach((c) => {
       const detail = (c.detail || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
-      lines.push(`| ${String(c.number).padStart(2, "0")} | ${c.name} | ${c.status.toUpperCase()} | ${c.settled_at || "-"} | ${detail} |`);
+      lines.push(`| ${String(c.number).padStart(2, "0")} | ${c.name} | ${c.status.toUpperCase()} | ${c.settled_at || "—"} | ${detail} |`);
     });
     lines.push("");
   });
@@ -342,7 +342,7 @@ exportBtn.addEventListener("click", exportReport);
 
 function pollJob(jobId, attempt) {
   if (attempt > MAX_POLL_ATTEMPTS) {
-    resultsLede.textContent = "Gave up waiting for a result: the check is taking unusually long. Please try again later.";
+    resultsLede.textContent = "Gave up waiting for a result — the check is taking unusually long. Please try again later.";
     renderSummary("error");
     setRunning(false);
     return;
@@ -355,7 +355,7 @@ function pollJob(jobId, attempt) {
         if (Array.isArray(body.checks)) applyChecksArray(body.checks);
         renderChecks();
         renderSummary("running");
-        resultsLede.textContent = "Running. Results update every 5 seconds.";
+        resultsLede.textContent = "Processing… usually 1–2 minutes.";
         setTimeout(() => pollJob(jobId, attempt + 1), POLL_INTERVAL_MS);
         return;
       }
@@ -391,7 +391,7 @@ function runCheck() {
   const vault = vaultInput.value.trim();
 
   if (!VAULT_ADDRESS_RE.test(vault)) {
-    setHintError('Invalid address: must start with "C" and be 56 characters long.');
+    setHintError('Invalid address — must start with "C" and be 56 characters long.');
     return;
   }
   clearHintError();

@@ -13,8 +13,6 @@
   /* Borders */
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.16);
-  /* Table row divider (DESIGN.md: Data Tables & Invariant Lists). */
-  --border-row: rgba(255, 255, 255, 0.05);
 
   /* Text */
   --text-primary: #f3f4f6;
@@ -47,11 +45,6 @@
   --pending: #fbbf24;
   --pending-bg: rgba(217, 119, 6, 0.07);
   --pending-border: rgba(217, 119, 6, 0.16);
-  /* Pending / queued badge: muted gray, not amber. */
-  --pending-muted-bg: rgba(255, 255, 255, 0.04);
-
-  /* Sticky topbar: canvas at 92% so content scrolls faintly beneath it. */
-  --topbar-bg: rgba(12, 13, 14, 0.92);
 
   /* Radius */
   --radius-sm: 0.125rem;
@@ -74,6 +67,11 @@
   --max-width: 1440px;
   --topbar-height: 64px;
   --cluster-gap: 2rem;
+
+  /* Icon badges: dark amber gradient with an amber border and glow */
+  --badge-bg: linear-gradient(135deg, #1a1006, #2a1a0a);
+  --badge-border: rgba(217, 119, 6, 0.25);
+  --badge-glow: rgba(217, 119, 6, 0.65);
 
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -149,7 +147,7 @@ select:focus-visible {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--topbar-bg);
+  background: rgba(12, 13, 14, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
 }
@@ -292,9 +290,50 @@ select:focus-visible {
 /* ---------- Hero ---------- */
 
 .hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding-top: var(--space-xl);
   padding-bottom: var(--space-xl);
   text-align: center;
+}
+
+/* Dot grid behind the headline: 24px pitch, brightest behind the
+   headline and fading out toward the hero's edges. */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 0);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
+}
+
+/* Soft amber ambient tone behind the headline. */
+.hero::after {
+  content: "";
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  width: 580px;
+  max-width: 90%;
+  height: 280px;
+  z-index: -1;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--primary-subtle-bg);
+  filter: blur(120px);
+}
+
+.hero-eyebrow {
+  margin: 0 0 var(--space-lg);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
 }
 
 .hero h1 {
@@ -346,6 +385,7 @@ select:focus-visible {
 .hero > :nth-child(2) { animation-delay: 80ms; }
 .hero > :nth-child(3) { animation-delay: 180ms; }
 .hero > :nth-child(4) { animation-delay: 280ms; }
+.hero > :nth-child(5) { animation-delay: 360ms; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero > * {
@@ -369,8 +409,8 @@ select:focus-visible {
 
 .stat {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 14px;
   min-width: 0;
   padding: 0 var(--space-lg);
 }
@@ -379,17 +419,47 @@ select:focus-visible {
   border-left: 1px solid var(--border);
 }
 
+.stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .stat-value {
+  display: flex;
+  align-items: center;
   font-size: 14px;
   line-height: 20px;
   font-weight: 500;
   color: var(--text-primary);
 }
 
+.stat.mint .stat-value {
+  color: var(--pass);
+}
+
 .stat-label {
   font-size: 12px;
   line-height: 16px;
   color: var(--text-secondary);
+}
+
+/* 6px connection-state dot (DESIGN.md's one allowed round badge). */
+.live-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  margin-right: 6px;
+  border-radius: var(--radius-full);
+  background: var(--pass);
+  animation: pulse 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
 }
 
 @media (max-width: 767px) {
@@ -404,6 +474,28 @@ select:focus-visible {
     border-left: none;
     border-top: 1px solid var(--border);
   }
+}
+
+/* ---------- Icon badges (stat strip + risk cards) ---------- */
+
+.icon-badge {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--badge-bg);
+  border: 1px solid var(--badge-border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(217, 119, 6, 0.15);
+  color: var(--primary-strong);
+}
+
+.icon-badge svg {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 0 5px var(--badge-glow));
 }
 
 /* ---------- Sections ---------- */
@@ -426,6 +518,26 @@ select:focus-visible {
 
 .section-head-row .section-head {
   margin-bottom: 0;
+}
+
+.env-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+
+.env-chip-value {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
 }
 
 .section-head {
@@ -458,99 +570,72 @@ select:focus-visible {
   color: var(--text-secondary);
 }
 
-/* ---------- Why it matters: one lead finding, then secondary rows ---------- */
+/* ---------- Why it matters: risk cards ---------- */
 
-.risk-lead {
-  margin-bottom: var(--space-lg);
-  padding: var(--space-lg);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--fail);
-  border-radius: var(--radius-lg);
-}
-
-.risk-lead-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm) var(--space-md);
-  margin-bottom: var(--space-sm);
-}
-
-.risk-lead h3 {
-  margin: 0;
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
-.risk-lead p {
-  margin: 0 0 var(--space-sm);
-  max-width: 48rem;
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--text-secondary);
-}
-
-.risk-lead p:last-child {
-  margin-bottom: 0;
-}
-
-.risk-list {
-  border-top: 1px solid var(--border);
-}
-
-.risk-row {
+.risk-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--gutter);
-  padding: var(--space-md) 0;
-  border-bottom: 1px solid var(--border);
 }
 
-.risk-row h3 {
-  margin: 0;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.risk-row-body p {
-  margin: 0 0 var(--space-xs);
-  max-width: 48rem;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--text-secondary);
-}
-
-.risk-row-body p:last-child {
-  margin-bottom: 0;
-}
-
-@media (max-width: 767px) {
-  .risk-row {
-    grid-template-columns: 1fr;
-    gap: var(--space-xs);
+@media (max-width: 1023px) {
+  .risk-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
-/* The lead's status label keeps its approved casing ("FAIL on the
-   reference vault") instead of the badge's default uppercase. */
-.risk-lead .badge {
-  text-transform: none;
+@media (max-width: 767px) {
+  .risk-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.nowrap {
-  white-space: nowrap;
+.risk-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  transition: border-color 0.15s ease;
 }
 
-/* Machine representations inside prose (function names, types, fields). */
-#why-it-matters code {
-  font-size: 13px;
+.risk-card:hover {
+  border-color: var(--border-strong);
+}
+
+.risk-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.risk-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.risk-card h3 {
+  margin: 0 0 var(--space-xs);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
   color: var(--text-primary);
+}
+
+.risk-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-secondary);
 }
 
 /* ---------- Try it / run panel ---------- */
@@ -771,12 +856,6 @@ select:focus-visible {
 
 /* Live run panel: header with status + elapsed time, then one card grid per
    check group. */
-/* The panel's own display: flex would otherwise override the `hidden`
-   attribute app.js uses to keep it out of view until a run starts. */
-.run-panel-results[hidden] {
-  display: none;
-}
-
 .run-panel-results {
   display: flex;
   flex-direction: column;
@@ -939,7 +1018,7 @@ select:focus-visible {
 }
 
 .badge-pending {
-  background: var(--pending-muted-bg);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-secondary);
   border-color: var(--border);
 }
@@ -1194,7 +1273,7 @@ select:focus-visible {
   gap: 0.75rem;
   min-height: 44px;
   padding: 0.75rem var(--space-md);
-  border-bottom: 1px solid var(--border-row);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .report-row:last-child {
@@ -1254,14 +1333,23 @@ select:focus-visible {
   background: var(--surface);
 }
 
-/* Brand on the left, link groups in one compact row on the right. */
 .footer-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-lg) var(--cluster-gap);
-  padding: var(--space-lg) var(--margin);
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: var(--space-lg);
+  padding: var(--space-xl) var(--margin);
+}
+
+@media (max-width: 1023px) {
+  .footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .footer-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .footer-logo {
@@ -1274,14 +1362,8 @@ select:focus-visible {
   margin: var(--space-sm) 0 0;
   max-width: 24rem;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 18px;
   color: var(--text-secondary);
-}
-
-.footer-links {
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  gap: var(--space-md) var(--space-xl);
 }
 
 .footer-col-title {
@@ -1290,17 +1372,16 @@ select:focus-visible {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  margin-bottom: var(--space-xs);
+  margin-bottom: var(--space-sm);
 }
 
 .footer-col a {
-  display: flex;
-  align-items: center;
-  min-height: 24px;
-  font-size: 13px;
-  line-height: 18px;
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--text-secondary);
   text-decoration: none;
+  margin-bottom: var(--space-xs);
   transition: color 0.15s ease;
 }
 
@@ -1308,24 +1389,11 @@ select:focus-visible {
   color: var(--primary);
 }
 
-@media (max-width: 767px) {
-  .footer-links {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-  }
-}
-
-@media (max-width: 767px), (pointer: coarse) {
-  .footer-col a {
-    min-height: 44px;
-  }
-}
-
 .footer-bottom {
-  padding: var(--space-md) 0;
+  padding: var(--space-md) 0 var(--space-lg);
   border-top: 1px solid var(--border);
-  font-size: 12px;
-  line-height: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--text-secondary);
 }
 
@@ -1339,12 +1407,6 @@ select:focus-visible {
 @media (max-width: 767px) {
   .hero {
     padding: var(--space-lg) var(--margin-mobile);
-  }
-  .hero h1 {
-    text-wrap: balance;
-  }
-  .hero h1 br {
-    display: none;
   }
   .hero h1 {
     font-size: 24px;

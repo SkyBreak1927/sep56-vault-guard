@@ -764,6 +764,12 @@ select:focus-visible {
 
 /* Live run panel: header with status + elapsed time, then one card grid per
    check group. */
+/* The panel's own display: flex would otherwise override the `hidden`
+   attribute app.js uses to keep it out of view until a run starts. */
+.run-panel-results[hidden] {
+  display: none;
+}
+
 .run-panel-results {
   display: flex;
   flex-direction: column;

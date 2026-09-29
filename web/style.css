@@ -295,13 +295,6 @@ select:focus-visible {
   text-align: center;
 }
 
-.hero-eyebrow {
-  margin: 0 0 var(--space-lg);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--text-secondary);
-}
-
 .hero h1 {
   margin: 0 auto var(--space-lg);
   font-size: 32px;
@@ -351,7 +344,6 @@ select:focus-visible {
 .hero > :nth-child(2) { animation-delay: 80ms; }
 .hero > :nth-child(3) { animation-delay: 180ms; }
 .hero > :nth-child(4) { animation-delay: 280ms; }
-.hero > :nth-child(5) { animation-delay: 360ms; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero > * {
@@ -375,8 +367,8 @@ select:focus-visible {
 
 .stat {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
   padding: 0 var(--space-lg);
 }
@@ -385,16 +377,7 @@ select:focus-visible {
   border-left: 1px solid var(--border);
 }
 
-.stat-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .stat-value {
-  display: flex;
-  align-items: center;
   font-size: 14px;
   line-height: 20px;
   font-weight: 500;

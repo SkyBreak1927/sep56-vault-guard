@@ -448,3 +448,46 @@ presetButtons.forEach((btn) => {
     vaultInput.focus();
   });
 });
+
+// Scroll-in reveal (progressive enhancement only): sections and cards fade
+// up once as they enter the viewport. Nothing is hidden unless the observer
+// is available and reduced motion isn't requested, so content stays visible
+// if this script fails. The live check cards and report are re-rendered on
+// every poll, so they are left out to avoid re-animating them.
+(function setupScrollReveal() {
+  if (!("IntersectionObserver" in window)) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const STAGGER_MS = 60;
+  const targets = [];
+  [
+    "#why-it-matters .section-head",
+    "#why-it-matters .risk-card",
+    "#try-it .section-head-row",
+    "#try-it .run-panel",
+    "#results .section-head",
+    ".footer-grid",
+  ].forEach((selector) => {
+    document.querySelectorAll(selector).forEach((el, i) => {
+      el.classList.add("reveal");
+      if (el.classList.contains("risk-card") && i > 0) {
+        // Stagger the cards, then drop the delay so hover stays immediate.
+        el.style.transitionDelay = `${i * STAGGER_MS}ms`;
+        el.addEventListener("transitionend", () => { el.style.transitionDelay = ""; }, { once: true });
+      }
+      targets.push(el);
+    });
+  });
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    },
+    { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+  );
+  targets.forEach((el) => observer.observe(el));
+})();

@@ -796,4 +796,21 @@ presetButtons.forEach((btn) => {
   }, { threshold: 0, rootMargin: "0px 0px -15% 0px" });
 
   targets.forEach((el) => observer.observe(el));
+
+  // The amber rule across the top of each section draws itself on the same
+  // trigger, but is watched separately: it belongs to the section, not to any
+  // one element inside it, and it is decoration only. The section's own 1px
+  // border stays and carries the separation by itself.
+  const ruleObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add("rv-rule-in");
+      ruleObserver.unobserve(entry.target);
+    });
+  }, { threshold: 0, rootMargin: "0px 0px -15% 0px" });
+
+  document.querySelectorAll("#why-it-matters, #try-it, #results").forEach((section) => {
+    section.classList.add("rv-rule");
+    ruleObserver.observe(section);
+  });
 })();

@@ -1931,3 +1931,42 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* A thin amber rule that draws itself across the top of a section as the
+   section arrives, growing from the centre out to both edges. It sits on top
+   of the existing 1px border, which is left in place and still carries the
+   separation on its own. The class is added by app.js, so without JavaScript
+   the pseudo-element is never styled at all. */
+.section.rv-rule {
+  position: relative;
+}
+
+.section.rv-rule::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--primary) 34%, transparent) 50%,
+    transparent 100%
+  );
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary-strong) 22%, transparent);
+  transform: scaleX(0);
+  transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.section.rv-rule.rv-rule-in::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section.rv-rule::after {
+    transform: scaleX(1);
+    transition: none;
+  }
+}

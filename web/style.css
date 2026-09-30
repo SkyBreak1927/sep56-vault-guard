@@ -1838,3 +1838,41 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* ---------- Scroll choreography: reveal ---------- */
+
+/* Strengthens the existing scroll-in reveal. The rules above are left as they
+   are; these come later in the file and win on cascade order. `.reveal` is
+   still added by app.js only when IntersectionObserver is available and
+   reduced motion is off, so without JS every element stays fully visible. */
+.reveal {
+  transform: translateY(28px);
+  transition:
+    opacity 800ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 800ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 800ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease-out,
+    background-color 200ms ease-out;
+}
+
+/* Blur-in is reserved for section titles: one large element per section, so
+   the filter never runs across a grid of cards at the same time. */
+.section-head.reveal h2 {
+  filter: blur(6px);
+  transition: filter 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.section-head.reveal.is-visible h2 {
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transform: none;
+    transition: none;
+  }
+  .section-head.reveal h2 {
+    filter: none;
+    transition: none;
+  }
+}

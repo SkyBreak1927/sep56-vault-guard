@@ -1780,3 +1780,61 @@ select:focus-visible {
   -webkit-mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
   mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
 }
+
+/* ---------- Hero stat cards: HUD corners and index ---------- */
+
+/* Anchor for the decorations below; does not affect the existing flex layout. */
+.stat {
+  position: relative;
+}
+
+/* Four corner brackets drawn as eight background slivers, so the arm length
+   and the amber strength can both transition. */
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 2px 10px;
+  pointer-events: none;
+  opacity: 0.55;
+  --hud-arm: 6px;
+  --hud-line: color-mix(in srgb, var(--primary-strong) 40%, transparent);
+  background-image:
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line)),
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line)),
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line)),
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line));
+  background-size:
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm),
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm),
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm),
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm);
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  background-repeat: no-repeat;
+  transition: opacity 200ms ease-out, background-size 200ms ease-out;
+}
+
+.stat:hover::before {
+  opacity: 1;
+  --hud-arm: 10px;
+}
+
+.stat-index {
+  position: absolute;
+  top: 0;
+  right: 18px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: color-mix(in srgb, var(--primary) 45%, transparent);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat::before {
+    transition: none;
+  }
+}

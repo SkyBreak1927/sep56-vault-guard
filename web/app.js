@@ -523,3 +523,135 @@ presetButtons.forEach((btn) => {
     tilt.style.transform = "";
   });
 })();
+
+// Dot-grid highlight (progressive enhancement only): lights up the dots of the
+// existing .hero::before grid near the cursor. The grid's pitch, dot origin and
+// dot radius are read from that layer's own computed style, so the highlights
+// land exactly on top of it. Skipped on touch devices and under reduced motion.
+(function setupDotHighlight() {
+  const canvas = document.querySelector(".cyber-dots");
+  const hero = document.querySelector(".hero");
+  if (!canvas || !hero) return;
+  if (!window.matchMedia("(hover: hover)").matches) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const ctx = canvas.getContext && canvas.getContext("2d");
+  if (!ctx) return;
+
+  const base = getComputedStyle(hero, "::before");
+  const image = base.backgroundImage || "";
+  const pitch = parseFloat(base.backgroundSize) || 24;
+  const origin = image.match(/circle at ([\d.]+)px ([\d.]+)px/);
+  const originX = origin ? parseFloat(origin[1]) : 1;
+  const originY = origin ? parseFloat(origin[2]) : 1;
+  const firstStop = image.match(/rgba?\([^)]*\)\s+([\d.]+)px/);
+  const dotRadius = firstStop ? parseFloat(firstStop[1]) : 1;
+
+  const SIGMA = 90;          // falloff spread, px
+  const REACH = SIGMA * 3;   // only dots this close are drawn
+  const MAX_ALPHA = 0.3;     // peak extra opacity
+  const MAX_GROWTH = 0.8;    // peak extra radius, px
+  const EASE = 0.09;         // cursor smoothing
+  const IDLE_MS = 2500;      // after this, the highlight wanders on its own
+  const TAU = Math.PI * 2;
+
+  const accent = getComputedStyle(document.documentElement)
+    .getPropertyValue("--primary").trim();
+  const hex = /^#([0-9a-f]{6})$/i.exec(accent);
+  const rgb = hex
+    ? [parseInt(hex[1].slice(0, 2), 16), parseInt(hex[1].slice(2, 4), 16), parseInt(hex[1].slice(4, 6), 16)]
+    : [255, 183, 125];
+
+  let width = 0;
+  let height = 0;
+  let pointerX = 0;
+  let pointerY = 0;
+  let spotX = 0;
+  let spotY = 0;
+  let lastMove = 0;
+  let onScreen = true;
+  let frame = 0;
+
+  function resize() {
+    const box = hero.getBoundingClientRect();
+    width = box.width;
+    height = box.height;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    if (!spotX && !spotY) {
+      spotX = pointerX = width / 2;
+      spotY = pointerY = height * 0.35;
+    }
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, width, height);
+    const iFrom = Math.max(0, Math.floor((spotX - REACH - originX) / pitch));
+    const iTo = Math.ceil((Math.min(spotX + REACH, width) - originX) / pitch);
+    const jFrom = Math.max(0, Math.floor((spotY - REACH - originY) / pitch));
+    const jTo = Math.ceil((Math.min(spotY + REACH, height) - originY) / pitch);
+
+    for (let i = iFrom; i <= iTo; i++) {
+      const cx = originX + i * pitch;
+      for (let j = jFrom; j <= jTo; j++) {
+        const cy = originY + j * pitch;
+        const dx = cx - spotX;
+        const dy = cy - spotY;
+        const weight = Math.exp(-(dx * dx + dy * dy) / (2 * SIGMA * SIGMA));
+        if (weight < 0.01) continue;
+        ctx.globalAlpha = MAX_ALPHA * weight;
+        ctx.beginPath();
+        ctx.arc(cx, cy, dotRadius + MAX_GROWTH * weight, 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function tick(now) {
+    frame = 0;
+    if (!onScreen || document.hidden) return;
+    if (now - lastMove > IDLE_MS) {
+      const t = now / 1000;
+      pointerX = width * (0.5 + 0.28 * Math.sin(t * 0.21));
+      pointerY = height * (0.45 + 0.22 * Math.cos(t * 0.17));
+    }
+    spotX += (pointerX - spotX) * EASE;
+    spotY += (pointerY - spotY) * EASE;
+    render();
+    frame = requestAnimationFrame(tick);
+  }
+
+  function start() {
+    if (!frame && onScreen && !document.hidden) frame = requestAnimationFrame(tick);
+  }
+
+  function stop() {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+  }
+
+  hero.addEventListener("mousemove", (event) => {
+    const box = hero.getBoundingClientRect();
+    pointerX = event.clientX - box.left;
+    pointerY = event.clientY - box.top;
+    lastMove = performance.now();
+    start();
+  });
+
+  window.addEventListener("resize", () => { resize(); });
+  document.addEventListener("visibilitychange", () => { document.hidden ? stop() : start(); });
+
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((entries) => {
+      onScreen = entries[0].isIntersecting;
+      onScreen ? start() : stop();
+    }, { threshold: 0 }).observe(hero);
+  }
+
+  resize();
+  start();
+})();

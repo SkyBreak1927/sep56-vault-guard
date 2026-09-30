@@ -491,3 +491,35 @@ presetButtons.forEach((btn) => {
   );
   targets.forEach((el) => observer.observe(el));
 })();
+
+// Decorative vault tilt (progressive enhancement only): the cube keeps its own
+// CSS spin, and this adds a small extra tilt toward the cursor on top of it.
+// Skipped on touch devices and under reduced motion; the vault still renders
+// and spins without this script.
+(function setupVaultTilt() {
+  const tilt = document.querySelector(".cyber-tilt");
+  const hero = document.querySelector(".hero");
+  if (!tilt || !hero) return;
+  if (!window.matchMedia("(hover: hover)").matches) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const MAX_TILT_X = 14; // degrees, vertical
+  const MAX_TILT_Y = 18; // degrees, horizontal
+  let frame = 0;
+
+  hero.addEventListener("mousemove", (event) => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const box = hero.getBoundingClientRect();
+      const nx = (event.clientX - box.left) / box.width - 0.5;
+      const ny = (event.clientY - box.top) / box.height - 0.5;
+      tilt.style.transform =
+        `rotateX(${(-ny * 2 * MAX_TILT_X).toFixed(2)}deg) rotateY(${(nx * 2 * MAX_TILT_Y).toFixed(2)}deg)`;
+    });
+  });
+
+  hero.addEventListener("mouseleave", () => {
+    tilt.style.transform = "";
+  });
+})();

@@ -69,6 +69,66 @@
         </span>
       </div>
     </div>
+
+    <!-- Decorative vault, additive: absolutely positioned in the empty space
+         at the right of the hero, hidden below 1100px. -->
+    <div class="cyber-safe" aria-hidden="true">
+      <div class="cyber-safe-inner">
+        <div class="cyber-halo"></div>
+        <svg class="cyber-shield" viewBox="0 0 270 310" fill="none">
+          <defs>
+            <linearGradient id="cyber-shield-line" x1="135" y1="8" x2="135" y2="302" gradientUnits="userSpaceOnUse">
+              <stop class="cyber-stop-top" offset="0" />
+              <stop class="cyber-stop-bottom" offset="1" />
+            </linearGradient>
+            <pattern id="cyber-shield-dots" width="12" height="12" patternUnits="userSpaceOnUse">
+              <circle class="cyber-shield-dot" cx="1.5" cy="1.5" r="1" />
+            </pattern>
+            <clipPath id="cyber-shield-clip">
+              <path d="M135 8 L250 42 L250 232 C250 262 190 288 135 302 C80 288 20 262 20 232 L20 42 Z" />
+            </clipPath>
+          </defs>
+          <path d="M135 8 L250 42 L250 232 C250 262 190 288 135 302 C80 288 20 262 20 232 L20 42 Z" fill="url(#cyber-shield-dots)" />
+          <g clip-path="url(#cyber-shield-clip)">
+            <rect class="cyber-scan" x="0" y="-10" width="270" height="10" />
+          </g>
+          <path d="M135 8 L250 42 L250 232 C250 262 190 288 135 302 C80 288 20 262 20 232 L20 42 Z" stroke="url(#cyber-shield-line)" stroke-width="1.5" />
+        </svg>
+
+        <div class="cyber-stage">
+          <div class="cyber-tilt">
+            <div class="cyber-cube">
+              <div class="cyber-face cyber-face-front">
+                <svg class="cyber-door" viewBox="0 0 140 140" fill="none">
+                  <circle class="cyber-door-ring" cx="70" cy="70" r="52" stroke-width="2" />
+                  <circle class="cyber-door-ticks" cx="70" cy="70" r="45" stroke-width="5" stroke-dasharray="1.5 10" />
+                  <g class="cyber-door-bolts">
+                    <circle cx="122" cy="70" r="3" /><circle cx="107" cy="107" r="3" />
+                    <circle cx="70" cy="122" r="3" /><circle cx="33" cy="107" r="3" />
+                    <circle cx="18" cy="70" r="3" /><circle cx="33" cy="33" r="3" />
+                    <circle cx="70" cy="18" r="3" /><circle cx="107" cy="33" r="3" />
+                  </g>
+                  <g class="cyber-wheel">
+                    <circle cx="70" cy="70" r="31" stroke-width="3" />
+                    <path d="M70 39v62M43.2 54.5l53.6 31M43.2 85.5l53.6-31" stroke-width="3" stroke-linecap="round" />
+                  </g>
+                  <circle class="cyber-hub" cx="70" cy="70" r="17" stroke-width="2" />
+                  <path class="cyber-hub-mark" d="M70 60l8 3v6c0 5-4.5 8-8 9-3.5-1-8-4-8-9v-6z" stroke-width="1.5" stroke-linejoin="round" />
+                  <path class="cyber-hub-check" d="M66.5 69.5l2.6 2.6 5-5.2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+              <div class="cyber-face cyber-face-back"><span class="cyber-vents"></span></div>
+              <div class="cyber-face cyber-face-right"><span class="cyber-slit cyber-slit-v"></span></div>
+              <div class="cyber-face cyber-face-left"><span class="cyber-hinge"></span><span class="cyber-hinge"></span></div>
+              <div class="cyber-face cyber-face-top"><span class="cyber-slit cyber-slit-h"></span></div>
+              <div class="cyber-face cyber-face-bottom"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cyber-floor"></div>
+      </div>
+    </div>
   </section>
 
   <!-- 2. WHY IT MATTERS -->

@@ -717,6 +717,13 @@ presetButtons.forEach((btn) => {
 // Parents whose children are choreographed here are marked `.rv-host` and stop
 // animating as a block. The live check cards and the report are re-rendered on
 // every poll, so they stay out of both passes.
+// Start once an element's top has travelled about 15% up from the bottom edge,
+// rather than the instant it touches it, so an entrance is already under way by
+// the time it is properly in view. The generous top margin covers the opposite
+// case: the topbar links jump straight down the page, and an element skipped
+// over in one frame is counted as seen rather than left hidden behind us.
+const OBSERVER_OPTIONS = { threshold: 0, rootMargin: "300% 0px -15% 0px" };
+
 (function setupScrollChoreography() {
   if (!("IntersectionObserver" in window)) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -725,8 +732,43 @@ presetButtons.forEach((btn) => {
   const CARD_STAGGER_MS = 100; // across one grid
   const LOAD_BASE_MS = 560;    // picks up while the hero's own fade-up runs
   const LOAD_STEP_MS = 90;     // global flow for what is already on screen
+  const WATCHDOG_MS = 3000;    // nothing stays hidden longer than this
 
   const targets = [];
+  const rules = [];
+  let delivered = false;
+
+  function enter(el) {
+    el.classList.add("rv-in");
+  }
+
+  // Both observers are built before a single element is hidden. If either
+  // constructor throws, we leave without having touched the page, so the
+  // content simply stays visible -- the same outcome as having no
+  // IntersectionObserver at all.
+  let observer;
+  let ruleObserver;
+  try {
+    observer = new IntersectionObserver((entries) => {
+      delivered = true;
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        enter(entry.target);
+        observer.unobserve(entry.target);
+      });
+    }, OBSERVER_OPTIONS);
+
+    ruleObserver = new IntersectionObserver((entries) => {
+      delivered = true;
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("rv-rule-in");
+        ruleObserver.unobserve(entry.target);
+      });
+    }, OBSERVER_OPTIONS);
+  } catch (err) {
+    return;
+  }
 
   function claim(el, delayMs) {
     el.classList.add("rv");
@@ -781,36 +823,32 @@ presetButtons.forEach((btn) => {
     step += 1;
   });
 
-  // Start once the element's top has travelled about 15% up from the bottom
-  // edge, rather than the instant it touches it, so an entrance is already
-  // under way by the time it is properly in view. The bottom margin only
-  // shrinks the root from below, so anything level with or above the fold
-  // still counts. Each element is unobserved on its first hit, so the
-  // entrance runs exactly once.
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-      entry.target.classList.add("rv-in");
-      observer.unobserve(entry.target);
-    });
-  }, { threshold: 0, rootMargin: "0px 0px -15% 0px" });
-
   targets.forEach((el) => observer.observe(el));
 
   // The amber rule across the top of each section draws itself on the same
   // trigger, but is watched separately: it belongs to the section, not to any
   // one element inside it, and it is decoration only. The section's own 1px
   // border stays and carries the separation by itself.
-  const ruleObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-      entry.target.classList.add("rv-rule-in");
-      ruleObserver.unobserve(entry.target);
-    });
-  }, { threshold: 0, rootMargin: "0px 0px -15% 0px" });
-
   document.querySelectorAll("#why-it-matters, #try-it, #results").forEach((section) => {
     section.classList.add("rv-rule");
+    rules.push(section);
     ruleObserver.observe(section);
   });
+
+  // Watchdog, so nothing can stay hidden because the observer went quiet. If it
+  // never reported at all, the whole pass is abandoned and everything is shown.
+  // Otherwise everything at or above the fold is forced in; only what is still
+  // below it is waiting on purpose and is left to its own trigger.
+  window.setTimeout(() => {
+    if (!delivered) {
+      targets.forEach(enter);
+      rules.forEach((el) => el.classList.add("rv-rule-in"));
+      return;
+    }
+    const fold = window.innerHeight;
+    targets.forEach((el) => {
+      if (el.classList.contains("rv-in")) return;
+      if (el.getBoundingClientRect().top < fold) enter(el);
+    });
+  }, WATCHDOG_MS);
 })();

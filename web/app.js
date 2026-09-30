@@ -491,3 +491,216 @@ presetButtons.forEach((btn) => {
   );
   targets.forEach((el) => observer.observe(el));
 })();
+
+// Decorative vault tilt (progressive enhancement only): the cube keeps its own
+// CSS spin, and this adds a small extra tilt toward the cursor on top of it.
+// Skipped on touch devices and under reduced motion; the vault still renders
+// and spins without this script.
+(function setupVaultTilt() {
+  const tilt = document.querySelector(".cyber-tilt");
+  const hero = document.querySelector(".hero");
+  if (!tilt || !hero) return;
+  if (!window.matchMedia("(hover: hover)").matches) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const MAX_TILT_X = 14; // degrees, vertical
+  const MAX_TILT_Y = 18; // degrees, horizontal
+  let frame = 0;
+
+  hero.addEventListener("mousemove", (event) => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const box = hero.getBoundingClientRect();
+      const nx = (event.clientX - box.left) / box.width - 0.5;
+      const ny = (event.clientY - box.top) / box.height - 0.5;
+      tilt.style.transform =
+        `rotateX(${(-ny * 2 * MAX_TILT_X).toFixed(2)}deg) rotateY(${(nx * 2 * MAX_TILT_Y).toFixed(2)}deg)`;
+    });
+  });
+
+  hero.addEventListener("mouseleave", () => {
+    tilt.style.transform = "";
+  });
+})();
+
+// Dot-grid highlight (progressive enhancement only): lights up the dots of the
+// existing .hero::before grid near the cursor. The grid's pitch, dot origin and
+// dot radius are read from that layer's own computed style, so the highlights
+// land exactly on top of it. Skipped on touch devices and under reduced motion.
+(function setupDotHighlight() {
+  const canvas = document.querySelector(".cyber-dots");
+  const hero = document.querySelector(".hero");
+  if (!canvas || !hero) return;
+  if (!window.matchMedia("(hover: hover)").matches) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const ctx = canvas.getContext && canvas.getContext("2d");
+  if (!ctx) return;
+
+  const base = getComputedStyle(hero, "::before");
+  const image = base.backgroundImage || "";
+  const pitch = parseFloat(base.backgroundSize) || 24;
+  const origin = image.match(/circle at ([\d.]+)px ([\d.]+)px/);
+  const originX = origin ? parseFloat(origin[1]) : 1;
+  const originY = origin ? parseFloat(origin[2]) : 1;
+  const firstStop = image.match(/rgba?\([^)]*\)\s+([\d.]+)px/);
+  const dotRadius = firstStop ? parseFloat(firstStop[1]) : 1;
+
+  const SIGMA = 90;          // falloff spread, px
+  const REACH = SIGMA * 3;   // only dots this close are drawn
+  const MAX_ALPHA = 0.3;     // peak extra opacity
+  const MAX_GROWTH = 0.8;    // peak extra radius, px
+  const EASE = 0.09;         // cursor smoothing
+  const IDLE_MS = 2500;      // after this, the highlight wanders on its own
+  const TAU = Math.PI * 2;
+
+  const accent = getComputedStyle(document.documentElement)
+    .getPropertyValue("--primary").trim();
+  const hex = /^#([0-9a-f]{6})$/i.exec(accent);
+  const rgb = hex
+    ? [parseInt(hex[1].slice(0, 2), 16), parseInt(hex[1].slice(2, 4), 16), parseInt(hex[1].slice(4, 6), 16)]
+    : [255, 183, 125];
+
+  let width = 0;
+  let height = 0;
+  let pointerX = 0;
+  let pointerY = 0;
+  let spotX = 0;
+  let spotY = 0;
+  let lastMove = 0;
+  let onScreen = true;
+  let frame = 0;
+
+  function resize() {
+    const box = hero.getBoundingClientRect();
+    width = box.width;
+    height = box.height;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    if (!spotX && !spotY) {
+      spotX = pointerX = width / 2;
+      spotY = pointerY = height * 0.35;
+    }
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, width, height);
+    const iFrom = Math.max(0, Math.floor((spotX - REACH - originX) / pitch));
+    const iTo = Math.ceil((Math.min(spotX + REACH, width) - originX) / pitch);
+    const jFrom = Math.max(0, Math.floor((spotY - REACH - originY) / pitch));
+    const jTo = Math.ceil((Math.min(spotY + REACH, height) - originY) / pitch);
+
+    for (let i = iFrom; i <= iTo; i++) {
+      const cx = originX + i * pitch;
+      for (let j = jFrom; j <= jTo; j++) {
+        const cy = originY + j * pitch;
+        const dx = cx - spotX;
+        const dy = cy - spotY;
+        const weight = Math.exp(-(dx * dx + dy * dy) / (2 * SIGMA * SIGMA));
+        if (weight < 0.01) continue;
+        ctx.globalAlpha = MAX_ALPHA * weight;
+        ctx.beginPath();
+        ctx.arc(cx, cy, dotRadius + MAX_GROWTH * weight, 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function tick(now) {
+    frame = 0;
+    if (!onScreen || document.hidden) return;
+    if (now - lastMove > IDLE_MS) {
+      const t = now / 1000;
+      pointerX = width * (0.5 + 0.28 * Math.sin(t * 0.21));
+      pointerY = height * (0.45 + 0.22 * Math.cos(t * 0.17));
+    }
+    spotX += (pointerX - spotX) * EASE;
+    spotY += (pointerY - spotY) * EASE;
+    render();
+    frame = requestAnimationFrame(tick);
+  }
+
+  function start() {
+    if (!frame && onScreen && !document.hidden) frame = requestAnimationFrame(tick);
+  }
+
+  function stop() {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+  }
+
+  hero.addEventListener("mousemove", (event) => {
+    const box = hero.getBoundingClientRect();
+    pointerX = event.clientX - box.left;
+    pointerY = event.clientY - box.top;
+    lastMove = performance.now();
+    start();
+  });
+
+  window.addEventListener("resize", () => { resize(); });
+  document.addEventListener("visibilitychange", () => { document.hidden ? stop() : start(); });
+
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((entries) => {
+      onScreen = entries[0].isIntersecting;
+      onScreen ? start() : stop();
+    }, { threshold: 0 }).observe(hero);
+  }
+
+  resize();
+  start();
+})();
+
+// Headline decrypt (progressive enhancement only): on load the hero headline
+// scrambles and then locks to its real text from left to right. The markup's
+// own text is never changed, only the text nodes' values during the animation,
+// and the original strings are restored at the end. Skipped under reduced
+// motion, and without JavaScript the headline simply renders as written.
+(function setupHeadlineDecrypt() {
+  const headline = document.querySelector(".hero h1");
+  if (!headline) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const parts = [];
+  const walker = document.createTreeWalker(headline, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) parts.push({ node, text: node.nodeValue });
+  if (!parts.length) return;
+
+  // Screen readers get the real text for the whole run, and the measured
+  // height is pinned so the scrambled glyphs cannot shift the layout.
+  headline.setAttribute("aria-label", parts.map((p) => p.text).join(" ").replace(/\s+/g, " ").trim());
+  headline.style.minHeight = `${headline.getBoundingClientRect().height}px`;
+
+  const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&@$";
+  const DURATION = 1300;
+  const total = parts.reduce((sum, p) => sum + p.text.length, 0);
+  const start = performance.now();
+
+  function step(now) {
+    const progress = Math.min((now - start) / DURATION, 1);
+    const locked = Math.floor(progress * total);
+    let index = 0;
+    for (const part of parts) {
+      let out = "";
+      for (let i = 0; i < part.text.length; i++, index++) {
+        const char = part.text[i];
+        out += (index < locked || char === " ") ? char : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+      }
+      part.node.nodeValue = out;
+    }
+    if (progress < 1) {
+      requestAnimationFrame(step);
+      return;
+    }
+    parts.forEach((part) => { part.node.nodeValue = part.text; });
+    headline.style.minHeight = "";
+  }
+
+  requestAnimationFrame(step);
+})();

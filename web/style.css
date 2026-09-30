@@ -1513,3 +1513,328 @@ select:focus-visible {
     transform: none;
   }
 }
+
+/* ---------- Hero: decorative 3D vault (additive, desktop only) ---------- */
+
+.cyber-safe {
+  --cyber-scale: 1;
+  --cyber-size: 140px;
+  --cyber-half: calc(var(--cyber-size) / 2);
+  position: absolute;
+  top: 0;
+  right: var(--margin);
+  width: calc(270px * var(--cyber-scale));
+  height: calc(310px * var(--cyber-scale));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+@media (max-width: 1399px) {
+  .cyber-safe { --cyber-scale: 0.78; }
+}
+
+@media (max-width: 1279px) {
+  .cyber-safe { --cyber-scale: 0.54; }
+}
+
+@media (max-width: 1099px) {
+  .cyber-safe { display: none; }
+}
+
+.cyber-safe-inner {
+  position: relative;
+  width: 270px;
+  height: 310px;
+  flex-shrink: 0;
+  transform: scale(var(--cyber-scale));
+  transform-origin: center;
+}
+
+/* Shield frame behind the vault: amber outline fading downward, faint dot
+   fill, and a slow scan line clipped to the shield. */
+.cyber-shield {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cyber-stop-top {
+  stop-color: var(--primary-strong);
+  stop-opacity: 0.9;
+}
+
+.cyber-stop-bottom {
+  stop-color: var(--primary-strong);
+  stop-opacity: 0.04;
+}
+
+.cyber-shield-dot {
+  fill: color-mix(in srgb, var(--primary-strong) 20%, transparent);
+}
+
+.cyber-scan {
+  fill: color-mix(in srgb, var(--primary) 22%, transparent);
+  animation: cyber-scan 5s linear infinite;
+}
+
+@keyframes cyber-scan {
+  from { transform: translateY(0); }
+  to { transform: translateY(320px); }
+}
+
+/* Soft amber glow behind the vault, and its light pool on the floor. */
+.cyber-halo {
+  position: absolute;
+  left: 50%;
+  top: 137px;
+  width: 230px;
+  height: 230px;
+  margin: -115px 0 0 -115px;
+  border-radius: var(--radius-full);
+  background: radial-gradient(circle, var(--primary-subtle-bg) 0%, transparent 70%);
+}
+
+.cyber-floor {
+  position: absolute;
+  left: 50%;
+  top: 243px;
+  width: 170px;
+  height: 26px;
+  margin-left: -85px;
+  border-radius: var(--radius-full);
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--primary-strong) 26%, transparent) 0%, transparent 72%);
+  filter: blur(6px);
+}
+
+/* Cube */
+.cyber-stage {
+  position: absolute;
+  left: 50%;
+  top: 137px;
+  width: var(--cyber-size);
+  height: var(--cyber-size);
+  margin: calc(var(--cyber-half) * -1) 0 0 calc(var(--cyber-half) * -1);
+  perspective: 900px;
+}
+
+.cyber-tilt {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 250ms ease-out;
+}
+
+.cyber-cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: cyber-spin 26s linear infinite;
+}
+
+@keyframes cyber-spin {
+  from { transform: rotateX(-18deg) rotateY(0deg); }
+  to { transform: rotateX(-18deg) rotateY(360deg); }
+}
+
+.cyber-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--surface-4) 0%, var(--surface-2) 45%, var(--bg) 100%);
+}
+
+/* Four rivets per face. */
+.cyber-face::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  background-image:
+    radial-gradient(circle, color-mix(in srgb, var(--text-secondary) 55%, transparent) 0 1.6px, transparent 1.9px),
+    radial-gradient(circle, color-mix(in srgb, var(--text-secondary) 55%, transparent) 0 1.6px, transparent 1.9px),
+    radial-gradient(circle, color-mix(in srgb, var(--text-secondary) 55%, transparent) 0 1.6px, transparent 1.9px),
+    radial-gradient(circle, color-mix(in srgb, var(--text-secondary) 55%, transparent) 0 1.6px, transparent 1.9px);
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+  background-position: left top, right top, left bottom, right bottom;
+}
+
+.cyber-face-front { transform: translateZ(var(--cyber-half)); }
+.cyber-face-back { transform: rotateY(180deg) translateZ(var(--cyber-half)); }
+.cyber-face-right { transform: rotateY(90deg) translateZ(var(--cyber-half)); }
+.cyber-face-left { transform: rotateY(-90deg) translateZ(var(--cyber-half)); }
+.cyber-face-top { transform: rotateX(90deg) translateZ(var(--cyber-half)); }
+.cyber-face-bottom { transform: rotateX(-90deg) translateZ(var(--cyber-half)); }
+
+/* Front face: vault door */
+.cyber-door {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cyber-door-ring {
+  stroke: color-mix(in srgb, var(--text-tertiary) 70%, transparent);
+}
+
+.cyber-door-ticks {
+  stroke: color-mix(in srgb, var(--text-tertiary) 55%, transparent);
+}
+
+.cyber-door-bolts circle {
+  fill: color-mix(in srgb, var(--text-secondary) 50%, transparent);
+}
+
+.cyber-wheel {
+  stroke: var(--primary-strong);
+  filter: drop-shadow(0 0 4px var(--badge-glow));
+}
+
+.cyber-hub {
+  fill: var(--bg);
+  stroke: var(--primary-strong);
+}
+
+.cyber-hub-mark,
+.cyber-hub-check {
+  stroke: var(--primary);
+}
+
+/* Back face: vent grille */
+.cyber-vents {
+  position: absolute;
+  inset: 34px 26px;
+  border-radius: var(--radius-sm);
+  background: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--bg) 85%, transparent) 0 3px,
+    transparent 3px 7px
+  );
+}
+
+/* Side and top faces: glowing amber slit */
+.cyber-slit {
+  position: absolute;
+  border-radius: var(--radius-full);
+  background: var(--primary-strong);
+  box-shadow: 0 0 8px var(--badge-glow);
+}
+
+.cyber-slit-v {
+  top: 30px;
+  bottom: 30px;
+  left: 50%;
+  width: 3px;
+  margin-left: -1.5px;
+}
+
+.cyber-slit-h {
+  left: 30px;
+  right: 30px;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+}
+
+/* Left face: two hinges */
+.cyber-hinge {
+  position: absolute;
+  left: 16px;
+  width: 16px;
+  height: 26px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--surface-4), var(--surface-2));
+  border: 1px solid var(--border-strong);
+}
+
+.cyber-hinge:first-child { top: 26px; }
+.cyber-hinge:last-child { bottom: 26px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cyber-cube,
+  .cyber-scan {
+    animation: none;
+  }
+  .cyber-tilt {
+    transition: none;
+  }
+}
+
+/* ---------- Hero: highlight layer over the existing dot grid ---------- */
+
+/* Sits between .hero::before (the CSS dot grid) and the hero content, and
+   repeats that layer's mask so highlights fade out exactly where the base
+   dots do. Painted by app.js; blank when that script does not run. */
+.cyber-dots {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(at 50% 35%, #000 20%, transparent 75%);
+}
+
+/* ---------- Hero stat cards: HUD corners and index ---------- */
+
+/* Anchor for the decorations below; does not affect the existing flex layout. */
+.stat {
+  position: relative;
+}
+
+/* Four corner brackets drawn as eight background slivers, so the arm length
+   and the amber strength can both transition. */
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 2px 10px;
+  pointer-events: none;
+  opacity: 0.55;
+  --hud-arm: 6px;
+  --hud-line: color-mix(in srgb, var(--primary-strong) 40%, transparent);
+  background-image:
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line)),
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line)),
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line)),
+    linear-gradient(var(--hud-line), var(--hud-line)), linear-gradient(var(--hud-line), var(--hud-line));
+  background-size:
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm),
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm),
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm),
+    var(--hud-arm) 1.5px, 1.5px var(--hud-arm);
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  background-repeat: no-repeat;
+  transition: opacity 200ms ease-out, background-size 200ms ease-out;
+}
+
+.stat:hover::before {
+  opacity: 1;
+  --hud-arm: 10px;
+}
+
+.stat-index {
+  position: absolute;
+  top: 0;
+  right: 18px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: color-mix(in srgb, var(--primary) 45%, transparent);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat::before {
+    transition: none;
+  }
+}

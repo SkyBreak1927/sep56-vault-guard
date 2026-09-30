@@ -655,3 +655,52 @@ presetButtons.forEach((btn) => {
   resize();
   start();
 })();
+
+// Headline decrypt (progressive enhancement only): on load the hero headline
+// scrambles and then locks to its real text from left to right. The markup's
+// own text is never changed, only the text nodes' values during the animation,
+// and the original strings are restored at the end. Skipped under reduced
+// motion, and without JavaScript the headline simply renders as written.
+(function setupHeadlineDecrypt() {
+  const headline = document.querySelector(".hero h1");
+  if (!headline) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const parts = [];
+  const walker = document.createTreeWalker(headline, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) parts.push({ node, text: node.nodeValue });
+  if (!parts.length) return;
+
+  // Screen readers get the real text for the whole run, and the measured
+  // height is pinned so the scrambled glyphs cannot shift the layout.
+  headline.setAttribute("aria-label", parts.map((p) => p.text).join(" ").replace(/\s+/g, " ").trim());
+  headline.style.minHeight = `${headline.getBoundingClientRect().height}px`;
+
+  const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&@$";
+  const DURATION = 1300;
+  const total = parts.reduce((sum, p) => sum + p.text.length, 0);
+  const start = performance.now();
+
+  function step(now) {
+    const progress = Math.min((now - start) / DURATION, 1);
+    const locked = Math.floor(progress * total);
+    let index = 0;
+    for (const part of parts) {
+      let out = "";
+      for (let i = 0; i < part.text.length; i++, index++) {
+        const char = part.text[i];
+        out += (index < locked || char === " ") ? char : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+      }
+      part.node.nodeValue = out;
+    }
+    if (progress < 1) {
+      requestAnimationFrame(step);
+      return;
+    }
+    parts.forEach((part) => { part.node.nodeValue = part.text; });
+    headline.style.minHeight = "";
+  }
+
+  requestAnimationFrame(step);
+})();

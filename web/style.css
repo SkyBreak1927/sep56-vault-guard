@@ -1876,3 +1876,58 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* The choreography pass in app.js gives a section's own lines and cards their
+   individual entrances. `.rv` carries the same travel and easing as `.reveal`
+   above; `.rv-in` is its gate. These rules come last, so an element carrying
+   both classes waits for this pass rather than the earlier one. */
+.rv {
+  transition:
+    opacity 800ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay, 0ms),
+    transform 800ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay, 0ms),
+    filter 800ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay, 0ms),
+    border-color 200ms ease-out,
+    background-color 200ms ease-out;
+}
+
+.rv:not(.rv-in) {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.rv.rv-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Titles keep the blur-in, now on the h2 itself. */
+.rv-title:not(.rv-in) {
+  filter: blur(6px);
+}
+
+.rv-title.rv-in {
+  filter: none;
+}
+
+/* A parent whose children are choreographed stops animating as a block, so the
+   two passes never stack their travel or their fade. */
+.rv-host.reveal,
+.rv-host.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.rv-host.reveal h2 {
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rv,
+  .rv:not(.rv-in),
+  .rv-title:not(.rv-in) {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+}

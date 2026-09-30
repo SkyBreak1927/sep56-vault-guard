@@ -781,13 +781,19 @@ presetButtons.forEach((btn) => {
     step += 1;
   });
 
+  // Start once the element's top has travelled about 15% up from the bottom
+  // edge, rather than the instant it touches it, so an entrance is already
+  // under way by the time it is properly in view. The bottom margin only
+  // shrinks the root from below, so anything level with or above the fold
+  // still counts. Each element is unobserved on its first hit, so the
+  // entrance runs exactly once.
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       if (!entry.isIntersecting) return;
       entry.target.classList.add("rv-in");
       observer.unobserve(entry.target);
     });
-  }, { threshold: 0.12 });
+  }, { threshold: 0, rootMargin: "0px 0px -15% 0px" });
 
   targets.forEach((el) => observer.observe(el));
 })();

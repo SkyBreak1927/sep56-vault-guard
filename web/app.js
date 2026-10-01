@@ -862,6 +862,11 @@ const OBSERVER_OPTIONS = { threshold: 0, rootMargin: "300% 0px -15% 0px" };
   const hero = document.querySelector(".hero");
   if (!hero || !document.querySelector(".cyber-dots")) return;
   if (!("ResizeObserver" in window)) return;
+  // Match the gates setupDotHighlight uses, so on a phone -- where it never
+  // starts, and where the hero's height changes every time the address bar
+  // collapses -- this does not raise resize events nobody listens for.
+  if (!window.matchMedia("(hover: hover)").matches) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   let last = Math.round(hero.getBoundingClientRect().height);
   new ResizeObserver(() => {

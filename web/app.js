@@ -852,3 +852,22 @@ const OBSERVER_OPTIONS = { threshold: 0, rootMargin: "300% 0px -15% 0px" };
     });
   }, WATCHDOG_MS);
 })();
+
+// The hero's height now follows the viewport, so the dot-grid canvas has to be
+// re-measured whenever that height changes -- including the cases a window
+// resize does not cover, such as web fonts landing or the scrollbar appearing.
+// setupDotHighlight above already re-measures on resize; this re-uses that path
+// rather than duplicating it, and does nothing when the canvas is absent.
+(function keepHeroCanvasInStep() {
+  const hero = document.querySelector(".hero");
+  if (!hero || !document.querySelector(".cyber-dots")) return;
+  if (!("ResizeObserver" in window)) return;
+
+  let last = Math.round(hero.getBoundingClientRect().height);
+  new ResizeObserver(() => {
+    const height = Math.round(hero.getBoundingClientRect().height);
+    if (height === last) return;
+    last = height;
+    window.dispatchEvent(new Event("resize"));
+  }).observe(hero);
+})();

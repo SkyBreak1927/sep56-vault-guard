@@ -1970,3 +1970,45 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* ---------- Full-screen sections ---------- */
+
+/* On a desktop-sized window the hero fills what is left of the screen below
+   the sticky topbar, and its pieces sit as one group in the vertical centre.
+   The spacing between them is untouched: every hero child carries only a
+   bottom margin, so the flex column reproduces the block layout's gaps
+   exactly. min-height rather than height, so a short window or a longer
+   headline grows the hero instead of clipping it.
+
+   svh tracks the screen without the browser's collapsing toolbars; vh is
+   declared first as the fallback for engines that do not know it. The rules
+   earlier in this file are untouched -- these come later and win on cascade
+   order. */
+@media (min-width: 1024px) and (min-height: 600px) {
+  .hero {
+    min-height: calc(100vh - var(--topbar-height));
+    min-height: calc(100svh - var(--topbar-height));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* A flex item with `margin: 0 auto` is sized to its content, which would
+     narrow the lede and the stat strip. Restoring the full width puts each
+     one back on its own max-width, exactly as block layout had it. The two
+     absolutely positioned children are left out: they carry their own size. */
+  .hero > *:not(.cyber-safe):not(.cyber-dots) {
+    width: 100%;
+  }
+
+  /* The vault moves to the hero's vertical centre at its existing size.
+     Pinning both edges and letting the block margins resolve to auto centres
+     it without a transform, which would otherwise sit between the stage and
+     its perspective. */
+  .cyber-safe {
+    top: 0;
+    bottom: 0;
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+}

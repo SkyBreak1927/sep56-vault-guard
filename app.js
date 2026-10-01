@@ -704,3 +704,151 @@ presetButtons.forEach((btn) => {
 
   requestAnimationFrame(step);
 })();
+
+// Scroll choreography (progressive enhancement only): a finer second pass on
+// top of setupScrollReveal above. That block reveals a section head as one
+// piece; this one gives the eyebrow, title and lede their own entrances and
+// walks a card grid across in order, so a section arrives in sequence instead
+// of all at once. On load it also spaces out whatever is already on screen, so
+// the page flows from the hero downward rather than snapping into place.
+//
+// Nothing the earlier block set up is undone. This pass has its own gate,
+// `.rv-in`, whose rules sit later in style.css and so win on cascade order.
+// Parents whose children are choreographed here are marked `.rv-host` and stop
+// animating as a block. The live check cards and the report are re-rendered on
+// every poll, so they stay out of both passes.
+// Start once an element's top has travelled about 15% up from the bottom edge,
+// rather than the instant it touches it, so an entrance is already under way by
+// the time it is properly in view. The generous top margin covers the opposite
+// case: the topbar links jump straight down the page, and an element skipped
+// over in one frame is counted as seen rather than left hidden behind us.
+const OBSERVER_OPTIONS = { threshold: 0, rootMargin: "300% 0px -15% 0px" };
+
+(function setupScrollChoreography() {
+  if (!("IntersectionObserver" in window)) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const HEAD_STAGGER_MS = 90;  // eyebrow, then title, then lede
+  const CARD_STAGGER_MS = 100; // across one grid
+  const LOAD_BASE_MS = 560;    // picks up while the hero's own fade-up runs
+  const LOAD_STEP_MS = 90;     // global flow for what is already on screen
+  const WATCHDOG_MS = 3000;    // nothing stays hidden longer than this
+
+  const targets = [];
+  const rules = [];
+  let delivered = false;
+
+  function enter(el) {
+    el.classList.add("rv-in");
+  }
+
+  // Both observers are built before a single element is hidden. If either
+  // constructor throws, we leave without having touched the page, so the
+  // content simply stays visible -- the same outcome as having no
+  // IntersectionObserver at all.
+  let observer;
+  let ruleObserver;
+  try {
+    observer = new IntersectionObserver((entries) => {
+      delivered = true;
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        enter(entry.target);
+        observer.unobserve(entry.target);
+      });
+    }, OBSERVER_OPTIONS);
+
+    ruleObserver = new IntersectionObserver((entries) => {
+      delivered = true;
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("rv-rule-in");
+        ruleObserver.unobserve(entry.target);
+      });
+    }, OBSERVER_OPTIONS);
+  } catch (err) {
+    return;
+  }
+
+  function claim(el, delayMs) {
+    el.classList.add("rv");
+    if (delayMs) el.style.setProperty("--rv-delay", delayMs + "ms");
+    // Drop the delay once the entrance is done so hover stays immediate.
+    el.addEventListener("transitionend", () => {
+      el.style.removeProperty("--rv-delay");
+    }, { once: true });
+    targets.push(el);
+  }
+
+  function host(el) {
+    if (el) el.classList.add("rv-host");
+  }
+
+  // Section heads: the three lines enter one after another.
+  document.querySelectorAll(
+    "#why-it-matters .section-head, #try-it .section-head, #results .section-head"
+  ).forEach((head) => {
+    const lines = head.querySelectorAll(":scope > .eyebrow, :scope > h2, :scope > .section-lede");
+    if (!lines.length) return;
+    host(head);
+    host(head.closest(".section-head-row"));
+    lines.forEach((line, i) => {
+      claim(line, i * HEAD_STAGGER_MS);
+      if (line.tagName === "H2") line.classList.add("rv-title");
+    });
+  });
+
+  // Card grids: one wave across the row.
+  document.querySelectorAll("#why-it-matters .risk-grid").forEach((grid) => {
+    grid.querySelectorAll(":scope > .risk-card").forEach((card, i) => {
+      claim(card, i * CARD_STAGGER_MS);
+    });
+  });
+
+  // Blocks that keep entering as a single piece.
+  document.querySelectorAll("#try-it .run-panel").forEach((el) => claim(el, 0));
+  document.querySelectorAll(".footer-grid").forEach((grid) => {
+    host(grid);
+    grid.querySelectorAll(":scope > *").forEach((col, i) => claim(col, i * CARD_STAGGER_MS));
+  });
+
+  // Whatever is already on screen at load runs as one global flow instead of
+  // its per-group stagger, so the hero and the stat strip lead and the rest
+  // follows in document order.
+  const fold = window.innerHeight;
+  let step = 0;
+  targets.forEach((el) => {
+    if (el.getBoundingClientRect().top >= fold) return;
+    el.style.setProperty("--rv-delay", LOAD_BASE_MS + step * LOAD_STEP_MS + "ms");
+    step += 1;
+  });
+
+  targets.forEach((el) => observer.observe(el));
+
+  // The amber rule across the top of each section draws itself on the same
+  // trigger, but is watched separately: it belongs to the section, not to any
+  // one element inside it, and it is decoration only. The section's own 1px
+  // border stays and carries the separation by itself.
+  document.querySelectorAll("#why-it-matters, #try-it, #results").forEach((section) => {
+    section.classList.add("rv-rule");
+    rules.push(section);
+    ruleObserver.observe(section);
+  });
+
+  // Watchdog, so nothing can stay hidden because the observer went quiet. If it
+  // never reported at all, the whole pass is abandoned and everything is shown.
+  // Otherwise everything at or above the fold is forced in; only what is still
+  // below it is waiting on purpose and is left to its own trigger.
+  window.setTimeout(() => {
+    if (!delivered) {
+      targets.forEach(enter);
+      rules.forEach((el) => el.classList.add("rv-rule-in"));
+      return;
+    }
+    const fold = window.innerHeight;
+    targets.forEach((el) => {
+      if (el.classList.contains("rv-in")) return;
+      if (el.getBoundingClientRect().top < fold) enter(el);
+    });
+  }, WATCHDOG_MS);
+})();

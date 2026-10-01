@@ -2012,3 +2012,28 @@ select:focus-visible {
     margin-bottom: auto;
   }
 }
+
+/* The sections below the hero get the same floor, so each one opens on a
+   screen of its own. min-height only, and no overflow clipping: a section
+   whose content is taller than the screen -- the Results section once a run
+   has filled it in -- grows to its natural height instead of being cut off.
+
+   `:not([hidden])` matters here. The report section carries the `hidden`
+   attribute until a run finishes, and an author `display: flex` would
+   override the user agent's `display: none` and reveal it. The footer is not
+   a `.section` and keeps its natural height. */
+@media (min-width: 1024px) and (min-height: 600px) {
+  .section:not([hidden]) {
+    min-height: calc(100vh - var(--topbar-height));
+    min-height: calc(100svh - var(--topbar-height));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* Same reason as in the hero: a flex item with `margin: 0 auto` is sized to
+     its content, which would pull the container in off its max-width. */
+  .section:not([hidden]) > .container {
+    width: 100%;
+  }
+}

@@ -2037,3 +2037,20 @@ select:focus-visible {
     width: 100%;
   }
 }
+
+/* Anchor landings. The topbar is sticky and 1px taller than --topbar-height,
+   because of its bottom border, so a section asked for by a topbar link used
+   to come to rest with its top edge -- and the amber rule drawn on it --
+   one pixel underneath the bar.
+
+   scroll-padding-top on the scroll container covers every scroll-into-view,
+   not just the three section links: a field reached by keyboard lands clear
+   of the bar too. The per-section scroll-margin is zeroed because the two
+   would otherwise add up and overshoot by a full bar's height. */
+html {
+  scroll-padding-top: calc(var(--topbar-height) + 1px);
+}
+
+.section {
+  scroll-margin-top: 0;
+}

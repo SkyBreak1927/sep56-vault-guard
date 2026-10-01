@@ -1970,3 +1970,87 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* ---------- Full-screen sections ---------- */
+
+/* On a desktop-sized window the hero fills what is left of the screen below
+   the sticky topbar, and its pieces sit as one group in the vertical centre.
+   The spacing between them is untouched: every hero child carries only a
+   bottom margin, so the flex column reproduces the block layout's gaps
+   exactly. min-height rather than height, so a short window or a longer
+   headline grows the hero instead of clipping it.
+
+   svh tracks the screen without the browser's collapsing toolbars; vh is
+   declared first as the fallback for engines that do not know it. The rules
+   earlier in this file are untouched -- these come later and win on cascade
+   order. */
+@media (min-width: 1024px) and (min-height: 600px) {
+  .hero {
+    min-height: calc(100vh - var(--topbar-height));
+    min-height: calc(100svh - var(--topbar-height));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* A flex item with `margin: 0 auto` is sized to its content, which would
+     narrow the lede and the stat strip. Restoring the full width puts each
+     one back on its own max-width, exactly as block layout had it. The two
+     absolutely positioned children are left out: they carry their own size. */
+  .hero > *:not(.cyber-safe):not(.cyber-dots) {
+    width: 100%;
+  }
+
+  /* The vault moves to the hero's vertical centre at its existing size.
+     Pinning both edges and letting the block margins resolve to auto centres
+     it without a transform, which would otherwise sit between the stage and
+     its perspective. */
+  .cyber-safe {
+    top: 0;
+    bottom: 0;
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+}
+
+/* The sections below the hero get the same floor, so each one opens on a
+   screen of its own. min-height only, and no overflow clipping: a section
+   whose content is taller than the screen -- the Results section once a run
+   has filled it in -- grows to its natural height instead of being cut off.
+
+   `:not([hidden])` matters here. The report section carries the `hidden`
+   attribute until a run finishes, and an author `display: flex` would
+   override the user agent's `display: none` and reveal it. The footer is not
+   a `.section` and keeps its natural height. */
+@media (min-width: 1024px) and (min-height: 600px) {
+  .section:not([hidden]) {
+    min-height: calc(100vh - var(--topbar-height));
+    min-height: calc(100svh - var(--topbar-height));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* Same reason as in the hero: a flex item with `margin: 0 auto` is sized to
+     its content, which would pull the container in off its max-width. */
+  .section:not([hidden]) > .container {
+    width: 100%;
+  }
+}
+
+/* Anchor landings. The topbar is sticky and 1px taller than --topbar-height,
+   because of its bottom border, so a section asked for by a topbar link used
+   to come to rest with its top edge -- and the amber rule drawn on it --
+   one pixel underneath the bar.
+
+   scroll-padding-top on the scroll container covers every scroll-into-view,
+   not just the three section links: a field reached by keyboard lands clear
+   of the bar too. The per-section scroll-margin is zeroed because the two
+   would otherwise add up and overshoot by a full bar's height. */
+html {
+  scroll-padding-top: calc(var(--topbar-height) + 1px);
+}
+
+.section {
+  scroll-margin-top: 0;
+}

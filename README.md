@@ -38,15 +38,117 @@ is available at:
 > a real inflation-attack vulnerability was confirmed under `decimals_offset=0`.
 > See [SECURITY.md](./SECURITY.md) for details.
 
-## Installation
+## What a run does to the vault
+
+Testnet only. The network is fixed to `testnet` in `cli/src/rpc.rs`; there is no
+flag to point this at mainnet.
+
+**The 7 conformance checks change the target vault's state.** They call
+`deposit`, `mint`, `withdraw` and `redeem` on the vault you pass to `--vault`,
+using testnet funds from your own identities, and assert the exact `total_assets`
+deltas those calls produce. Running the checker against a vault is not a
+read-only operation.
+
+**The 4 security checks run against throwaway copies.** Each one resolves the
+target vault's Wasm hash, underlying asset and `decimals_offset`, deploys its own
+fresh instance from that same configuration, and attacks the copy. The target
+vault is only read.
+
+Because those copies are deployed from the target's own Wasm, the 4 security
+checks need the vault contract to accept a constructor of
+`(name, symbol, asset, decimals_offset)` and to expose a `query_asset` function.
+A vault that does not will fail those four checks on deployment, not on
+behaviour.
+
+## Prerequisites
+
+- **[Stellar CLI](https://developers.stellar.org/docs/tools/cli) v28.0.0 or newer.**
+  The checker starts the `stellar` executable directly rather than through a
+  shell, so on Windows it needs a package that provides `stellar.exe` — the
+  official `stellar-cli-<version>-x86_64-pc-windows-msvc` archive does. A
+  `stellar.cmd` or `stellar.bat` shim works in a terminal but is not found here;
+  the checker detects that case and says so before running anything.
+- **A Rust toolchain new enough for edition 2024.** Built and tested with
+  1.98.1.
+- **Git.**
+
+### Testnet identities
+
+The checks use seven named identities. They are not interchangeable: concurrent
+checks are given separate accounts so they do not race each other for
+transaction sequence numbers.
+
+```
+alice  bob  carol  dave  erin  frank  grace
+```
+
+Create and fund them once:
+
+```bash
+# Linux / macOS
+for n in alice bob carol dave erin frank grace; do
+  stellar keys generate "$n" --network testnet --fund
+done
+```
+
+```powershell
+# Windows PowerShell
+foreach ($n in "alice","bob","carol","dave","erin","frank","grace") {
+  stellar keys generate $n --network testnet --fund
+}
+```
+
+## Build from source
 
 ```bash
 git clone https://github.com/SkyBreak1927/sep56-vault-guard.git
 cd sep56-vault-guard
-cargo build --release
+cargo build --release -p sep56-vault-guard
 ```
 
-Requires the [Stellar CLI](https://developers.stellar.org/docs/tools/cli) (v28.0.0+) installed and configured with a funded testnet identity.
+The `-p sep56-vault-guard` matters. Without it, Cargo builds every member of the
+workspace, which includes the five example vault contracts in `contracts/` — a
+longer build that produces nothing the checker needs.
+
+The binary lands at `target/release/sep56-vault-guard` (`.exe` on Windows).
+
+<!-- ============================================================
+     AKTIFKAN SETELAH RILIS PERTAMA TERBIT DAN TERUJI.
+     Jangan dibuka sebelum ada rilis di
+     https://github.com/SkyBreak1927/sep56-vault-guard/releases —
+     teks di bawah menjanjikan tautan yang belum ada.
+     ============================================================
+
+## Download a release binary
+
+Prebuilt binaries are attached to each release: a `.zip` for Windows x86_64 and
+a `.tar.gz` for Linux x86_64, each with a `.sha256` file beside it.
+
+Install the Stellar CLI and create the seven identities first (see
+[Prerequisites](#prerequisites)), then:
+
+1. Download the archive for your platform and its `.sha256` file from the
+   [releases page](https://github.com/SkyBreak1927/sep56-vault-guard/releases).
+2. Check it matches. On Windows:
+   `certutil -hashfile sep56-vault-guard-windows-x86_64.zip SHA256`, and compare
+   against the contents of the `.sha256` file. On Linux:
+   `sha256sum -c sep56-vault-guard-linux-x86_64.tar.gz.sha256`.
+3. Extract the archive.
+4. Run it: `sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text`
+
+A run prints 11 result lines followed by one summary line. See
+[Exit codes](#exit-codes) for what the process returns.
+
+The Windows binary links the C runtime statically, so it needs nothing beyond
+the Stellar CLI.
+
+NOTE, BELUM DIUJI: a browser download marks the file with the Mark-of-the-Web,
+and because the binary is not code-signed, Windows may show a "Windows protected
+your PC" screen — "More info", then "Run anyway". This was not reproduced: the
+artifacts were fetched with `gh run download`, which does not set that mark.
+Confirm before publishing this section.
+
+     ============================================================ -->
 
 ## Usage
 
@@ -61,6 +163,39 @@ Requires the [Stellar CLI](https://developers.stellar.org/docs/tools/cli) (v28.0
 ./target/release/sep56-vault-guard --output json
 ```
 
+A run usually takes about a minute, sometimes longer — every check is a chain of
+network round trips to testnet.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | All 11 checks passed. |
+| `1` | The checks ran and at least one failed. |
+| `2` | A prerequisite is missing. No check ran. |
+
+Exit 2 covers a `stellar` that cannot be started or is older than v28, a missing
+identity, and an address that is not a contract on testnet. Under
+`--output json` this prints a single object instead of the usual array:
+
+```json
+{
+  "error": "preflight_failed",
+  "code": "vault_not_a_contract",
+  "problem": "…",
+  "fix": "…"
+}
+```
+
+## Platforms
+
+Windows x86_64 and Linux x86_64. The release workflow builds both.
+
+Honest state of testing: the Windows binary has been built, downloaded and run
+end to end against the reference vault. The Linux release binary has been built
+and its archive verified, but has not been run from the release artifact — the
+Linux path is exercised by the backend, which runs the checker in a container.
+
 ## Project Structure
 
 ```
@@ -68,14 +203,16 @@ sep56-vault-guard/
 ├── cli/                    # CLI engine (Rust)
 ├── contracts/
 │   └── reference-vault/    # OpenZeppelin-pattern reference SEP-56 vault
+├── server/                 # Backend that runs the CLI for the web UI
 └── web/                    # Static web UI (results dashboard)
 ```
 
 ## Scope & Limitations
 
 This tool performs functional conformance and adversarial testing — it is **not**
-a substitute for a formal third-party security audit. See [SECURITY.md](./SECURITY.md)
-for known findings and limitations.
+a substitute for a formal third-party security review. See
+[SECURITY.md](./SECURITY.md) for known findings and limitations, and
+[VAULT_CHECKS.md](./VAULT_CHECKS.md) for what each check asserts.
 
 ## License
 

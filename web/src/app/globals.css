@@ -1,0 +1,709 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens — design-reference/DESIGN.md is the single source of truth.
+ * Where its YAML front matter and its prose disagree, the prose (the more
+ * specific spec) wins. Tailwind's default palette, radii and breakpoints are
+ * cleared so only these values can be used.
+ */
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Canvas & surfaces (Elevation: Level 0 → interactive) */
+  --color-canvas: #0c0d0e;
+  --color-surface: #0e0f11;
+  --color-raised: #1c1e22;
+  --color-interactive: #25282e;
+
+  /* Primary accent */
+  --color-accent: #d97706;
+  --color-accent-hover: #e8900c;
+  --color-on-accent: #2f1500;
+
+  /* Text */
+  --color-fg: #f3f4f6;
+  --color-muted: #9ca3af;
+  --color-subtle: #6b7280;
+
+  /* Borders */
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-line-strong: rgb(255 255 255 / 0.16);
+  --color-line-overlay: rgb(255 255 255 / 0.14);
+  --color-line-row: rgb(255 255 255 / 0.05);
+
+  /* Semantics: `*-base` tints backgrounds/borders, the desaturated value is for text */
+  --color-pass: #34d399;
+  --color-pass-base: #10b981;
+  --color-fail: #f87171;
+  --color-fail-base: #ef4444;
+  --color-warn: #f59e0b;
+  --color-pending: #fbbf24;
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Type scale (11px – 32px). Headlines carry negative tracking. */
+  --text-*: initial;
+  --text-headline-xl: 2rem;
+  --text-headline-xl--line-height: 2.5rem;
+  --text-headline-xl--font-weight: 600;
+  --text-headline-xl--letter-spacing: -0.02em;
+  --text-headline-xl-mobile: 1.5rem;
+  --text-headline-xl-mobile--line-height: 2rem;
+  --text-headline-xl-mobile--font-weight: 600;
+  --text-headline-xl-mobile--letter-spacing: -0.02em;
+  --text-headline-lg: 1.5rem;
+  --text-headline-lg--line-height: 2rem;
+  --text-headline-lg--font-weight: 600;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg-mobile: 1.25rem;
+  --text-headline-lg-mobile--line-height: 1.75rem;
+  --text-headline-lg-mobile--font-weight: 600;
+  --text-headline-lg-mobile--letter-spacing: -0.02em;
+  --text-headline-md: 1.125rem;
+  --text-headline-md--line-height: 1.5rem;
+  --text-headline-md--font-weight: 600;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5rem;
+  --text-body-md: 0.875rem;
+  --text-body-md--line-height: 1.25rem;
+  --text-body-sm: 0.75rem;
+  --text-body-sm--line-height: 1rem;
+  --text-label-md: 0.8125rem;
+  --text-label-md--line-height: 1.125rem;
+  --text-label-md--font-weight: 500;
+  --text-label-sm: 0.6875rem;
+  --text-label-sm--line-height: 0.875rem;
+  --text-label-sm--font-weight: 600;
+  --text-code-md: 0.8125rem;
+  --text-code-md--line-height: 1.125rem;
+  --text-code-sm: 0.6875rem;
+  --text-code-sm--line-height: 1rem;
+  /* Conformance check tree: nested assertion/trace logs */
+  --text-code-trace: 0.75rem;
+  --text-code-trace--line-height: 1.125rem;
+
+  /* Hero display line and (below) the closing headline: the only places the scale goes past 32px. */
+  --text-display: clamp(2.25rem, 0.8rem + 3.3vw, 3.75rem);
+  --text-display--line-height: 1.02;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.035em;
+  /* Closing headline: 36px mobile → ~47px tablet → 68px desktop, set in two lines. */
+  --text-display-closing: clamp(2.25rem, 1rem + 4vw, 4.25rem);
+  --text-display-closing--line-height: 1.1;
+  --text-display-closing--font-weight: 700;
+  --text-display-closing--letter-spacing: -0.03em;
+
+  /* Radius: 4px base (`rounded`), 8px containers, 2px micro-elements */
+  --radius-*: initial;
+  --radius: 0.25rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Spacing (multiples of 4px) */
+  --spacing-gutter: 1.5rem;
+  --spacing-gutter-tablet: 1rem;
+  --spacing-gutter-mobile: 0.75rem;
+  --spacing-margin: 2rem;
+  --spacing-margin-mobile: 1rem;
+  /* Space above each page section. The section before it ends on space-xl, so the
+     gap between sections is ~144px on desktop and ~88px on mobile. */
+  --spacing-section: 6.5rem;
+  --spacing-section-mobile: 3rem;
+  --spacing-space-xs: 0.25rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-space-md: 1rem;
+  --spacing-space-lg: 1.5rem;
+  --spacing-space-xl: 2.5rem;
+
+  --container-site: 1440px;
+
+  /* Mobile < 768 · Tablet 768–1023 · Desktop 1024–1439 · Wide ≥ 1440 */
+  --breakpoint-*: initial;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 90rem;
+
+  /* Level 2 overlays only — no other drop shadows */
+  --shadow-overlay: 0 4px 20px -2px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+
+    /*
+     * Page ambience: the shared backdrop and the per-section layers (see
+     * components/Ambience.tsx). Tune the whole page from here.
+     */
+    --ambient-tone: 0.028; /* neutral lift of the tonal variation over the canvas */
+    --ambient-grain: 0.045;
+    --ambient-grid-size: 48px; /* lower-page construction grid; matches the hero cell */
+    --ambient-grid-opacity: 0.10;
+    --ambient-glow: 9%; /* amber share at the core of a section glow */
+    --ambient-bleed: 30rem; /* how far section glows reach into the neighbouring sections */
+    --grain-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+    @media (width < 48rem) {
+      --ambient-grid-size: 32px;
+      --ambient-grid-opacity: 0.065;
+      --ambient-glow: 6%;
+      --ambient-bleed: 18rem;
+    }
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 4rem; /* sticky header */
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* links whose destination isn't configured (see src/config/site.ts) */
+  [data-unconfigured] {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+/* Page-width wrapper: 1440px max. 16px side margins on mobile, 32px from tablet up. */
+@utility shell {
+  width: 100%;
+  max-width: var(--container-site);
+  margin-inline: auto;
+  padding-inline: var(--spacing-margin-mobile);
+
+  @media (width >= 48rem) {
+    padding-inline: var(--spacing-margin);
+  }
+}
+
+/* Page section opener: space above, no rule. Sections share one continuous
+   backdrop, so nothing marks the seam between them. */
+@utility section-gap {
+  padding-top: var(--spacing-section-mobile);
+
+  @media (width >= 48rem) {
+    padding-top: var(--spacing-section);
+  }
+}
+
+/* Column gutters: 12px mobile, 16px tablet, 24px desktop. */
+@utility gap-grid {
+  gap: var(--spacing-gutter-mobile);
+
+  @media (width >= 48rem) {
+    gap: var(--spacing-gutter-tablet);
+  }
+
+  @media (width >= 64rem) {
+    gap: var(--spacing-gutter);
+  }
+}
+
+/* Hover styles for live controls only: not disabled (or aria-disabled) buttons, not unconfigured links. */
+@custom-variant can-hover (&:not(:disabled, [aria-disabled='true'], [data-unconfigured]):hover);
+
+/* Hero network: lives on the copy side and fades out before the vault artwork
+   (below the copy on small screens, to its right from lg). */
+@utility hero-network {
+  mask-image: linear-gradient(to bottom, #000 35%, transparent 70%);
+
+  @variant lg {
+    mask-image:
+      linear-gradient(to right, #000 30%, transparent 62%),
+      linear-gradient(to bottom, #000 70%, transparent);
+    mask-composite: intersect;
+  }
+}
+
+/*
+ * Why It Matters captions: each brightens when its step of the canvas story
+ * plays. Runs once while its panel carries [data-play]; an ancestor
+ * [data-paused] holds it on the first frame until the section is in view.
+ * Backwards fill only, so captions rest at full strength (and stay there with
+ * reduced motion). Timing: --d (delay), --t (duration).
+ */
+@keyframes risk-caption {
+  from {
+    opacity: 0.3;
+  }
+}
+
+@utility risk-motion {
+  transform-box: fill-box;
+  transform-origin: center;
+
+  [data-play] & {
+    animation-name: var(--risk-anim);
+    animation-duration: var(--t, 0.6s);
+    animation-delay: var(--d, 0s);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+    animation-fill-mode: backwards;
+  }
+
+  [data-paused] [data-play] & {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-play] & {
+      animation-name: none;
+    }
+  }
+}
+
+@utility risk-caption {
+  --risk-anim: risk-caption;
+  @apply risk-motion;
+}
+
+/* Live status dot: blinks on a steady beat so "live" reads at a glance. */
+@keyframes live-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@utility live-blink {
+  animation: live-blink 1.4s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+/* Fades the canvas into the canvas base on all four sides (tuned via --fade-x/--fade-y). */
+@utility artwork-fade {
+  mask-image:
+    linear-gradient(to right, transparent, #000 var(--fade-x), #000 calc(100% - var(--fade-x)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--fade-y), #000 calc(100% - var(--fade-y)), transparent);
+  mask-composite: intersect;
+}
+
+/*
+ * Hero atmosphere (HeroLight). --light-at is the centre of the vault artwork:
+ * below the copy on small screens, the right column from lg. Set on the
+ * wrapper so the bloom and the ground light share it.
+ */
+@utility hero-light {
+  --light-x: 50%;
+  --light-y: 76%;
+  --light-at: var(--light-x) var(--light-y);
+  background: linear-gradient(115deg, #080d13 0%, #101114 48%, #15120f 100%);
+
+  @variant lg {
+    --light-x: 75%;
+    --light-y: 52%;
+  }
+}
+
+@utility hero-bloom {
+  background-image:
+    radial-gradient(ellipse 28% 36% at var(--light-at), rgb(191 110 35 / 0.15), transparent 80%),
+    radial-gradient(ellipse 48% 62% at var(--light-at), rgb(157 90 30 / 0.10), transparent 85%),
+    radial-gradient(ellipse 34% 24% at 90% 65%, rgb(222 146 64 / 0.045), transparent 90%),
+    radial-gradient(ellipse 48% 70% at 8% 25%, rgb(24 46 69 / 0.12), transparent 85%);
+}
+
+/* Same tile and strength as ambient-grain (closing), so hero and closing share one texture. */
+@utility hero-grain {
+  background-image: var(--grain-texture);
+  background-size: 160px 160px;
+  opacity: var(--ambient-grain);
+}
+
+@utility hero-vignette {
+  background-image: radial-gradient(ellipse 85% 80% at var(--light-at), transparent 35%, rgb(5 8 12 / 0.35));
+}
+
+/* Blend into the shared page atmosphere without a hard section boundary. */
+@utility hero-fade {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 10rem), transparent);
+}
+
+@utility hero-ground-light {
+  position: absolute;
+  left: var(--light-x);
+  top: calc(var(--light-y) + 23%);
+  width: min(48vw, 640px);
+  height: 10%;
+  translate: -50% -50%;
+  background: radial-gradient(ellipse, rgb(211 136 54 / 0.12), rgb(160 92 34 / 0.045) 42%, transparent 72%);
+}
+
+/* Section headings rise in as they scroll into view. Scroll-driven, so no JS;
+   browsers without animation-timeline (and reduced motion) show them as-is. */
+@keyframes scroll-reveal {
+  from {
+    opacity: 0;
+    translate: 0 3rem;
+    scale: 0.97;
+    filter: blur(3px);
+  }
+}
+
+@utility scroll-reveal {
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: scroll-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 30%;
+    }
+  }
+}
+
+/*
+ * Page ambience (components/Ambience.tsx). One shared backdrop spans the page;
+ * each section adds a glow that bleeds into its neighbours and a blueprint grid
+ * revealed only through soft masks. All static, decorative, behind content.
+ */
+
+/* Shared backdrop: broad neutral lifts so the canvas isn't a flat black. */
+@utility ambient-page {
+  background-image:
+    radial-gradient(ellipse min(1100px, 120vw) 1400px at 85% 0, rgb(255 255 255 / var(--ambient-tone)), transparent 70%),
+    radial-gradient(ellipse min(1000px, 120vw) 1600px at 8% 45%, rgb(255 255 255 / calc(var(--ambient-tone) * 0.8)), transparent 70%),
+    radial-gradient(ellipse min(1100px, 120vw) 1400px at 82% 78%, rgb(255 255 255 / calc(var(--ambient-tone) * 0.7)), transparent 70%);
+}
+
+@utility ambient-grain {
+  background-image: var(--grain-texture);
+  background-size: 160px 160px;
+  opacity: var(--ambient-grain);
+}
+
+/* 1px lines on a fixed pitch, centred on the page so every section's grid shares
+   its columns. --grid-strength scales one section's grid, or --grid-color
+   replaces its line colour outright; masks come from the section utilities below. */
+@utility ambient-grid {
+  --grid-line: var(--grid-color, rgb(201 143 65 / calc(var(--ambient-grid-opacity) * var(--grid-strength, 1))));
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--ambient-grid-size) var(--ambient-grid-size);
+  background-position: 50% var(--grid-y, 0px);
+}
+
+/*
+ * Glow layer: the section's box plus --ambient-bleed above and below, so
+ * gradients overlap the section boundaries and fade out before the layer's
+ * edges. In it, 50% is the middle of the section, var(--ambient-bleed) its top
+ * and calc(100% - var(--ambient-bleed)) its bottom. Keep vertical radii within
+ * the bleed for glows anchored at a section edge.
+ */
+@utility ambient-bleed {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(-1 * var(--ambient-bleed));
+  bottom: calc(-1 * var(--ambient-bleed));
+  /* Long eased falloffs (no hard rim); `soft` is a bit over half strength. */
+  --glow:
+    color-mix(in srgb, var(--color-accent) var(--ambient-glow), transparent) 0,
+    color-mix(in srgb, var(--color-accent) calc(var(--ambient-glow) * 0.62), transparent) 28%,
+    color-mix(in srgb, var(--color-accent) calc(var(--ambient-glow) * 0.26), transparent) 58%,
+    color-mix(in srgb, var(--color-accent) calc(var(--ambient-glow) * 0.07), transparent) 82%,
+    transparent 100%;
+  --glow-soft:
+    color-mix(in srgb, var(--color-accent) calc(var(--ambient-glow) * 0.55), transparent) 0,
+    color-mix(in srgb, var(--color-accent) calc(var(--ambient-glow) * 0.34), transparent) 28%,
+    color-mix(in srgb, var(--color-accent) calc(var(--ambient-glow) * 0.14), transparent) 58%,
+    color-mix(in srgb, var(--color-accent) calc(var(--ambient-glow) * 0.04), transparent) 82%,
+    transparent 100%;
+}
+
+/* Why: warmth drifting down from the hero vault (top right) to the small vault. */
+@utility why-glow {
+  background-image:
+    radial-gradient(ellipse 70vw 260px at 70% var(--ambient-bleed), var(--glow-soft)),
+    radial-gradient(ellipse min(420px, 90vw) 320px at 50% 62%, var(--glow));
+
+  @variant lg {
+    background-image:
+      radial-gradient(ellipse 520px 440px at 72% var(--ambient-bleed), var(--glow-soft)),
+      radial-gradient(ellipse 540px 380px at 32% 56%, var(--glow));
+  }
+}
+
+/* Under the small vault, meeting the scene's own perspective grid. */
+@utility why-grid {
+  mask-image: radial-gradient(ellipse 60% 20% at 50% 62%, #000 0, rgb(0 0 0 / 0.5) 50%, transparent 100%);
+
+  @variant lg {
+    mask-image: radial-gradient(ellipse 32% 30% at 32% 62%, #000 0, rgb(0 0 0 / 0.5) 50%, transparent 100%);
+  }
+}
+
+/* Try: neutral middle, a faint warm presence at the outer edges only. */
+@utility try-glow {
+  background-image:
+    radial-gradient(ellipse 45vw 260px at 0 40%, var(--glow-soft)),
+    radial-gradient(ellipse 45vw 260px at 100% 62%, var(--glow-soft));
+
+  @variant lg {
+    background-image:
+      radial-gradient(ellipse 380px 520px at 0 42%, var(--glow-soft)),
+      radial-gradient(ellipse 380px 520px at 100% 62%, var(--glow-soft));
+  }
+}
+
+@utility try-grid {
+  mask-image:
+    radial-gradient(ellipse 22% 30% at 0 30%, rgb(0 0 0 / 0.8) 0, transparent 100%),
+    radial-gradient(ellipse 22% 30% at 100% 70%, rgb(0 0 0 / 0.8) 0, transparent 100%);
+
+  @variant lg {
+    mask-image:
+      radial-gradient(ellipse 14% 38% at 0 32%, rgb(0 0 0 / 0.8) 0, transparent 100%),
+      radial-gradient(ellipse 14% 38% at 100% 68%, rgb(0 0 0 / 0.8) 0, transparent 100%);
+  }
+}
+
+/* Try: walkthrough poster. Warm light behind the centred lockup, faint
+   concentric rings, and a soft vignette towards the frame's edges. */
+@utility walkthrough-poster {
+  --ring: 3.5rem;
+  background-image:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 38%),
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 calc(var(--ring) - 1px), var(--color-line) calc(var(--ring) - 1px) var(--ring)),
+    radial-gradient(ellipse at 50% 50%, var(--color-raised), var(--color-canvas) 75%);
+
+  @variant md {
+    --ring: 5.5rem;
+  }
+}
+
+/* Try: the walkthrough's progress slider, a thin rail flush with the frame's
+   bottom edge. The fill follows --progress; hover or focus thickens the rail and
+   shows the thumb. Browsers centre the rail in the input, so the input (taller
+   than the rail, for an easier grab) hangs below the edge by the difference and
+   the frame's overflow clips that part. */
+@utility video-scrubber {
+  --rail: 3px;
+  --thumb: 12px;
+  --hit: 1.25rem;
+  position: absolute;
+  bottom: calc(var(--rail) / 2 - var(--hit) / 2);
+  height: var(--hit);
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  outline-offset: -2px;
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    --rail: 5px;
+  }
+
+  @media (pointer: coarse) {
+    --hit: 2rem;
+  }
+
+  &::-webkit-slider-runnable-track {
+    height: var(--rail);
+    background:
+      linear-gradient(var(--color-accent), var(--color-accent)) 0 0 / var(--progress, 0%) 100% no-repeat,
+      var(--color-line-strong);
+  }
+
+  &::-moz-range-track {
+    height: var(--rail);
+    background:
+      linear-gradient(var(--color-accent), var(--color-accent)) 0 0 / var(--progress, 0%) 100% no-repeat,
+      var(--color-line-strong);
+  }
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc((var(--rail) - var(--thumb)) / 2);
+    border-radius: 9999px;
+    background: var(--color-accent);
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+  }
+
+  &::-moz-range-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    border: 0;
+    border-radius: 9999px;
+    background: var(--color-accent);
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+  }
+
+  /* Separate rules: a selector list mixing -webkit- and -moz- pseudo-elements is
+     dropped whole by each engine. */
+  &:hover:not(:disabled)::-webkit-slider-thumb,
+  &:focus-visible::-webkit-slider-thumb {
+    opacity: 1;
+  }
+
+  &:hover:not(:disabled)::-moz-range-thumb,
+  &:focus-visible::-moz-range-thumb {
+    opacity: 1;
+  }
+}
+
+/* Integrate: warmth returns on the right, behind Build from Source. */
+@utility integrate-glow {
+  background-image: radial-gradient(ellipse 80vw 340px at 75% 72%, var(--glow-soft));
+
+  @variant lg {
+    background-image: radial-gradient(ellipse 560px 420px at 80% 58%, var(--glow));
+  }
+}
+
+@utility integrate-grid {
+  --grid-strength: 1.35;
+  mask-image: radial-gradient(ellipse 65% 26% at 70% 74%, #000 0, rgb(0 0 0 / 0.45) 55%, transparent 100%);
+
+  @variant lg {
+    mask-image: radial-gradient(ellipse 36% 52% at 78% 60%, #000 0, rgb(0 0 0 / 0.45) 55%, transparent 100%);
+  }
+}
+
+/* Final CTA base: near-black (canvas deepened toward black). It covers the section
+   above's glow bleed; closing-fade masks it in from the top so there is no seam. */
+@utility closing-base {
+  background-color: color-mix(in srgb, var(--color-canvas) 70%, black);
+}
+
+@utility closing-fade {
+  mask-image: linear-gradient(to bottom, transparent, black 6rem);
+}
+
+/* Final CTA glow, positioned on the copy's wrapper and concentric with it: a broad wash
+   reaching 9rem past the headline and the button, plus a warmer core at the copy's centre.
+   Both fall off along a gaussian to transparent at the box (no rim, no box). No blend mode
+   or blur: a filtered layer is stored at 8 bits, whose rounding tints a faint tail green;
+   the grain layer above dithers banding. */
+@utility closing-glow {
+  --glow-core: color-mix(in srgb, var(--color-accent) 76%, var(--color-canvas));
+  --glow-mid: color-mix(in srgb, var(--color-accent) 55%, var(--color-canvas));
+  left: 50%;
+  translate: -50% 0;
+  width: 140%;
+  top: -9rem;
+  bottom: -9rem;
+  background-image:
+    radial-gradient(
+      ellipse 48% 46% at 50% 50%,
+      color-mix(in srgb, var(--glow-core) 26.0%, transparent) 0%,
+      color-mix(in srgb, var(--glow-core) 25.2%, transparent) 10%,
+      color-mix(in srgb, var(--glow-core) 22.9%, transparent) 20%,
+      color-mix(in srgb, var(--glow-core) 19.5%, transparent) 30%,
+      color-mix(in srgb, var(--glow-core) 15.6%, transparent) 40%,
+      color-mix(in srgb, var(--glow-core) 11.6%, transparent) 50%,
+      color-mix(in srgb, var(--glow-core) 7.9%, transparent) 60%,
+      color-mix(in srgb, var(--glow-core) 4.9%, transparent) 70%,
+      color-mix(in srgb, var(--glow-core) 2.6%, transparent) 80%,
+      color-mix(in srgb, var(--glow-core) 1.0%, transparent) 90%,
+      transparent
+    ),
+    radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--glow-mid) 30.0%, transparent) 0%,
+      color-mix(in srgb, var(--glow-mid) 28.8%, transparent) 10%,
+      color-mix(in srgb, var(--glow-mid) 25.5%, transparent) 20%,
+      color-mix(in srgb, var(--glow-mid) 20.8%, transparent) 30%,
+      color-mix(in srgb, var(--glow-mid) 15.6%, transparent) 40%,
+      color-mix(in srgb, var(--glow-mid) 10.7%, transparent) 50%,
+      color-mix(in srgb, var(--glow-mid) 6.7%, transparent) 60%,
+      color-mix(in srgb, var(--glow-mid) 3.7%, transparent) 70%,
+      color-mix(in srgb, var(--glow-mid) 1.8%, transparent) 80%,
+      color-mix(in srgb, var(--glow-mid) 0.6%, transparent) 90%,
+      transparent
+    );
+
+  @variant md {
+    width: 90%;
+  }
+
+  @variant lg {
+    width: 72%;
+  }
+}
+
+/* Final CTA particles. ClosingParticles.tsx animates them with the Web Animations API;
+   these styles are their look and their still state (before hydration, reduced motion):
+   spread over the height. --travel (px) is the layer height plus both edges. The mask
+   quiets them behind the copy without an obvious hole. */
+@utility closing-particles {
+  --travel: 760;
+  mask-image: radial-gradient(ellipse min(36rem, 60%) 15rem at 50% 47%, rgb(0 0 0 / 0.3), black);
+}
+
+/* A soft dot: solid at --size across, then a feathered edge out to --spread times that
+   (wider on the bright accents, as their halo). Centred on --x and the bottom edge. */
+@utility closing-particle {
+  --box: calc(var(--size) * var(--spread));
+  --core: calc(100% / var(--spread));
+  position: absolute;
+  left: var(--x);
+  bottom: calc(-12px - var(--box) / 2);
+  width: var(--box);
+  height: var(--box);
+  margin-left: calc(var(--box) / -2);
+  background-image: radial-gradient(
+    closest-side,
+    var(--tone) 0,
+    var(--tone) calc(var(--core) * 0.7),
+    color-mix(in srgb, var(--tone) 45%, transparent) var(--core),
+    color-mix(in srgb, var(--tone) 12%, transparent) calc(var(--core) * 1.6),
+    transparent
+  );
+  opacity: var(--peak);
+  translate: 0 calc(var(--travel) * var(--rise) * (var(--offset) * 0.8 + 0.1) * -1px);
+}
+
+/* One restrained rise for the closing content group (scroll-driven, like scroll-reveal). */
+@keyframes closing-reveal {
+  from {
+    opacity: 0;
+    translate: 0 0.625rem;
+  }
+}
+
+@utility closing-reveal {
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: closing-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 30%;
+    }
+  }
+}

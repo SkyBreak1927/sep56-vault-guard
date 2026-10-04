@@ -145,15 +145,21 @@ async fn check_identities(accounts: &[&str]) -> Result<(), PreflightError> {
     }
 
     let list = missing.join(", ");
+    let spaced = missing.join(" ");
+    let quoted = missing.join("\",\"");
+    let fix = [
+        "Create and fund them on testnet, for example:".to_string(),
+        format!("  sh:         for n in {spaced}; do stellar keys generate $n --network testnet --fund; done"),
+        format!("  PowerShell: foreach ($n in \"{quoted}\") {{ stellar keys generate $n --network testnet --fund }}"),
+        format!("  cmd:        for %n in ({spaced}) do stellar keys generate %n --network testnet --fund"),
+    ]
+    .join("
+");
+
     Err(PreflightError::new(
         "identities_missing",
         format!("these test identities do not exist: {list}"),
-        format!(
-            "Create and fund them on testnet, for example:\n  \
-             for n in {list}; do stellar keys generate $n --network testnet --fund; done\n  \
-             PowerShell: foreach ($n in \"{}\") {{ stellar keys generate $n --network testnet --fund }}",
-            missing.join("\",\"")
-        ),
+        fix,
     ))
 }
 

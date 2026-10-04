@@ -4,7 +4,7 @@
 
 ## 1. Executive Summary
 
-**Plain language:** Aegis Vault is an "automated auditor" for vaults on the Stellar network. A vault is a smart contract where people deposit assets and receive "shares" as proof of ownership (similar to an automated savings account). Aegis Vault checks whether a given vault is built correctly and safely, before it's trusted with real user funds.
+**Plain language:** Aegis Vault runs a fixed set of automated checks against vaults on the Stellar network. A vault is a smart contract where people deposit assets and receive "shares" as proof of ownership (similar to an automated savings account). Aegis Vault reports which of those checks a given vault passes and which it fails, with the detail behind each result. It is a testing tool, not a review of the contract as a whole.
 
 **Technical:** A Rust-based CLI that runs 11 automated checks (7 conformance + 4 adversarial) against smart contract vaults implementing the SEP-56 standard on Soroban (Stellar's smart contract platform), with a companion web dashboard for visualizing results.
 
@@ -20,8 +20,8 @@ High-level flow:
 
 1. The user runs the CLI (`sep56-vault-guard`), pointing it at a target vault contract address (or defaulting to our reference vault)
 2. The CLI calls `stellar contract invoke` as a subprocess to communicate with the vault on-chain (testnet)
-3. For **positive conformance checks**: the CLI calls the target vault's functions directly and compares results against the standard's expectations
-4. For **security/adversarial checks**: the CLI deploys a throwaway clone of the vault (based on the target's wasm hash & parameters — never touching the real vault's state), then simulates attacks against that clone. This matters: **security checks never touch a real production vault**, so it's safe to run against anyone's vault
+3. For **positive conformance checks**: the CLI calls the target vault's functions directly and compares results against the standard's expectations. These are read/write calls — `deposit`, `mint`, `withdraw` and `redeem` move testnet funds and change the target vault's state, and the checks assert the exact `total_assets` deltas they produce
+4. For **security/adversarial checks**: the CLI deploys a throwaway clone of the vault (based on the target's wasm hash & parameters), then simulates attacks against that clone. These four only read the target vault, so the attacks themselves never put a real vault's funds at risk. That protection stops at the four, though — it says nothing about step 3 above, which does change the target vault. Running the whole suite against someone else's vault is not a read-only act
 5. Results (PASS/FAIL + detail) are printed to the terminal or as JSON, and can be displayed on the web dashboard
 
 ## 4. Detail of the 11 Checks

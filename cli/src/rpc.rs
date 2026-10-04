@@ -70,7 +70,7 @@ impl std::error::Error for RpcError {
 /// blindly at the end could land it past a `--` and be misinterpreted as
 /// a positional argument to the invoked contract function instead of a
 /// top-level CLI flag.
-async fn run_stellar(args: &[String]) -> Result<String, RpcError> {
+pub(crate) async fn run_stellar(args: &[String]) -> Result<String, RpcError> {
     let output = Command::new("stellar")
         .args(args)
         .stdin(Stdio::null())

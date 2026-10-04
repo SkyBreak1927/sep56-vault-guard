@@ -169,6 +169,27 @@ function runCheckJob(jobId, vault, statusFilePath) {
     if (stdout) {
       try {
         const result = JSON.parse(stdout);
+
+        // A missing prerequisite (no `stellar`, a missing identity, an
+        // address that is not a contract) makes the CLI print one error
+        // object instead of the array of check results, and exit 2. Without
+        // this branch that object would be stored as a 'complete' job whose
+        // `result` has no checks in it, and the page would say "Done." over
+        // an empty list rather than telling anyone what went wrong.
+        if (!Array.isArray(result)) {
+          const problem = result && result.problem;
+          const fix = result && result.fix;
+          log(`CLI reported a prerequisite failure: ${result && result.code}`);
+          jobs.set(jobId, {
+            status: 'error',
+            error: [problem, fix].filter(Boolean).join(' ') ||
+              'The checker could not run: prerequisites are not met.',
+            createdAt: startedAt,
+            statusFilePath,
+          });
+          return;
+        }
+
         log(`parsed ${result.length} check results successfully`);
         // Cache the final per-check status snapshot too (best-effort — the
         // authoritative outcome is `result`, parsed straight from the

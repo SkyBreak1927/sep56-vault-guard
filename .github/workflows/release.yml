@@ -13,11 +13,6 @@ on:
   push:
     tags:
       - 'v*'
-    # TEMPORARY, removed again before this branch merges. See the previous
-    # pair of commits: workflow_dispatch is only offered for a workflow that
-    # already exists on the default branch.
-    branches:
-      - p1-29-release
   workflow_dispatch:
 
 permissions:

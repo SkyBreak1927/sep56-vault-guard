@@ -13,6 +13,11 @@ on:
   push:
     tags:
       - 'v*'
+    # TEMPORARY, removed again before this branch merges. See the previous
+    # pair of commits: workflow_dispatch is only offered for a workflow that
+    # already exists on the default branch.
+    branches:
+      - p1-29-release
   workflow_dispatch:
 
 permissions:
@@ -36,7 +41,15 @@ jobs:
           rustc --version
           cargo --version
 
+      # Link the C runtime into the binary so it runs on a Windows that has
+      # never had the Visual C++ Redistributable installed. Without this the
+      # binary imports VCRUNTIME140.dll, which is usually present because
+      # other software brings it along, but is not guaranteed on a clean
+      # machine -- and the failure there is a dialog about a missing DLL,
+      # which says nothing about what to install.
       - name: Build
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo build --release -p sep56-vault-guard
 
       - name: Package

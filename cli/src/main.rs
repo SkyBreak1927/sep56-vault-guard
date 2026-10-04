@@ -1,5 +1,6 @@
 mod rpc;
 mod checks;
+mod preflight;
 mod status;
 
 use clap::Parser;
@@ -19,6 +20,11 @@ const VICTIM_ACCOUNT: &str = "bob";
 // that. `alice` belongs to the conformance sequence alone, which is why the
 // donation attacker needs an account of its own.
 const DONATION_ATTACKER_ACCOUNT: &str = "grace";
+
+/// Exit code for a missing prerequisite. Kept distinct from 1, which keeps
+/// meaning "the checks ran and at least one of them failed", so a caller can
+/// tell "could not run" apart from "ran and found something".
+const EXIT_PREFLIGHT_FAILED: i32 = 2;
 const OVERFLOW_DEPLOYER_ACCOUNT: &str = "carol";
 const ROUNDING_DEPLOYER_ACCOUNT: &str = "dave";
 const ACCESS_OWNER_ACCOUNT: &str = "erin";
@@ -79,6 +85,46 @@ fn category_for(check_name: &str) -> &'static str {
 async fn main() {
     let cli = Cli::parse();
     let vault = cli.vault.as_str();
+
+    // Prerequisites first. A missing `stellar`, a missing identity or an
+    // address that is not a contract is a problem with the environment, not a
+    // finding about the vault, so it is reported on its own terms and no check
+    // runs. Every account the checks below use is listed here.
+    let accounts = [
+        SOURCE_ACCOUNT,
+        VICTIM_ACCOUNT,
+        DONATION_ATTACKER_ACCOUNT,
+        OVERFLOW_DEPLOYER_ACCOUNT,
+        ROUNDING_DEPLOYER_ACCOUNT,
+        ACCESS_OWNER_ACCOUNT,
+        ACCESS_OPERATOR_ACCOUNT,
+    ];
+    match preflight::run(vault, &accounts).await {
+        // Warnings go to stderr in both formats, so stdout stays exactly the
+        // payload a consumer parses.
+        Ok(preflight) => {
+            for warning in &preflight.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Err(failure) => {
+            match cli.output {
+                OutputFormat::Text => {
+                    eprintln!("Prerequisite missing: {}", failure.problem);
+                    eprintln!();
+                    eprintln!("{}", failure.fix);
+                    eprintln!();
+                    eprintln!("No checks were run.");
+                }
+                OutputFormat::Json => {
+                    let output = serde_json::to_string_pretty(&failure)
+                        .expect("the preflight error is serializable");
+                    println!("{output}");
+                }
+            }
+            std::process::exit(EXIT_PREFLIGHT_FAILED);
+        }
+    }
 
     let status_reporter = StatusReporter::new(cli.status_file.clone(), vault).await;
 

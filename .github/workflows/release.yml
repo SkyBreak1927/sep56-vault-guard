@@ -13,12 +13,6 @@ on:
   push:
     tags:
       - 'v*'
-    # TEMPORARY, removed before this branch merges. GitHub only offers
-    # workflow_dispatch for a workflow that already exists on the default
-    # branch, so this is the only way to prove the workflow runs before it is
-    # merged -- and it beats creating a tag just to test it.
-    branches:
-      - p1-29-release
   workflow_dispatch:
 
 permissions:

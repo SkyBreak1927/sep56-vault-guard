@@ -896,7 +896,7 @@ pub async fn check_donation_attack(
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, attacker_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -910,10 +910,10 @@ pub async fn check_donation_attack(
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, attacker_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, attacker_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not deploy a fresh vault instance for the attack simulation: {e}"
                 ))
         }
@@ -929,11 +929,12 @@ pub async fn check_donation_attack(
         "--operator".to_string(),
         attacker_account.to_string(),
     ];
-    let attacker_shares = match invoke_contract(
+    let attacker_shares = match invoke_checked(
         &vault_id,
         "deposit",
         &attacker_deposit_args,
         attacker_account,
+        false,
     )
     .await
     {
@@ -946,7 +947,7 @@ pub async fn check_donation_attack(
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("attacker dust deposit failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("attacker dust deposit failed on {vault_id}: {e}"))
         }
     };
 
@@ -959,9 +960,9 @@ pub async fn check_donation_attack(
         DONATION_AMOUNT.to_string(),
     ];
     if let Err(e) =
-        invoke_contract(&underlying_asset, "transfer", &donation_args, attacker_account).await
+        invoke_checked(&underlying_asset, "transfer", &donation_args, attacker_account, false).await
     {
-        return CheckResult::fail(name, format!("attacker donation transfer to {vault_id} failed: {e}"));
+        return e.finish(name, |e| format!("attacker donation transfer to {vault_id} failed: {e}"));
     }
 
     let victim_deposit_args = vec![
@@ -975,7 +976,7 @@ pub async fn check_donation_attack(
         victim_account.to_string(),
     ];
     let victim_shares =
-        match invoke_contract(&vault_id, "deposit", &victim_deposit_args, victim_account).await {
+        match invoke_checked(&vault_id, "deposit", &victim_deposit_args, victim_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -985,7 +986,7 @@ pub async fn check_donation_attack(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("victim deposit failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("victim deposit failed on {vault_id}: {e}"))
             }
         };
 
@@ -1106,7 +1107,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -1120,10 +1121,10 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not deploy a fresh vault instance for the overflow test: {e}"
                 ))
         }
@@ -1153,7 +1154,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
                 Ok(v) => format!("unexpectedly SUCCEEDED, returned {v}"),
                 Err(e) => format!("failed as expected ({e})"),
             };
-            return CheckResult::fail(name, format!(
+            return detail.finish(name, |detail| format!(
                     "deposit(assets=i128::MAX) {outcome}; additionally could not read \
                      total_assets afterwards to confirm clean state: {detail}"
                 ));
@@ -1251,7 +1252,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -1265,10 +1266,10 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!("could not deploy a fresh vault instance for the rounding test: {e}"))
+            return e.finish(name, |e| format!("could not deploy a fresh vault instance for the rounding test: {e}"))
         }
     };
 
@@ -1282,8 +1283,8 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         "--operator".to_string(),
         deployer_account.to_string(),
     ];
-    if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, deployer_account).await {
-        return CheckResult::fail(name, format!("seed deposit failed on {vault_id}: {e}"));
+    if let Err(e) = invoke_checked(&vault_id, "deposit", &seed_args, deployer_account, false).await {
+        return e.finish(name, |e| format!("seed deposit failed on {vault_id}: {e}"));
     }
 
     let donation_args = vec![
@@ -1295,17 +1296,18 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         DONATION.to_string(),
     ];
     if let Err(e) =
-        invoke_contract(&underlying_asset, "transfer", &donation_args, deployer_account).await
+        invoke_checked(&underlying_asset, "transfer", &donation_args, deployer_account, false).await
     {
-        return CheckResult::fail(name, format!("donation transfer to {vault_id} failed: {e}"));
+        return e.finish(name, |e| format!("donation transfer to {vault_id} failed: {e}"));
     }
 
     // --- Test A: deposit() must floor, matching preview_deposit() ---
-    let preview_deposit_shares = match invoke_contract(
+    let preview_deposit_shares = match invoke_checked(
         &vault_id,
         "preview_deposit",
         &["--assets".to_string(), DEPOSIT_TEST_ASSETS.to_string()],
         deployer_account,
+        false,
     )
     .await
     {
@@ -1318,7 +1320,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("preview_deposit failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("preview_deposit failed on {vault_id}: {e}"))
         }
     };
 
@@ -1333,7 +1335,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         deployer_account.to_string(),
     ];
     let actual_deposit_shares =
-        match invoke_contract(&vault_id, "deposit", &deposit_args, deployer_account).await {
+        match invoke_checked(&vault_id, "deposit", &deposit_args, deployer_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1343,7 +1345,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("deposit failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("deposit failed on {vault_id}: {e}"))
             }
         };
 
@@ -1356,11 +1358,12 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
 
     // --- Test B: mint() must ceil, matching preview_mint() and strictly
     //     exceeding the always-floor convert_to_assets() ---
-    let preview_mint_assets = match invoke_contract(
+    let preview_mint_assets = match invoke_checked(
         &vault_id,
         "preview_mint",
         &["--shares".to_string(), MINT_TEST_SHARES.to_string()],
         deployer_account,
+        false,
     )
     .await
     {
@@ -1373,15 +1376,16 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("preview_mint failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("preview_mint failed on {vault_id}: {e}"))
         }
     };
 
-    let idealized_assets = match invoke_contract(
+    let idealized_assets = match invoke_checked(
         &vault_id,
         "convert_to_assets",
         &["--shares".to_string(), MINT_TEST_SHARES.to_string()],
         deployer_account,
+        false,
     )
     .await
     {
@@ -1394,7 +1398,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("convert_to_assets failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("convert_to_assets failed on {vault_id}: {e}"))
         }
     };
 
@@ -1409,7 +1413,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         deployer_account.to_string(),
     ];
     let actual_mint_assets =
-        match invoke_contract(&vault_id, "mint", &mint_args, deployer_account).await {
+        match invoke_checked(&vault_id, "mint", &mint_args, deployer_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1417,7 +1421,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("mint failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("mint failed on {vault_id}: {e}"))
             }
         };
 
@@ -1491,7 +1495,7 @@ pub async fn check_access_control_probing(
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, owner_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -1505,10 +1509,10 @@ pub async fn check_access_control_probing(
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, owner_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, owner_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not deploy a fresh vault instance for the access-control probe: {e}"
                 ))
         }
@@ -1524,8 +1528,8 @@ pub async fn check_access_control_probing(
         "--operator".to_string(),
         owner_account.to_string(),
     ];
-    if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, owner_account).await {
-        return CheckResult::fail(name, format!("owner seed deposit failed on {vault_id}: {e}"));
+    if let Err(e) = invoke_checked(&vault_id, "deposit", &seed_args, owner_account, false).await {
+        return e.finish(name, |e| format!("owner seed deposit failed on {vault_id}: {e}"));
     }
 
     // --- Step 1: unauthorized withdraw (0 allowance) must fail ---
@@ -1563,7 +1567,7 @@ pub async fn check_access_control_probing(
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!(
+            return detail.finish(name, |detail| format!(
                     "could not compute preview_withdraw on {vault_id} to size the allowance: \
                      {detail}"
                 ))
@@ -1572,10 +1576,10 @@ pub async fn check_access_control_probing(
     let approved_allowance = shares_needed_for_within.saturating_mul(2);
 
     // --- Step 2: owner approves operator for a limited allowance ---
-    let current_ledger = match fetch_current_ledger_sequence().await {
+    let current_ledger = match ledger_checked().await {
         Ok(seq) => seq,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not fetch current ledger sequence to compute a valid \
                      live_until_ledger for approve() on {vault_id}: {e}"
                 ))
@@ -1593,8 +1597,8 @@ pub async fn check_access_control_probing(
         "--live_until_ledger".to_string(),
         live_until_ledger.to_string(),
     ];
-    if let Err(e) = invoke_contract(&vault_id, "approve", &approve_args, owner_account).await {
-        return CheckResult::fail(name, format!("owner approve() failed on {vault_id}: {e}"));
+    if let Err(e) = invoke_checked(&vault_id, "approve", &approve_args, owner_account, false).await {
+        return e.finish(name, |e| format!("owner approve() failed on {vault_id}: {e}"));
     }
 
     // --- Step 3: withdraw within the allowance must succeed, decrementing
@@ -1610,7 +1614,7 @@ pub async fn check_access_control_probing(
         operator_account.to_string(),
     ];
     let shares_spent =
-        match invoke_contract(&vault_id, "withdraw", &within_args, operator_account).await {
+        match invoke_checked(&vault_id, "withdraw", &within_args, operator_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1621,7 +1625,7 @@ pub async fn check_access_control_probing(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!(
+                return e.finish(name, |e| format!(
                         "authorized withdraw within allowance unexpectedly failed on \
                          {vault_id}: {e}"
                     ))
@@ -1635,7 +1639,7 @@ pub async fn check_access_control_probing(
         operator_account.to_string(),
     ];
     let allowance_after_spend =
-        match invoke_contract(&vault_id, "allowance", &allowance_args, owner_account).await {
+        match invoke_checked(&vault_id, "allowance", &allowance_args, owner_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1645,7 +1649,7 @@ pub async fn check_access_control_probing(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("allowance query failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("allowance query failed on {vault_id}: {e}"))
             }
         };
 
@@ -1683,7 +1687,7 @@ pub async fn check_access_control_probing(
     }
 
     let allowance_final =
-        match invoke_contract(&vault_id, "allowance", &allowance_args, owner_account).await {
+        match invoke_checked(&vault_id, "allowance", &allowance_args, owner_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1694,7 +1698,7 @@ pub async fn check_access_control_probing(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("final allowance query failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("final allowance query failed on {vault_id}: {e}"))
             }
         };
 
@@ -1740,68 +1744,78 @@ async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i1
 /// holds because the vault's `decimals()` is defined as the underlying
 /// asset's decimals plus the offset.
 ///
-/// Returns a single combined error string on failure — e.g. if
-/// `target_vault` is a Stellar Asset Contract (which has no wasm hash) or
-/// otherwise not a valid Soroban vault contract — so callers can fail the
-/// check cleanly rather than panicking.
+/// Returns a [`Stop`] on failure, so callers end the check cleanly rather than
+/// panicking. Which status it carries depends on why: a missing `query_asset`
+/// or asset `decimals()`, an offset that cannot be derived, or a target with
+/// no Wasm of its own is `NotApplicable`; an unreachable network or an
+/// unclassified failure is `Inconclusive`; the other failures stay `Fail`.
 async fn resolve_target_vault(
     target_vault: &str,
     caller_account: &str,
-) -> Result<(String, String, u32), String> {
-    let wasm_hash = fetch_wasm_hash(target_vault)
-        .await
-        .map_err(|e| format!("could not fetch wasm hash from target vault {target_vault}: {e}"))?;
+) -> Result<(String, String, u32), Stop> {
+    let wasm_hash = wasm_hash_checked(target_vault).await?;
 
+    // `query_asset` is not part of SEP-56; a vault without it is a design this
+    // check does not cover, not a vault that failed.
     let underlying_asset =
-        match invoke_contract(target_vault, "query_asset", &[], caller_account).await {
+        match invoke_checked(target_vault, "query_asset", &[], caller_account, true).await {
             Ok(value) => match value.as_str() {
                 Some(s) => s.to_string(),
                 None => {
-                    return Err(format!(
+                    return Err(Stop::Fail(format!(
                         "query_asset on {target_vault} returned an unexpected value: {value}"
-                    ))
+                    )))
                 }
             },
             Err(e) => {
-                return Err(format!(
-                    "could not query underlying asset from target vault {target_vault}: {e}"
-                ))
+                return Err(e.wrap_fail(|e| {
+                    format!("could not query underlying asset from target vault {target_vault}: {e}")
+                }))
             }
         };
 
-    let vault_decimals = match invoke_contract(target_vault, "decimals", &[], caller_account).await
-    {
-        Ok(value) => parse_u32(&value).ok_or_else(|| {
-            format!("decimals() on {target_vault} returned an unexpected value: {value}")
-        })?,
-        Err(e) => {
-            return Err(format!(
-                "could not query decimals() from target vault {target_vault}: {e}"
-            ))
-        }
-    };
-
-    let asset_decimals =
-        match invoke_contract(&underlying_asset, "decimals", &[], caller_account).await {
+    let vault_decimals =
+        match invoke_checked(target_vault, "decimals", &[], caller_account, false).await {
             Ok(value) => parse_u32(&value).ok_or_else(|| {
-                format!(
-                    "decimals() on underlying asset {underlying_asset} returned an unexpected \
-                     value: {value}"
-                )
+                Stop::Fail(format!(
+                    "decimals() on {target_vault} returned an unexpected value: {value}"
+                ))
             })?,
             Err(e) => {
-                return Err(format!(
-                    "could not query decimals() from underlying asset {underlying_asset}: {e}"
+                return Err(e.wrap_fail(|e| {
+                    format!("could not query decimals() from target vault {target_vault}: {e}")
+                }))
+            }
+        };
+
+    // `decimals` on the underlying asset is a token function the tool calls, not
+    // part of SEP-56; an asset without it is treated like a missing `query_asset`.
+    let asset_decimals =
+        match invoke_checked(&underlying_asset, "decimals", &[], caller_account, true).await {
+            Ok(value) => parse_u32(&value).ok_or_else(|| {
+                Stop::Fail(format!(
+                    "decimals() on underlying asset {underlying_asset} returned an unexpected \
+                     value: {value}"
                 ))
+            })?,
+            Err(e) => {
+                return Err(e.wrap_fail(|e| {
+                    format!(
+                        "could not query decimals() from underlying asset {underlying_asset}: {e}"
+                    )
+                }))
             }
         };
 
     let decimals_offset = vault_decimals.checked_sub(asset_decimals).ok_or_else(|| {
-        format!(
-            "target vault {target_vault} decimals ({vault_decimals}) is less than its \
-             underlying asset's decimals ({asset_decimals}) — cannot derive a valid \
-             decimals_offset"
-        )
+        Stop::NotApplicable {
+            reason: "not_a_standard_vault",
+            detail: format!(
+                "the target vault's decimals() ({vault_decimals}) is smaller than its underlying \
+                 asset's decimals() ({asset_decimals}), so the decimals offset this check needs \
+                 cannot be derived. No finding about the vault."
+            ),
+        }
     })?;
 
     Ok((wasm_hash, underlying_asset, decimals_offset))

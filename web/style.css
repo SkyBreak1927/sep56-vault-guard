@@ -975,6 +975,10 @@ select:focus-visible {
   border-color: var(--warn-border);
 }
 
+.check-card-inconclusive {
+  border-color: var(--warn-border);
+}
+
 .check-card-top {
   display: flex;
   align-items: flex-start;
@@ -1065,6 +1069,18 @@ select:focus-visible {
   background: var(--warn-bg);
   color: var(--warn);
   border-color: var(--warn-border);
+}
+
+.badge-inconclusive {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: var(--warn-border);
+}
+
+.badge-not_applicable {
+  background: var(--surface-4);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
 }
 
 /* ---------- Verification report ---------- */
@@ -1294,6 +1310,10 @@ select:focus-visible {
   background: var(--warn-bg);
 }
 
+.report-row-inconclusive {
+  background: var(--warn-bg);
+}
+
 .report-row-num {
   flex-shrink: 0;
   width: 1.5rem;
@@ -1329,6 +1349,10 @@ select:focus-visible {
 }
 
 .report-row-detail.detail-warn {
+  color: var(--warn);
+}
+
+.report-row-detail.detail-inconclusive {
   color: var(--warn);
 }
 

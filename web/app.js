@@ -28,7 +28,15 @@ const CHECK_DEFS = [
   { id: "access_control_probing", group: "security", name: "Access Control Probing", description: "Confirms sensitive functions are properly authorization-gated." },
 ];
 
-const BADGE_LABEL = { pending: "Pending", running: "Running", pass: "Pass", fail: "Fail", warn: "Warn" };
+const BADGE_LABEL = {
+  pending: "Pending",
+  running: "Running",
+  pass: "Pass",
+  fail: "Fail",
+  warn: "Warn",
+  inconclusive: "Inconclusive",
+  not_applicable: "Not applicable",
+};
 
 function escapeHtml(value) {
   const div = document.createElement("div");
@@ -43,7 +51,10 @@ let checkState = new Map();
 // doesn't return timestamps, so these are accurate to one poll interval.
 const run = { vault: null, startedAt: null, completedAt: null, settledAt: new Map() };
 
-const FINAL_STATUSES = new Set(["pass", "fail", "warn"]);
+// "inconclusive" (a prerequisite was not met, so no verdict) and
+// "not_applicable" (the check does not fit this vault's design) are final too.
+// Any other status string is not final and is counted as pending.
+const FINAL_STATUSES = new Set(["pass", "fail", "warn", "inconclusive", "not_applicable"]);
 
 function resetCheckState() {
   checkState = new Map(CHECK_DEFS.map((def) => [def.id, { status: "pending", detail: null }]));
@@ -91,7 +102,7 @@ function badgeHtml(status) {
 }
 
 function countStatuses(defs) {
-  const counts = { pass: 0, fail: 0, warn: 0, running: 0, pending: 0 };
+  const counts = { pass: 0, fail: 0, warn: 0, inconclusive: 0, not_applicable: 0, running: 0, pending: 0 };
   defs.forEach((def) => {
     const status = checkState.get(def.id).status;
     counts[status in counts ? status : "pending"] += 1;
@@ -102,7 +113,15 @@ function countStatuses(defs) {
 // "3 Passed · 2 Running · 2 Pending" — zero counts are left out.
 function groupSummaryText(group) {
   const counts = countStatuses(CHECK_DEFS.filter((def) => def.group === group));
-  const labels = [["pass", "Passed"], ["fail", "Failed"], ["warn", "Warned"], ["running", "Running"], ["pending", "Pending"]];
+  const labels = [
+    ["pass", "Passed"],
+    ["fail", "Failed"],
+    ["warn", "Warned"],
+    ["inconclusive", "Inconclusive"],
+    ["not_applicable", "Not applicable"],
+    ["running", "Running"],
+    ["pending", "Pending"],
+  ];
   return labels.filter(([key]) => counts[key] > 0).map(([key, label]) => `${counts[key]} ${label}`).join(" · ");
 }
 
@@ -134,7 +153,7 @@ function renderChecks() {
 
 function renderSummary(kind) {
   const counts = countStatuses(CHECK_DEFS);
-  const settled = counts.pass + counts.fail + counts.warn;
+  const settled = counts.pass + counts.fail + counts.warn + counts.inconclusive + counts.not_applicable;
 
   resultsDot.className = `dot ${kind}`;
 
@@ -150,6 +169,8 @@ function renderSummary(kind) {
 
   const parts = [`${counts.pass} passed`, `${counts.fail} failed`];
   if (counts.warn > 0) parts.push(`${counts.warn} warned`);
+  if (counts.inconclusive > 0) parts.push(`${counts.inconclusive} inconclusive`);
+  if (counts.not_applicable > 0) parts.push(`${counts.not_applicable} not applicable`);
   resultsSummaryText.textContent = `Run complete — ${parts.join(", ")}`;
 }
 
@@ -168,11 +189,14 @@ function applyChecksArray(checksArr) {
 
 // Fallback for the (should-be-rare) case where a 'complete' response has no
 // cached `checks` array — reconstruct from the legacy `result` shape
-// (CLI's --output json: { name, category, status: "PASS"|"FAIL", detail }).
+// (CLI's --output json: { name, category, status: "PASS"|"FAIL"|"INCONCLUSIVE"|
+// "NOT_APPLICABLE", detail }). Any other status is treated as a failure.
+const LEGACY_STATUS = { PASS: "pass", INCONCLUSIVE: "inconclusive", NOT_APPLICABLE: "not_applicable" };
+
 function applyLegacyResult(resultArr) {
   resultArr.forEach((r) => {
     if (checkState.has(r.name)) {
-      const status = r.status === "PASS" ? "pass" : "fail";
+      const status = LEGACY_STATUS[r.status] || "fail";
       checkState.set(r.name, { status, detail: r.detail || null });
       recordSettled(r.name, status);
     }
@@ -215,7 +239,7 @@ function reportData() {
     started_at: new Date(run.startedAt).toISOString(),
     completed_at: new Date(run.completedAt).toISOString(),
     duration_seconds: Math.round((run.completedAt - run.startedAt) / 1000),
-    summary: { total: CHECK_DEFS.length, pass: counts.pass, fail: counts.fail, warn: counts.warn, pass_rate_percent: passRate },
+    summary: { total: CHECK_DEFS.length, pass: counts.pass, fail: counts.fail, warn: counts.warn, inconclusive: counts.inconclusive, not_applicable: counts.not_applicable, pass_rate_percent: passRate },
     checks: CHECK_DEFS.map((def, i) => {
       const state = checkState.get(def.id);
       const settledAt = run.settledAt.get(def.id);
@@ -274,6 +298,8 @@ function renderReport() {
     `<span class="badge badge-pass">${s.pass} Pass</span>`,
     s.warn > 0 ? `<span class="badge badge-warn">${s.warn} Warn</span>` : "",
     `<span class="badge badge-fail">${s.fail} Fail</span>`,
+    s.inconclusive > 0 ? `<span class="badge badge-inconclusive">${s.inconclusive} Inconclusive</span>` : "",
+    s.not_applicable > 0 ? `<span class="badge badge-not_applicable">${s.not_applicable} Not applicable</span>` : "",
   ].join("");
   const scoreEl = document.getElementById("report-score");
   scoreEl.textContent = `${s.pass_rate_percent}%`;
@@ -298,7 +324,7 @@ function reportMarkdown(data) {
     `- Started: ${data.started_at}`,
     `- Completed: ${data.completed_at}`,
     `- Duration: ${data.duration_seconds} s`,
-    `- Result: ${data.summary.pass} pass, ${data.summary.warn} warn, ${data.summary.fail} fail (${data.summary.pass_rate_percent}% of ${data.summary.total} checks passed)`,
+    `- Result: ${data.summary.pass} pass, ${data.summary.warn} warn, ${data.summary.fail} fail, ${data.summary.inconclusive} inconclusive, ${data.summary.not_applicable} not applicable (${data.summary.pass_rate_percent}% of ${data.summary.total} checks passed)`,
     "",
   ];
   [["conformance", "Conformance checks"], ["security", "Security checks"]].forEach(([group, title]) => {

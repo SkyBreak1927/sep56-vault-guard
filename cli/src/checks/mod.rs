@@ -1,6 +1,10 @@
 use serde_json::Value;
 
-use crate::rpc::{deploy_contract, fetch_current_ledger_sequence, fetch_wasm_hash, invoke_contract};
+use crate::rpc::{
+    deploy_contract, diagnose_deploy, diagnose_info_hash, diagnose_invoke,
+    fetch_current_ledger_sequence, fetch_wasm_hash, invoke_contract, Diagnosis, ErrorClass,
+    RetryNote,
+};
 
 /// How a single check ended.
 ///
@@ -63,6 +67,250 @@ impl CheckResult {
     }
 }
 
+impl CheckResult {
+    /// An `Inconclusive` result: the check could not reach a verdict about the
+    /// vault. `reason_code` says why, in a form a program can read.
+    #[allow(dead_code)]
+    pub fn inconclusive(name: String, reason_code: &'static str, detail: String) -> Self {
+        CheckResult { name, status: CheckStatus::Inconclusive, reason_code: Some(reason_code), detail }
+    }
+
+    /// A `NotApplicable` result: the check does not fit this vault's design.
+    #[allow(dead_code)]
+    pub fn not_applicable(name: String, reason_code: &'static str, detail: String) -> Self {
+        CheckResult { name, status: CheckStatus::NotApplicable, reason_code: Some(reason_code), detail }
+    }
+}
+
+/// Why a step of a check stopped it. `Fail` keeps the check's existing FAIL
+/// text; the other two carry the new status, its reason code and its detail.
+#[allow(dead_code)]
+pub(crate) enum Stop {
+    Fail(String),
+    Inconclusive { reason: &'static str, detail: String },
+    NotApplicable { reason: &'static str, detail: String },
+}
+
+impl std::fmt::Display for Stop {
+    /// The message of a `Fail`, or the detail of the other two.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stop::Fail(text) => f.write_str(text),
+            Stop::Inconclusive { detail, .. } | Stop::NotApplicable { detail, .. } => f.write_str(detail),
+        }
+    }
+}
+
+impl Stop {
+    /// Turns this into the check's result. `wrap` builds the existing FAIL text
+    /// around the message of a `Fail`, and is not used for the other two.
+    #[allow(dead_code)]
+    pub(crate) fn finish(self, name: String, wrap: impl FnOnce(&str) -> String) -> CheckResult {
+        match self {
+            Stop::Fail(message) => CheckResult::fail(name, wrap(&message)),
+            Stop::Inconclusive { reason, detail } => CheckResult::inconclusive(name, reason, detail),
+            Stop::NotApplicable { reason, detail } => CheckResult::not_applicable(name, reason, detail),
+        }
+    }
+
+    /// Rewrites the message of a `Fail`; the other two pass through unchanged.
+    #[allow(dead_code)]
+    fn wrap_fail(self, wrap: impl FnOnce(&str) -> String) -> Stop {
+        match self {
+            Stop::Fail(message) => Stop::Fail(wrap(&message)),
+            other => other,
+        }
+    }
+}
+
+/// What a failed command was doing, for [`verdict`].
+#[allow(dead_code)]
+enum Subject<'a> {
+    /// A `stellar contract invoke` of `function`, started as test account
+    /// `account`. `na_if_missing` is true only for a function that is not part
+    /// of SEP-56 and that the tool calls anyway (`query_asset` on the vault,
+    /// `decimals` on the underlying asset); a missing SEP-56 function stays a
+    /// FAIL, as before.
+    Call { function: &'a str, account: &'a str, na_if_missing: bool },
+    /// Deploying the comparison copy of the vault.
+    Deploy,
+    /// Reading the target's Wasm hash.
+    WasmHash,
+}
+
+/// Longest stretch of raw error text copied into a detail.
+#[allow(dead_code)]
+const RAW_ERROR_LIMIT: usize = 1500;
+
+#[allow(dead_code)]
+fn truncate_raw(raw: &str) -> String {
+    match raw.char_indices().nth(RAW_ERROR_LIMIT) {
+        Some((end, _)) => format!("{} [truncated]", &raw[..end]),
+        None => raw.to_string(),
+    }
+}
+
+/// Maps a diagnosis to a status, or `None` to leave the result a FAIL.
+#[allow(dead_code)]
+fn verdict(subject: &Subject<'_>, diag: &Diagnosis) -> Option<Stop> {
+    let phrase = match subject {
+        Subject::Call { function, .. } => format!("the call to {function}()"),
+        Subject::Deploy => "the deploy of the comparison copy".to_string(),
+        Subject::WasmHash => "the lookup of the target's Wasm hash".to_string(),
+    };
+
+    let (reason, lead, not_applicable) = match (diag.class, subject) {
+        (ErrorClass::InsufficientTokenBalance, Subject::Call { account, .. }) => (
+            "insufficient_token_balance",
+            format!(
+                "the token transfer needed for this check was rejected, which appears to be \
+                 insufficient balance on the account paying for it (this check started the \
+                 call as test account '{account}'). Fund that account with the vault's \
+                 underlying asset and run again. This is a precondition problem, not a \
+                 finding about the vault."
+            ),
+            false,
+        ),
+        (ErrorClass::ConstructorMismatch, Subject::Deploy) => (
+            "constructor_mismatch",
+            "this check deploys a comparison copy of the vault with the constructor arguments \
+             --name, --symbol, --asset, --decimals_offset; the target vault's constructor does \
+             not accept them, so the copy could not be deployed. No finding about the vault."
+                .to_string(),
+            true,
+        ),
+        (ErrorClass::NotAStandardVault, Subject::Call { function, na_if_missing: true, .. }) => (
+            "not_a_standard_vault",
+            format!(
+                "the target does not expose the interface this check needs ({function}). No \
+                 finding about the vault."
+            ),
+            true,
+        ),
+        (ErrorClass::NotAStandardVault, Subject::Call { .. }) => return None,
+        (ErrorClass::NotAStandardVault, Subject::WasmHash) => (
+            "not_a_standard_vault",
+            "the target does not expose the interface this check needs (a contract with Wasm \
+             code of its own, which a comparison copy is deployed from). No finding about the \
+             vault."
+                .to_string(),
+            true,
+        ),
+        (ErrorClass::Network, _) => (
+            "network_error",
+            format!("{phrase} did not reach the RPC or network. Run again later."),
+            false,
+        ),
+        _ => (
+            "unclassified_error",
+            format!(
+                "{phrase} failed for a reason the tool could not classify. No finding about the \
+                 vault."
+            ),
+            false,
+        ),
+    };
+
+    let tail = match (&diag.raw, diag.retry) {
+        (Some(raw), _) => format!(" Raw error: {}", truncate_raw(raw)),
+        (None, RetryNote::RetriedSucceeded) => " The call succeeded when repeated as a simulation, \
+            so the first failure could not be reproduced and its cause is unknown."
+            .to_string(),
+        (None, RetryNote::RetriedNoText) => " The CLI printed no error text, also when the call \
+            was repeated without --quiet."
+            .to_string(),
+        (None, _) => " No error text was available.".to_string(),
+    };
+    let detail = format!("{lead}{tail}");
+
+    Some(if not_applicable {
+        Stop::NotApplicable { reason, detail }
+    } else {
+        Stop::Inconclusive { reason, detail }
+    })
+}
+
+/// Calls a contract function like [`invoke_contract`]. A failure is diagnosed
+/// (see [`diagnose_invoke`]) and becomes a [`Stop`]; the success path is
+/// exactly `invoke_contract`, with no extra call.
+#[allow(dead_code)]
+pub(crate) async fn invoke_checked(
+    contract_id: &str,
+    function_name: &str,
+    args: &[String],
+    account: &str,
+    na_if_missing: bool,
+) -> Result<Value, Stop> {
+    match invoke_contract(contract_id, function_name, args, account).await {
+        Ok(value) => Ok(value),
+        Err(e) => {
+            let diag = diagnose_invoke(contract_id, function_name, args, account, &e).await;
+            let subject = Subject::Call { function: function_name, account, na_if_missing };
+            Err(verdict(&subject, &diag).unwrap_or_else(|| Stop::Fail(e.to_string())))
+        }
+    }
+}
+
+/// Deploys like [`deploy_contract`]. A failure is classified from the text it
+/// already has and is never repeated; it never stays a FAIL.
+#[allow(dead_code)]
+pub(crate) async fn deploy_checked(
+    wasm_hash: &str,
+    account: &str,
+    constructor_args: &[String],
+) -> Result<String, Stop> {
+    match deploy_contract(wasm_hash, account, constructor_args).await {
+        Ok(id) => Ok(id),
+        Err(e) => {
+            let diag = diagnose_deploy(&e).await;
+            Err(verdict(&Subject::Deploy, &diag)
+                .unwrap_or_else(|| Stop::Fail(e.to_string())))
+        }
+    }
+}
+
+/// Fetches the target's Wasm hash like [`fetch_wasm_hash`], diagnosing a failure.
+#[allow(dead_code)]
+async fn wasm_hash_checked(target_vault: &str) -> Result<String, Stop> {
+    match fetch_wasm_hash(target_vault).await {
+        Ok(hash) => Ok(hash),
+        Err(e) => {
+            let diag = diagnose_info_hash(target_vault, &e).await;
+            Err(verdict(&Subject::WasmHash, &diag)
+                .unwrap_or_else(|| Stop::Fail(e.to_string())))
+        }
+    }
+}
+
+/// Reads the current ledger sequence like [`fetch_current_ledger_sequence`].
+/// That function only talks to Horizon, so a failed request is a network
+/// problem; a reply that could not be read is not classified.
+#[allow(dead_code)]
+async fn ledger_checked() -> Result<u32, Stop> {
+    match fetch_current_ledger_sequence().await {
+        Ok(sequence) => Ok(sequence),
+        Err(message) => {
+            let (reason, lead) = if message.starts_with("Horizon request failed") {
+                (
+                    "network_error",
+                    "the request for the current ledger sequence did not reach Horizon. Run \
+                     again later.",
+                )
+            } else {
+                (
+                    "unclassified_error",
+                    "the reply with the current ledger sequence could not be read, for a \
+                     reason the tool could not classify. No finding about the vault.",
+                )
+            };
+            Err(Stop::Inconclusive {
+                reason,
+                detail: format!("{lead} Raw error: {}", truncate_raw(&message)),
+            })
+        }
+    }
+}
+
 /// Checks that `total_assets()` can be called on the vault and returns a
 /// valid non-negative amount.
 ///
@@ -73,7 +321,7 @@ pub async fn check_total_assets(contract_id: &str, source_account: &str) -> Chec
 
     match read_total_assets(contract_id, source_account).await {
         Ok(amount) => CheckResult::pass(name, format!("total_assets = {amount}")),
-        Err(detail) => CheckResult::fail(name, detail),
+        Err(stop) => stop.finish(name, |m| m.to_string()),
     }
 }
 
@@ -93,7 +341,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets before deposit: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets before deposit: {detail}"))
         }
     };
 
@@ -108,7 +356,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not compute preview_deposit: {detail}"))
+            return detail.finish(name, |detail| format!("could not compute preview_deposit: {detail}"))
         }
     };
 
@@ -123,7 +371,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
         source_account.to_string(),
     ];
 
-    let shares_minted = match invoke_contract(contract_id, "deposit", &args, source_account).await
+    let shares_minted = match invoke_checked(contract_id, "deposit", &args, source_account, false).await
     {
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
@@ -132,7 +380,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("deposit invoke failed: {e}"))
+            return e.finish(name, |e| format!("deposit invoke failed: {e}"))
         }
     };
 
@@ -146,7 +394,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets after deposit: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets after deposit: {detail}"))
         }
     };
 
@@ -178,7 +426,7 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets before mint: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets before mint: {detail}"))
         }
     };
 
@@ -193,7 +441,7 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not compute preview_mint: {detail}"))
+            return detail.finish(name, |detail| format!("could not compute preview_mint: {detail}"))
         }
     };
 
@@ -208,7 +456,7 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
         source_account.to_string(),
     ];
 
-    let assets_pulled = match invoke_contract(contract_id, "mint", &args, source_account).await {
+    let assets_pulled = match invoke_checked(contract_id, "mint", &args, source_account, false).await {
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
@@ -216,7 +464,7 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("mint invoke failed: {e}"))
+            return e.finish(name, |e| format!("mint invoke failed: {e}"))
         }
     };
 
@@ -230,7 +478,7 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets after mint: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets after mint: {detail}"))
         }
     };
 
@@ -262,7 +510,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets before withdraw: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets before withdraw: {detail}"))
         }
     };
 
@@ -277,7 +525,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not compute preview_withdraw: {detail}"))
+            return detail.finish(name, |detail| format!("could not compute preview_withdraw: {detail}"))
         }
     };
 
@@ -292,7 +540,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
         source_account.to_string(),
     ];
 
-    let shares_burned = match invoke_contract(contract_id, "withdraw", &args, source_account).await
+    let shares_burned = match invoke_checked(contract_id, "withdraw", &args, source_account, false).await
     {
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
@@ -301,7 +549,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("withdraw invoke failed: {e}"))
+            return e.finish(name, |e| format!("withdraw invoke failed: {e}"))
         }
     };
 
@@ -315,7 +563,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets after withdraw: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets after withdraw: {detail}"))
         }
     };
 
@@ -347,7 +595,7 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets before redeem: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets before redeem: {detail}"))
         }
     };
 
@@ -362,7 +610,7 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not compute preview_redeem: {detail}"))
+            return detail.finish(name, |detail| format!("could not compute preview_redeem: {detail}"))
         }
     };
 
@@ -377,7 +625,7 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
         source_account.to_string(),
     ];
 
-    let assets_received = match invoke_contract(contract_id, "redeem", &args, source_account).await
+    let assets_received = match invoke_checked(contract_id, "redeem", &args, source_account, false).await
     {
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
@@ -386,7 +634,7 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("redeem invoke failed: {e}"))
+            return e.finish(name, |e| format!("redeem invoke failed: {e}"))
         }
     };
 
@@ -400,7 +648,7 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets after redeem: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets after redeem: {detail}"))
         }
     };
 
@@ -449,7 +697,7 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!(
+            return detail.finish(name, |detail| format!(
                     "could not read total_assets before convert_to_shares: {detail}"
                 ))
         }
@@ -457,13 +705,13 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
 
     let shares = match convert_to_shares(contract_id, source_account, CONVERT_ASSETS).await {
         Ok(amount) => amount,
-        Err(detail) => return CheckResult::fail(name, detail),
+        Err(detail) => return detail.finish(name, |m| m.to_string()),
     };
 
     let roundtrip_assets = match convert_to_assets(contract_id, source_account, shares).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("round-trip convert_to_assets call failed: {detail}"))
+            return detail.finish(name, |detail| format!("round-trip convert_to_assets call failed: {detail}"))
         }
     };
 
@@ -478,7 +726,7 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets after convert_to_shares: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets after convert_to_shares: {detail}"))
         }
     };
 
@@ -513,7 +761,7 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!(
+            return detail.finish(name, |detail| format!(
                     "could not read total_assets before convert_to_assets: {detail}"
                 ))
         }
@@ -521,13 +769,13 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
 
     let assets = match convert_to_assets(contract_id, source_account, CONVERT_SHARES).await {
         Ok(amount) => amount,
-        Err(detail) => return CheckResult::fail(name, detail),
+        Err(detail) => return detail.finish(name, |m| m.to_string()),
     };
 
     let roundtrip_shares = match convert_to_shares(contract_id, source_account, assets).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("round-trip convert_to_shares call failed: {detail}"))
+            return detail.finish(name, |detail| format!("round-trip convert_to_shares call failed: {detail}"))
         }
     };
 
@@ -542,7 +790,7 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!("could not read total_assets after convert_to_assets: {detail}"))
+            return detail.finish(name, |detail| format!("could not read total_assets after convert_to_assets: {detail}"))
         }
     };
 
@@ -566,13 +814,13 @@ async fn convert_to_shares(
     contract_id: &str,
     source_account: &str,
     assets: i128,
-) -> Result<i128, String> {
+) -> Result<i128, Stop> {
     let args = vec!["--assets".to_string(), assets.to_string()];
-    match invoke_contract(contract_id, "convert_to_shares", &args, source_account).await {
+    match invoke_checked(contract_id, "convert_to_shares", &args, source_account, false).await {
         Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
-            format!("convert_to_shares returned a non-numeric or negative value: {value}")
+            Stop::Fail(format!("convert_to_shares returned a non-numeric or negative value: {value}"))
         }),
-        Err(e) => Err(format!("convert_to_shares invoke failed: {e}")),
+        Err(e) => Err(e.wrap_fail(|e| format!("convert_to_shares invoke failed: {e}"))),
     }
 }
 
@@ -582,13 +830,13 @@ async fn convert_to_assets(
     contract_id: &str,
     source_account: &str,
     shares: i128,
-) -> Result<i128, String> {
+) -> Result<i128, Stop> {
     let args = vec!["--shares".to_string(), shares.to_string()];
-    match invoke_contract(contract_id, "convert_to_assets", &args, source_account).await {
+    match invoke_checked(contract_id, "convert_to_assets", &args, source_account, false).await {
         Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
-            format!("convert_to_assets returned a non-numeric or negative value: {value}")
+            Stop::Fail(format!("convert_to_assets returned a non-numeric or negative value: {value}"))
         }),
-        Err(e) => Err(format!("convert_to_assets invoke failed: {e}")),
+        Err(e) => Err(e.wrap_fail(|e| format!("convert_to_assets invoke failed: {e}"))),
     }
 }
 
@@ -648,7 +896,7 @@ pub async fn check_donation_attack(
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, attacker_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -662,10 +910,10 @@ pub async fn check_donation_attack(
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, attacker_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, attacker_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not deploy a fresh vault instance for the attack simulation: {e}"
                 ))
         }
@@ -681,11 +929,12 @@ pub async fn check_donation_attack(
         "--operator".to_string(),
         attacker_account.to_string(),
     ];
-    let attacker_shares = match invoke_contract(
+    let attacker_shares = match invoke_checked(
         &vault_id,
         "deposit",
         &attacker_deposit_args,
         attacker_account,
+        false,
     )
     .await
     {
@@ -698,7 +947,7 @@ pub async fn check_donation_attack(
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("attacker dust deposit failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("attacker dust deposit failed on {vault_id}: {e}"))
         }
     };
 
@@ -711,9 +960,9 @@ pub async fn check_donation_attack(
         DONATION_AMOUNT.to_string(),
     ];
     if let Err(e) =
-        invoke_contract(&underlying_asset, "transfer", &donation_args, attacker_account).await
+        invoke_checked(&underlying_asset, "transfer", &donation_args, attacker_account, false).await
     {
-        return CheckResult::fail(name, format!("attacker donation transfer to {vault_id} failed: {e}"));
+        return e.finish(name, |e| format!("attacker donation transfer to {vault_id} failed: {e}"));
     }
 
     let victim_deposit_args = vec![
@@ -727,7 +976,7 @@ pub async fn check_donation_attack(
         victim_account.to_string(),
     ];
     let victim_shares =
-        match invoke_contract(&vault_id, "deposit", &victim_deposit_args, victim_account).await {
+        match invoke_checked(&vault_id, "deposit", &victim_deposit_args, victim_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -737,7 +986,7 @@ pub async fn check_donation_attack(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("victim deposit failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("victim deposit failed on {vault_id}: {e}"))
             }
         };
 
@@ -858,7 +1107,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -872,10 +1121,10 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not deploy a fresh vault instance for the overflow test: {e}"
                 ))
         }
@@ -905,7 +1154,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
                 Ok(v) => format!("unexpectedly SUCCEEDED, returned {v}"),
                 Err(e) => format!("failed as expected ({e})"),
             };
-            return CheckResult::fail(name, format!(
+            return detail.finish(name, |detail| format!(
                     "deposit(assets=i128::MAX) {outcome}; additionally could not read \
                      total_assets afterwards to confirm clean state: {detail}"
                 ));
@@ -1003,7 +1252,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -1017,10 +1266,10 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!("could not deploy a fresh vault instance for the rounding test: {e}"))
+            return e.finish(name, |e| format!("could not deploy a fresh vault instance for the rounding test: {e}"))
         }
     };
 
@@ -1034,8 +1283,8 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         "--operator".to_string(),
         deployer_account.to_string(),
     ];
-    if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, deployer_account).await {
-        return CheckResult::fail(name, format!("seed deposit failed on {vault_id}: {e}"));
+    if let Err(e) = invoke_checked(&vault_id, "deposit", &seed_args, deployer_account, false).await {
+        return e.finish(name, |e| format!("seed deposit failed on {vault_id}: {e}"));
     }
 
     let donation_args = vec![
@@ -1047,17 +1296,18 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         DONATION.to_string(),
     ];
     if let Err(e) =
-        invoke_contract(&underlying_asset, "transfer", &donation_args, deployer_account).await
+        invoke_checked(&underlying_asset, "transfer", &donation_args, deployer_account, false).await
     {
-        return CheckResult::fail(name, format!("donation transfer to {vault_id} failed: {e}"));
+        return e.finish(name, |e| format!("donation transfer to {vault_id} failed: {e}"));
     }
 
     // --- Test A: deposit() must floor, matching preview_deposit() ---
-    let preview_deposit_shares = match invoke_contract(
+    let preview_deposit_shares = match invoke_checked(
         &vault_id,
         "preview_deposit",
         &["--assets".to_string(), DEPOSIT_TEST_ASSETS.to_string()],
         deployer_account,
+        false,
     )
     .await
     {
@@ -1070,7 +1320,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("preview_deposit failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("preview_deposit failed on {vault_id}: {e}"))
         }
     };
 
@@ -1085,7 +1335,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         deployer_account.to_string(),
     ];
     let actual_deposit_shares =
-        match invoke_contract(&vault_id, "deposit", &deposit_args, deployer_account).await {
+        match invoke_checked(&vault_id, "deposit", &deposit_args, deployer_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1095,7 +1345,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("deposit failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("deposit failed on {vault_id}: {e}"))
             }
         };
 
@@ -1108,11 +1358,12 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
 
     // --- Test B: mint() must ceil, matching preview_mint() and strictly
     //     exceeding the always-floor convert_to_assets() ---
-    let preview_mint_assets = match invoke_contract(
+    let preview_mint_assets = match invoke_checked(
         &vault_id,
         "preview_mint",
         &["--shares".to_string(), MINT_TEST_SHARES.to_string()],
         deployer_account,
+        false,
     )
     .await
     {
@@ -1125,15 +1376,16 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("preview_mint failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("preview_mint failed on {vault_id}: {e}"))
         }
     };
 
-    let idealized_assets = match invoke_contract(
+    let idealized_assets = match invoke_checked(
         &vault_id,
         "convert_to_assets",
         &["--shares".to_string(), MINT_TEST_SHARES.to_string()],
         deployer_account,
+        false,
     )
     .await
     {
@@ -1146,7 +1398,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             }
         },
         Err(e) => {
-            return CheckResult::fail(name, format!("convert_to_assets failed on {vault_id}: {e}"))
+            return e.finish(name, |e| format!("convert_to_assets failed on {vault_id}: {e}"))
         }
     };
 
@@ -1161,7 +1413,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         deployer_account.to_string(),
     ];
     let actual_mint_assets =
-        match invoke_contract(&vault_id, "mint", &mint_args, deployer_account).await {
+        match invoke_checked(&vault_id, "mint", &mint_args, deployer_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1169,7 +1421,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("mint failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("mint failed on {vault_id}: {e}"))
             }
         };
 
@@ -1243,7 +1495,7 @@ pub async fn check_access_control_probing(
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, owner_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult::fail(name, detail),
+            Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
 
     let constructor_args = vec![
@@ -1257,10 +1509,10 @@ pub async fn check_access_control_probing(
         decimals_offset.to_string(),
     ];
 
-    let vault_id = match deploy_contract(&wasm_hash, owner_account, &constructor_args).await {
+    let vault_id = match deploy_checked(&wasm_hash, owner_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not deploy a fresh vault instance for the access-control probe: {e}"
                 ))
         }
@@ -1276,8 +1528,8 @@ pub async fn check_access_control_probing(
         "--operator".to_string(),
         owner_account.to_string(),
     ];
-    if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, owner_account).await {
-        return CheckResult::fail(name, format!("owner seed deposit failed on {vault_id}: {e}"));
+    if let Err(e) = invoke_checked(&vault_id, "deposit", &seed_args, owner_account, false).await {
+        return e.finish(name, |e| format!("owner seed deposit failed on {vault_id}: {e}"));
     }
 
     // --- Step 1: unauthorized withdraw (0 allowance) must fail ---
@@ -1315,7 +1567,7 @@ pub async fn check_access_control_probing(
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult::fail(name, format!(
+            return detail.finish(name, |detail| format!(
                     "could not compute preview_withdraw on {vault_id} to size the allowance: \
                      {detail}"
                 ))
@@ -1324,10 +1576,10 @@ pub async fn check_access_control_probing(
     let approved_allowance = shares_needed_for_within.saturating_mul(2);
 
     // --- Step 2: owner approves operator for a limited allowance ---
-    let current_ledger = match fetch_current_ledger_sequence().await {
+    let current_ledger = match ledger_checked().await {
         Ok(seq) => seq,
         Err(e) => {
-            return CheckResult::fail(name, format!(
+            return e.finish(name, |e| format!(
                     "could not fetch current ledger sequence to compute a valid \
                      live_until_ledger for approve() on {vault_id}: {e}"
                 ))
@@ -1345,8 +1597,8 @@ pub async fn check_access_control_probing(
         "--live_until_ledger".to_string(),
         live_until_ledger.to_string(),
     ];
-    if let Err(e) = invoke_contract(&vault_id, "approve", &approve_args, owner_account).await {
-        return CheckResult::fail(name, format!("owner approve() failed on {vault_id}: {e}"));
+    if let Err(e) = invoke_checked(&vault_id, "approve", &approve_args, owner_account, false).await {
+        return e.finish(name, |e| format!("owner approve() failed on {vault_id}: {e}"));
     }
 
     // --- Step 3: withdraw within the allowance must succeed, decrementing
@@ -1362,7 +1614,7 @@ pub async fn check_access_control_probing(
         operator_account.to_string(),
     ];
     let shares_spent =
-        match invoke_contract(&vault_id, "withdraw", &within_args, operator_account).await {
+        match invoke_checked(&vault_id, "withdraw", &within_args, operator_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1373,7 +1625,7 @@ pub async fn check_access_control_probing(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!(
+                return e.finish(name, |e| format!(
                         "authorized withdraw within allowance unexpectedly failed on \
                          {vault_id}: {e}"
                     ))
@@ -1387,7 +1639,7 @@ pub async fn check_access_control_probing(
         operator_account.to_string(),
     ];
     let allowance_after_spend =
-        match invoke_contract(&vault_id, "allowance", &allowance_args, owner_account).await {
+        match invoke_checked(&vault_id, "allowance", &allowance_args, owner_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1397,7 +1649,7 @@ pub async fn check_access_control_probing(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("allowance query failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("allowance query failed on {vault_id}: {e}"))
             }
         };
 
@@ -1435,7 +1687,7 @@ pub async fn check_access_control_probing(
     }
 
     let allowance_final =
-        match invoke_contract(&vault_id, "allowance", &allowance_args, owner_account).await {
+        match invoke_checked(&vault_id, "allowance", &allowance_args, owner_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
@@ -1446,7 +1698,7 @@ pub async fn check_access_control_probing(
                 }
             },
             Err(e) => {
-                return CheckResult::fail(name, format!("final allowance query failed on {vault_id}: {e}"))
+                return e.finish(name, |e| format!("final allowance query failed on {vault_id}: {e}"))
             }
         };
 
@@ -1469,13 +1721,15 @@ pub async fn check_access_control_probing(
         ))
 }
 
-/// Calls `total_assets()` and parses it as a non-negative `i128`, collapsing
-/// both invoke and parse failures into a single human-readable error string.
-async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i128, String> {
-    match invoke_contract(contract_id, "total_assets", &[], source_account).await {
-        Ok(value) => parse_non_negative_i128(&value)
-            .ok_or_else(|| format!("total_assets returned a non-numeric or negative value: {value}")),
-        Err(e) => Err(format!("invoke_contract failed: {e}")),
+/// Calls `total_assets()` and parses it as a non-negative `i128`. A failed
+/// call becomes a [`Stop`] (see [`invoke_checked`]); a reply that is not a
+/// non-negative number is a `Stop::Fail`.
+async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i128, Stop> {
+    match invoke_checked(contract_id, "total_assets", &[], source_account, false).await {
+        Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
+            Stop::Fail(format!("total_assets returned a non-numeric or negative value: {value}"))
+        }),
+        Err(e) => Err(e.wrap_fail(|e| format!("invoke_contract failed: {e}"))),
     }
 }
 
@@ -1490,68 +1744,78 @@ async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i1
 /// holds because the vault's `decimals()` is defined as the underlying
 /// asset's decimals plus the offset.
 ///
-/// Returns a single combined error string on failure — e.g. if
-/// `target_vault` is a Stellar Asset Contract (which has no wasm hash) or
-/// otherwise not a valid Soroban vault contract — so callers can fail the
-/// check cleanly rather than panicking.
+/// Returns a [`Stop`] on failure, so callers end the check cleanly rather than
+/// panicking. Which status it carries depends on why: a missing `query_asset`
+/// or asset `decimals()`, an offset that cannot be derived, or a target with
+/// no Wasm of its own is `NotApplicable`; an unreachable network or an
+/// unclassified failure is `Inconclusive`; the other failures stay `Fail`.
 async fn resolve_target_vault(
     target_vault: &str,
     caller_account: &str,
-) -> Result<(String, String, u32), String> {
-    let wasm_hash = fetch_wasm_hash(target_vault)
-        .await
-        .map_err(|e| format!("could not fetch wasm hash from target vault {target_vault}: {e}"))?;
+) -> Result<(String, String, u32), Stop> {
+    let wasm_hash = wasm_hash_checked(target_vault).await?;
 
+    // `query_asset` is not part of SEP-56; a vault without it is a design this
+    // check does not cover, not a vault that failed.
     let underlying_asset =
-        match invoke_contract(target_vault, "query_asset", &[], caller_account).await {
+        match invoke_checked(target_vault, "query_asset", &[], caller_account, true).await {
             Ok(value) => match value.as_str() {
                 Some(s) => s.to_string(),
                 None => {
-                    return Err(format!(
+                    return Err(Stop::Fail(format!(
                         "query_asset on {target_vault} returned an unexpected value: {value}"
-                    ))
+                    )))
                 }
             },
             Err(e) => {
-                return Err(format!(
-                    "could not query underlying asset from target vault {target_vault}: {e}"
-                ))
+                return Err(e.wrap_fail(|e| {
+                    format!("could not query underlying asset from target vault {target_vault}: {e}")
+                }))
             }
         };
 
-    let vault_decimals = match invoke_contract(target_vault, "decimals", &[], caller_account).await
-    {
-        Ok(value) => parse_u32(&value).ok_or_else(|| {
-            format!("decimals() on {target_vault} returned an unexpected value: {value}")
-        })?,
-        Err(e) => {
-            return Err(format!(
-                "could not query decimals() from target vault {target_vault}: {e}"
-            ))
-        }
-    };
-
-    let asset_decimals =
-        match invoke_contract(&underlying_asset, "decimals", &[], caller_account).await {
+    let vault_decimals =
+        match invoke_checked(target_vault, "decimals", &[], caller_account, false).await {
             Ok(value) => parse_u32(&value).ok_or_else(|| {
-                format!(
-                    "decimals() on underlying asset {underlying_asset} returned an unexpected \
-                     value: {value}"
-                )
+                Stop::Fail(format!(
+                    "decimals() on {target_vault} returned an unexpected value: {value}"
+                ))
             })?,
             Err(e) => {
-                return Err(format!(
-                    "could not query decimals() from underlying asset {underlying_asset}: {e}"
+                return Err(e.wrap_fail(|e| {
+                    format!("could not query decimals() from target vault {target_vault}: {e}")
+                }))
+            }
+        };
+
+    // `decimals` on the underlying asset is a token function the tool calls, not
+    // part of SEP-56; an asset without it is treated like a missing `query_asset`.
+    let asset_decimals =
+        match invoke_checked(&underlying_asset, "decimals", &[], caller_account, true).await {
+            Ok(value) => parse_u32(&value).ok_or_else(|| {
+                Stop::Fail(format!(
+                    "decimals() on underlying asset {underlying_asset} returned an unexpected \
+                     value: {value}"
                 ))
+            })?,
+            Err(e) => {
+                return Err(e.wrap_fail(|e| {
+                    format!(
+                        "could not query decimals() from underlying asset {underlying_asset}: {e}"
+                    )
+                }))
             }
         };
 
     let decimals_offset = vault_decimals.checked_sub(asset_decimals).ok_or_else(|| {
-        format!(
-            "target vault {target_vault} decimals ({vault_decimals}) is less than its \
-             underlying asset's decimals ({asset_decimals}) — cannot derive a valid \
-             decimals_offset"
-        )
+        Stop::NotApplicable {
+            reason: "not_a_standard_vault",
+            detail: format!(
+                "the target vault's decimals() ({vault_decimals}) is smaller than its underlying \
+                 asset's decimals() ({asset_decimals}), so the decimals offset this check needs \
+                 cannot be derived. No finding about the vault."
+            ),
+        }
     })?;
 
     Ok((wasm_hash, underlying_asset, decimals_offset))
@@ -1567,13 +1831,13 @@ async fn call_preview(
     function_name: &str,
     arg_name: &str,
     amount: i128,
-) -> Result<i128, String> {
+) -> Result<i128, Stop> {
     let args = vec![format!("--{arg_name}"), amount.to_string()];
-    match invoke_contract(contract_id, function_name, &args, source_account).await {
+    match invoke_checked(contract_id, function_name, &args, source_account, false).await {
         Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
-            format!("{function_name} returned a non-numeric or negative value: {value}")
+            Stop::Fail(format!("{function_name} returned a non-numeric or negative value: {value}"))
         }),
-        Err(e) => Err(format!("{function_name} invoke failed: {e}")),
+        Err(e) => Err(e.wrap_fail(|e| format!("{function_name} invoke failed: {e}"))),
     }
 }
 
@@ -1598,5 +1862,175 @@ fn parse_u32(value: &Value) -> Option<u32> {
         Value::Number(n) => u32::try_from(n.as_u64()?).ok(),
         Value::String(s) => s.parse::<u32>().ok(),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Raw text from the real `stellar` 28.0.0 on testnet (see `rpc.rs`).
+    const BALANCE_TEXT: &str = r####"❌ error: transaction simulation failed: HostError: Error(Contract, #100)
+
+Event log (newest first):
+   0: [Diagnostic Event] contract:CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM, topics:[error, Error(Contract, #100)], data:"escalating error to VM trap from failed host function call: call"
+   1: [Diagnostic Event] contract:CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM, topics:[error, Error(Contract, #100)], data:["contract call failed", transfer, [GAAYTSOWQNT6ZHGMQGYVWIRKPF5VMZ4LGYDGYE4YFJ3NAWJU23NL3F3L, CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM, 1000]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBLFFTLYJB2YA3DEO4WR7LR33QAAUAVIH5DZQC7Y2GKZ2HW27F652CB7, topics:[log], data:["VM call trapped with HostError", transfer, Error(Contract, #100)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBLFFTLYJB2YA3DEO4WR7LR33QAAUAVIH5DZQC7Y2GKZ2HW27F652CB7, topics:[error, Error(Contract, #100)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBLFFTLYJB2YA3DEO4WR7LR33QAAUAVIH5DZQC7Y2GKZ2HW27F652CB7, topics:[error, Error(Contract, #100)], data:["failing with contract error", 100]
+   5: [Diagnostic Event] contract:CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM, topics:[fn_call, CBLFFTLYJB2YA3DEO4WR7LR33QAAUAVIH5DZQC7Y2GKZ2HW27F652CB7, transfer], data:[GAAYTSOWQNT6ZHGMQGYVWIRKPF5VMZ4LGYDGYE4YFJ3NAWJU23NL3F3L, CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM, 1000]
+   6: [Diagnostic Event] contract:CBLFFTLYJB2YA3DEO4WR7LR33QAAUAVIH5DZQC7Y2GKZ2HW27F652CB7, topics:[fn_return, balance], data:6004000
+   7: [Diagnostic Event] contract:CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM, topics:[fn_call, CBLFFTLYJB2YA3DEO4WR7LR33QAAUAVIH5DZQC7Y2GKZ2HW27F652CB7, balance], data:CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM
+   8: [Diagnostic Event] topics:[fn_call, CD6DPWCY6LLSNQIGYGTFLJPXT46SEZZQWUKTSVD5B5TX4H7ZWXK22WTM, deposit], data:[1000, GAAYTSOWQNT6ZHGMQGYVWIRKPF5VMZ4LGYDGYE4YFJ3NAWJU23NL3F3L, GAAYTSOWQNT6ZHGMQGYVWIRKPF5VMZ4LGYDGYE4YFJ3NAWJU23NL3F3L, GAAYTSOWQNT6ZHGMQGYVWIRKPF5VMZ4LGYDGYE4YFJ3NAWJU23NL3F3L]"####;
+    const CONSTRUCTOR_TEXT: &str = r####"ℹ️  Deploying contract using wasm hash 67e44a6286e46ab0b0438e3e32fba05fdd5a618412b53086cfa587beb273a0ac
+error: unexpected argument '--decimals_offset' found
+
+Usage: __constructor --name <String> --symbol <String> --asset <Address>
+
+For more information, try '--help'."####;
+    const MISSING_FUNCTION_TEXT: &str = r####"error: unrecognized subcommand 'query_asset'
+
+Usage: C:\Program Files (x86)\Stellar CLI\stellar.exe contract invoke --id CBLFFTLYJB2YA3DEO4WR7LR33QAAUAVIH5DZQC7Y2GKZ2HW27F652CB7 --source-account carol --network testnet -- [COMMAND]
+
+For more information, try '--help'."####;
+    const CONNECT_TEXT: &str = r####"❌ error: client error (Connect)"####;
+
+    fn diag(class: ErrorClass, raw: Option<&str>, retry: RetryNote) -> Diagnosis {
+        Diagnosis { class, raw: raw.map(str::to_string), retry }
+    }
+
+    fn call(function: &'static str, na_if_missing: bool) -> Subject<'static> {
+        Subject::Call { function, account: "alice", na_if_missing }
+    }
+
+    fn result_of(stop: Stop, wrap: &'static str) -> CheckResult {
+        stop.finish("deposit".to_string(), move |m| format!("{wrap}: {m}"))
+    }
+
+    // P1: a proven vault defect, and every failure the tool does not remap, stays a FAIL
+    // with its existing text.
+    #[test]
+    fn p1_a_fail_keeps_its_text_and_has_no_reason_code() {
+        let r = result_of(Stop::Fail("shares differ".to_string()), "deposit invoke failed");
+        assert_eq!(r.status, CheckStatus::Fail);
+        assert_eq!(r.reason_code, None);
+        assert_eq!(r.detail, "deposit invoke failed: shares differ");
+    }
+
+    // P2
+    #[test]
+    fn p2_insufficient_balance_is_inconclusive_with_the_raw_error() {
+        let d = diag(ErrorClass::InsufficientTokenBalance, Some(BALANCE_TEXT), RetryNote::RetriedFoundText);
+        let r = result_of(verdict(&call("deposit", false), &d).unwrap(), "unused");
+        assert_eq!(r.status, CheckStatus::Inconclusive);
+        assert_eq!(r.reason_code, Some("insufficient_token_balance"));
+        assert!(r.detail.contains("test account 'alice'"));
+        assert!(r.detail.contains("not a finding about the vault"));
+        assert!(r.detail.ends_with(BALANCE_TEXT.trim()) || r.detail.contains("Raw error: "));
+        assert!(r.detail.contains("Error(Contract, #100)"));
+        // no balance figure is claimed
+        assert!(!r.detail.contains("holds"));
+    }
+
+    // P3
+    #[test]
+    fn p3_a_constructor_mismatch_is_not_applicable() {
+        let d = diag(ErrorClass::ConstructorMismatch, Some(CONSTRUCTOR_TEXT), RetryNote::NotRetried);
+        let r = result_of(verdict(&Subject::Deploy, &d).unwrap(), "unused");
+        assert_eq!(r.status, CheckStatus::NotApplicable);
+        assert_eq!(r.reason_code, Some("constructor_mismatch"));
+        assert!(r.detail.contains("--name, --symbol, --asset, --decimals_offset"));
+        assert!(r.detail.contains("No finding about the vault"));
+        assert!(r.detail.contains("unexpected argument '--decimals_offset' found"));
+    }
+
+    #[test]
+    fn p3_other_deploy_failures_are_inconclusive() {
+        let net = diag(ErrorClass::Network, Some(CONNECT_TEXT), RetryNote::NotRetried);
+        let r = result_of(verdict(&Subject::Deploy, &net).unwrap(), "unused");
+        assert_eq!((r.status, r.reason_code), (CheckStatus::Inconclusive, Some("network_error")));
+
+        let silent = diag(ErrorClass::Unclassified, None, RetryNote::NotRetried);
+        let r = result_of(verdict(&Subject::Deploy, &silent).unwrap(), "unused");
+        assert_eq!((r.status, r.reason_code), (CheckStatus::Inconclusive, Some("unclassified_error")));
+        assert!(r.detail.contains("No error text was available."));
+    }
+
+    // P4
+    #[test]
+    fn p4_a_missing_non_sep56_function_is_not_applicable() {
+        let d = diag(ErrorClass::NotAStandardVault, Some(MISSING_FUNCTION_TEXT), RetryNote::NotRetried);
+        let r = result_of(verdict(&call("query_asset", true), &d).unwrap(), "unused");
+        assert_eq!(r.status, CheckStatus::NotApplicable);
+        assert_eq!(r.reason_code, Some("not_a_standard_vault"));
+        assert!(r.detail.contains("(query_asset)"));
+        assert!(r.detail.contains("unrecognized subcommand 'query_asset'"));
+    }
+
+    #[test]
+    fn p4_no_wasm_of_its_own_is_not_applicable_and_a_network_error_is_inconclusive() {
+        let d = diag(ErrorClass::NotAStandardVault, Some("error: cannot fetch wasm"), RetryNote::NotRetried);
+        let r = result_of(verdict(&Subject::WasmHash, &d).unwrap(), "unused");
+        assert_eq!((r.status, r.reason_code), (CheckStatus::NotApplicable, Some("not_a_standard_vault")));
+        let n = diag(ErrorClass::Network, Some(CONNECT_TEXT), RetryNote::RetriedFoundText);
+        let r = result_of(verdict(&Subject::WasmHash, &n).unwrap(), "unused");
+        assert_eq!((r.status, r.reason_code), (CheckStatus::Inconclusive, Some("network_error")));
+    }
+
+    // P5
+    #[test]
+    fn p5_a_network_error_anywhere_is_inconclusive() {
+        let d = diag(ErrorClass::Network, Some(CONNECT_TEXT), RetryNote::RetriedFoundText);
+        for function in ["deposit", "total_assets", "preview_mint", "allowance"] {
+            let r = result_of(verdict(&call(function, false), &d).unwrap(), "unused");
+            assert_eq!((r.status, r.reason_code), (CheckStatus::Inconclusive, Some("network_error")));
+            assert!(r.detail.contains(&format!("the call to {function}()")));
+            assert!(r.detail.contains("Run again later."));
+        }
+    }
+
+    // P6
+    #[test]
+    fn p6_an_unknown_error_is_inconclusive_and_says_what_the_repeat_showed() {
+        let cases = [
+            (None, RetryNote::RetriedSucceeded, "could not be reproduced"),
+            (None, RetryNote::RetriedNoText, "also when the call was repeated without --quiet"),
+            (Some("error: something new"), RetryNote::RetriedFoundText, "Raw error: error: something new"),
+        ];
+        for (raw, retry, expected) in cases {
+            let d = diag(ErrorClass::Unclassified, raw, retry);
+            let r = result_of(verdict(&call("mint", false), &d).unwrap(), "unused");
+            assert_eq!((r.status, r.reason_code), (CheckStatus::Inconclusive, Some("unclassified_error")));
+            assert!(r.detail.contains(expected), "{}", r.detail);
+        }
+    }
+
+    // P7: a missing SEP-56 function is left exactly as it is today (a FAIL).
+    #[test]
+    fn p7_a_missing_required_function_stays_a_fail() {
+        let d = diag(ErrorClass::NotAStandardVault, Some(MISSING_FUNCTION_TEXT), RetryNote::NotRetried);
+        for function in [
+            "total_assets", "deposit", "mint", "withdraw", "redeem", "convert_to_shares",
+            "convert_to_assets", "preview_deposit", "max_withdraw", "decimals",
+        ] {
+            assert!(verdict(&call(function, false), &d).is_none(), "{function}");
+        }
+    }
+
+    #[test]
+    fn a_new_status_carries_a_reason_code_and_a_fail_does_not() {
+        assert_eq!(CheckResult::fail("x".into(), "d".into()).reason_code, None);
+        assert_eq!(CheckResult::pass("x".into(), "d".into()).reason_code, None);
+        assert_eq!(CheckResult::inconclusive("x".into(), "network_error", "d".into()).reason_code, Some("network_error"));
+        assert_eq!(CheckResult::not_applicable("x".into(), "constructor_mismatch", "d".into()).reason_code, Some("constructor_mismatch"));
+    }
+
+    #[test]
+    fn raw_error_text_is_cut_at_the_limit() {
+        let long = "x".repeat(RAW_ERROR_LIMIT + 50);
+        let cut = truncate_raw(&long);
+        assert!(cut.ends_with(" [truncated]"));
+        assert_eq!(cut.chars().count(), RAW_ERROR_LIMIT + " [truncated]".chars().count());
+        assert_eq!(truncate_raw("short"), "short");
     }
 }

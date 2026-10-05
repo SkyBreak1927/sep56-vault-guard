@@ -6,7 +6,7 @@ mod status;
 use clap::Parser;
 use serde::Serialize;
 
-use checks::CheckResult;
+use checks::{CheckResult, CheckStatus};
 use status::{run_tracked, StatusReporter};
 
 const REFERENCE_VAULT_CONTRACT_ID: &str = "CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF";
@@ -65,6 +65,48 @@ struct JsonCheckResult<'a> {
     category: &'static str,
     status: &'static str,
     detail: &'a str,
+    /// Only written when there is a value, so a result without one serializes
+    /// exactly as before this field existed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason_code: Option<&'static str>,
+}
+
+/// How many results ended in each status.
+#[derive(Debug, PartialEq, Eq)]
+struct Tally {
+    total: usize,
+    passed: usize,
+    failed: usize,
+    inconclusive: usize,
+    not_applicable: usize,
+}
+
+fn tally(results: &[CheckResult]) -> Tally {
+    let count = |status: CheckStatus| results.iter().filter(|r| r.status == status).count();
+    Tally {
+        total: results.len(),
+        passed: count(CheckStatus::Pass),
+        failed: count(CheckStatus::Fail),
+        inconclusive: count(CheckStatus::Inconclusive),
+        not_applicable: count(CheckStatus::NotApplicable),
+    }
+}
+
+fn summary_line(tally: &Tally) -> String {
+    format!("Summary: {} checks, {} passed, {} failed", tally.total, tally.passed, tally.failed)
+}
+
+fn json_results(results: &[CheckResult]) -> Vec<JsonCheckResult<'_>> {
+    results
+        .iter()
+        .map(|r| JsonCheckResult {
+            name: &r.name,
+            category: category_for(&r.name),
+            status: r.status.as_report_str(),
+            detail: &r.detail,
+            reason_code: r.reason_code,
+        })
+        .collect()
 }
 
 /// Classifies a check by name into the two categories documented in
@@ -229,35 +271,116 @@ async fn main() {
         ])
         .collect();
 
-    let total = results.len();
-    let passed = results.iter().filter(|r| r.passed).count();
-    let failed = total - passed;
+    let tally = tally(&results);
 
     match cli.output {
         OutputFormat::Text => {
             for result in &results {
-                let status = if result.passed { "PASS" } else { "FAIL" };
-                println!("[{status}] {} - {}", result.name, result.detail);
+                println!(
+                    "[{}] {} - {}",
+                    result.status.as_report_str(),
+                    result.name,
+                    result.detail
+                );
             }
-            println!("Summary: {total} checks, {passed} passed, {failed} failed");
+            println!("{}", summary_line(&tally));
         }
         OutputFormat::Json => {
-            let json_results: Vec<JsonCheckResult> = results
-                .iter()
-                .map(|r| JsonCheckResult {
-                    name: &r.name,
-                    category: category_for(&r.name),
-                    status: if r.passed { "PASS" } else { "FAIL" },
-                    detail: &r.detail,
-                })
-                .collect();
-            let output =
-                serde_json::to_string_pretty(&json_results).expect("results are serializable");
+            let output = serde_json::to_string_pretty(&json_results(&results))
+                .expect("results are serializable");
             println!("{output}");
         }
     }
 
-    if failed > 0 {
+    // Exit codes are unchanged in this step: 1 whenever a check failed. The
+    // other two statuses do not affect it yet.
+    if tally.failed > 0 {
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn result(name: &str, status: CheckStatus, reason_code: Option<&'static str>) -> CheckResult {
+        CheckResult {
+            name: name.to_string(),
+            status,
+            reason_code,
+            detail: format!("detail for {name}"),
+        }
+    }
+
+    #[test]
+    fn report_strings_for_all_four_statuses() {
+        assert_eq!(CheckStatus::Pass.as_report_str(), "PASS");
+        assert_eq!(CheckStatus::Fail.as_report_str(), "FAIL");
+        assert_eq!(CheckStatus::Inconclusive.as_report_str(), "INCONCLUSIVE");
+        assert_eq!(CheckStatus::NotApplicable.as_report_str(), "NOT_APPLICABLE");
+    }
+
+    #[test]
+    fn json_omits_reason_code_when_there_is_none() {
+        let results = [result("deposit", CheckStatus::Pass, None)];
+        let json = serde_json::to_string(&json_results(&results)).unwrap();
+        assert_eq!(
+            json,
+            r#"[{"name":"deposit","category":"Positive Conformance","status":"PASS","detail":"detail for deposit"}]"#
+        );
+        assert!(!json.contains("reason_code"));
+    }
+
+    #[test]
+    fn json_writes_reason_code_when_there_is_one() {
+        let results = [result(
+            "donation_attack",
+            CheckStatus::Inconclusive,
+            Some("insufficient_token_balance"),
+        )];
+        let json = serde_json::to_string(&json_results(&results)).unwrap();
+        assert_eq!(
+            json,
+            r#"[{"name":"donation_attack","category":"Security/Adversarial","status":"INCONCLUSIVE","detail":"detail for donation_attack","reason_code":"insufficient_token_balance"}]"#
+        );
+    }
+
+    #[test]
+    fn tally_counts_a_mix_of_statuses() {
+        let results = [
+            result("total_assets", CheckStatus::Pass, None),
+            result("deposit", CheckStatus::Pass, None),
+            result("mint", CheckStatus::Fail, None),
+            result("withdraw", CheckStatus::Inconclusive, Some("x")),
+            result("redeem", CheckStatus::NotApplicable, Some("y")),
+            result("convert_to_shares", CheckStatus::Inconclusive, Some("x")),
+        ];
+        assert_eq!(
+            tally(&results),
+            Tally { total: 6, passed: 2, failed: 1, inconclusive: 2, not_applicable: 1 }
+        );
+    }
+
+    #[test]
+    fn failed_comes_from_fail_not_from_total_minus_passed() {
+        // Under the old `total - passed` rule this would report 3 failed.
+        let results = [
+            result("total_assets", CheckStatus::Pass, None),
+            result("deposit", CheckStatus::Inconclusive, Some("x")),
+            result("mint", CheckStatus::NotApplicable, Some("y")),
+            result("withdraw", CheckStatus::Fail, None),
+        ];
+        let t = tally(&results);
+        assert_eq!(t.failed, 1);
+        assert_eq!(summary_line(&t), "Summary: 4 checks, 1 passed, 1 failed");
+    }
+
+    #[test]
+    fn summary_line_for_passes_and_fails_only_keeps_its_shape() {
+        let results = [
+            result("total_assets", CheckStatus::Pass, None),
+            result("deposit", CheckStatus::Fail, None),
+        ];
+        assert_eq!(summary_line(&tally(&results)), "Summary: 2 checks, 1 passed, 1 failed");
     }
 }

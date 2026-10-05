@@ -15,19 +15,23 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
-use crate::checks::CheckResult;
+use crate::checks::{CheckResult, CheckStatus};
 
 #[derive(Clone, Serialize)]
 pub struct CheckStatusEntry {
     pub id: &'static str,
     pub group: &'static str,
-    /// "pending" | "running" | "pass" | "fail" | "warn". Only "pending",
-    /// "running", "pass", and "fail" are ever produced today — "warn" is
-    /// reserved in the schema for a future check that isn't a strict
-    /// pass/fail, but no existing check emits it, so introducing it here
-    /// doesn't change any check's actual result.
+    /// "pending" | "running" | "pass" | "fail" | "inconclusive" |
+    /// "not_applicable". The last two exist in the schema but no check
+    /// produces them yet. ("warn" was reserved here earlier and never
+    /// emitted; the web still understands it.)
     pub status: String,
     pub detail: Option<String>,
+    /// Machine-readable cause for "inconclusive" and "not_applicable". Left
+    /// out of the file entirely when there is none, so a snapshot of a run
+    /// with only pass and fail results is unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason_code: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -77,6 +81,7 @@ impl StatusReporter {
                 group,
                 status: "pending".to_string(),
                 detail: None,
+                reason_code: None,
             })
             .collect();
 
@@ -96,13 +101,20 @@ impl StatusReporter {
         self.flush_locked(&entries).await;
     }
 
-    /// Marks `id` as "pass" or "fail", taken directly from the check's own
-    /// `passed` flag and `detail` string — this never fabricates or
-    /// alters a result, only records the one the check already computed.
-    async fn mark_done(&self, id: &str, passed: bool, detail: &str) {
+    /// Records `id`'s final status, `reason_code` and `detail`, taken directly
+    /// from the check's own result — this never fabricates or alters a
+    /// result, only records the one the check already computed.
+    async fn mark_done(
+        &self,
+        id: &str,
+        status: CheckStatus,
+        reason_code: Option<&'static str>,
+        detail: &str,
+    ) {
         let mut entries = self.entries.lock().await;
         if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
-            entry.status = if passed { "pass" } else { "fail" }.to_string();
+            entry.status = status.as_status_file_str().to_string();
+            entry.reason_code = reason_code;
             entry.detail = Some(detail.to_string());
         }
         self.flush_locked(&entries).await;
@@ -136,7 +148,7 @@ impl StatusReporter {
 }
 
 /// Runs `fut`, marking `id` "running" just before it starts and "pass"/
-/// "fail" (with its detail) the moment it finishes — independent of
+/// its final status (with its detail) the moment it finishes — independent of
 /// whatever else is running concurrently, so this reports in real time
 /// even when several checks are joined together (see `main()`'s
 /// `tokio::join!` of the 4 security checks).
@@ -147,6 +159,88 @@ pub async fn run_tracked(
 ) -> CheckResult {
     reporter.mark_running(id).await;
     let result = fut.await;
-    reporter.mark_done(id, result.passed, &result.detail).await;
+    reporter.mark_done(id, result.status, result.reason_code, &result.detail).await;
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_file_strings_for_all_four_final_statuses() {
+        assert_eq!(CheckStatus::Pass.as_status_file_str(), "pass");
+        assert_eq!(CheckStatus::Fail.as_status_file_str(), "fail");
+        assert_eq!(CheckStatus::Inconclusive.as_status_file_str(), "inconclusive");
+        assert_eq!(CheckStatus::NotApplicable.as_status_file_str(), "not_applicable");
+    }
+
+    fn entry(reason_code: Option<&'static str>) -> CheckStatusEntry {
+        CheckStatusEntry {
+            id: "deposit",
+            group: "conformance",
+            status: "pass".to_string(),
+            detail: Some("ok".to_string()),
+            reason_code,
+        }
+    }
+
+    #[test]
+    fn entry_without_reason_code_keeps_the_old_shape() {
+        let json = serde_json::to_string(&entry(None)).unwrap();
+        assert_eq!(json, r#"{"id":"deposit","group":"conformance","status":"pass","detail":"ok"}"#);
+    }
+
+    #[test]
+    fn entry_with_reason_code_writes_it_last() {
+        let json = serde_json::to_string(&entry(Some("network_error"))).unwrap();
+        assert_eq!(
+            json,
+            r#"{"id":"deposit","group":"conformance","status":"pass","detail":"ok","reason_code":"network_error"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn snapshot_file_carries_every_status_and_only_present_reason_codes() {
+        let path = std::env::temp_dir()
+            .join(format!("aegis-status-test-{}.json", std::process::id()));
+        let reporter = StatusReporter::new(Some(path.clone()), "CVAULT").await;
+
+        reporter.mark_running("total_assets").await;
+        reporter.mark_done("deposit", CheckStatus::Pass, None, "d1").await;
+        reporter.mark_done("mint", CheckStatus::Fail, None, "d2").await;
+        reporter
+            .mark_done("withdraw", CheckStatus::Inconclusive, Some("insufficient_token_balance"), "d3")
+            .await;
+        reporter
+            .mark_done("redeem", CheckStatus::NotApplicable, Some("constructor_mismatch"), "d4")
+            .await;
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let status_of = |id: &str| {
+            let c = parsed["checks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|c| c["id"] == id)
+                .unwrap()
+                .clone();
+            (c["status"].as_str().unwrap().to_string(), c.get("reason_code").cloned())
+        };
+
+        assert_eq!(status_of("convert_to_shares"), ("pending".to_string(), None));
+        assert_eq!(status_of("total_assets"), ("running".to_string(), None));
+        assert_eq!(status_of("deposit"), ("pass".to_string(), None));
+        assert_eq!(status_of("mint"), ("fail".to_string(), None));
+        assert_eq!(
+            status_of("withdraw"),
+            ("inconclusive".to_string(), Some(serde_json::json!("insufficient_token_balance")))
+        );
+        assert_eq!(
+            status_of("redeem"),
+            ("not_applicable".to_string(), Some(serde_json::json!("constructor_mismatch")))
+        );
+    }
 }

@@ -2,11 +2,65 @@ use serde_json::Value;
 
 use crate::rpc::{deploy_contract, fetch_current_ledger_sequence, fetch_wasm_hash, invoke_contract};
 
+/// How a single check ended.
+///
+/// `Pass` and `Fail` are verdicts about the vault. `Inconclusive` means the
+/// check could not reach a verdict (a prerequisite was not met), and
+/// `NotApplicable` means the check does not fit this vault's design. No check
+/// produces the last two yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckStatus {
+    Pass,
+    Fail,
+    #[allow(dead_code)]
+    Inconclusive,
+    #[allow(dead_code)]
+    NotApplicable,
+}
+
+impl CheckStatus {
+    /// The string used in `--output json` and in the text output's prefix.
+    pub fn as_report_str(self) -> &'static str {
+        match self {
+            CheckStatus::Pass => "PASS",
+            CheckStatus::Fail => "FAIL",
+            CheckStatus::Inconclusive => "INCONCLUSIVE",
+            CheckStatus::NotApplicable => "NOT_APPLICABLE",
+        }
+    }
+
+    /// The string used in the `--status-file` snapshots.
+    pub fn as_status_file_str(self) -> &'static str {
+        match self {
+            CheckStatus::Pass => "pass",
+            CheckStatus::Fail => "fail",
+            CheckStatus::Inconclusive => "inconclusive",
+            CheckStatus::NotApplicable => "not_applicable",
+        }
+    }
+}
+
 /// Outcome of a single conformance check.
 pub struct CheckResult {
     pub name: String,
-    pub passed: bool,
+    pub status: CheckStatus,
+    /// Machine-readable cause for an `Inconclusive` or `NotApplicable` result.
+    /// `None` for `Pass` and `Fail`, and for every result produced today.
+    pub reason_code: Option<&'static str>,
     pub detail: String,
+}
+
+impl CheckResult {
+    /// A `Pass` result. The check bodies build every result through this and
+    /// [`CheckResult::fail`], so adding a field never means touching each one.
+    pub fn pass(name: String, detail: String) -> Self {
+        CheckResult { name, status: CheckStatus::Pass, reason_code: None, detail }
+    }
+
+    /// A `Fail` result.
+    pub fn fail(name: String, detail: String) -> Self {
+        CheckResult { name, status: CheckStatus::Fail, reason_code: None, detail }
+    }
 }
 
 /// Checks that `total_assets()` can be called on the vault and returns a
@@ -18,16 +72,8 @@ pub async fn check_total_assets(contract_id: &str, source_account: &str) -> Chec
     let name = "total_assets".to_string();
 
     match read_total_assets(contract_id, source_account).await {
-        Ok(amount) => CheckResult {
-            name,
-            passed: true,
-            detail: format!("total_assets = {amount}"),
-        },
-        Err(detail) => CheckResult {
-            name,
-            passed: false,
-            detail,
-        },
+        Ok(amount) => CheckResult::pass(name, format!("total_assets = {amount}")),
+        Err(detail) => CheckResult::fail(name, detail),
     }
 }
 
@@ -47,11 +93,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets before deposit: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets before deposit: {detail}"))
         }
     };
 
@@ -66,11 +108,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not compute preview_deposit: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not compute preview_deposit: {detail}"))
         }
     };
 
@@ -90,64 +128,40 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("deposit returned a non-numeric or negative value: {value}"),
-                }
+                return CheckResult::fail(name, format!("deposit returned a non-numeric or negative value: {value}"))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("deposit invoke failed: {e}"),
-            }
+            return CheckResult::fail(name, format!("deposit invoke failed: {e}"))
         }
     };
 
     if shares_minted != expected_shares {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "shares minted ({shares_minted}) does not match preview_deposit({DEPOSIT_AMOUNT}) \
                  = {expected_shares}"
-            ),
-        };
+            ));
     }
 
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets after deposit: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets after deposit: {detail}"))
         }
     };
 
     let expected_after = before + DEPOSIT_AMOUNT;
     if after != expected_after {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "total_assets after deposit ({after}) != before ({before}) + deposited \
                  ({DEPOSIT_AMOUNT}) = {expected_after}"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "deposited {DEPOSIT_AMOUNT} stroops, minted {shares_minted} shares matching \
              preview_deposit(), total_assets {before} -> {after}"
-        ),
-    }
+        ))
 }
 
 /// Mints a fixed amount of vault shares (receiver = from = operator =
@@ -164,11 +178,7 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets before mint: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets before mint: {detail}"))
         }
     };
 
@@ -183,11 +193,7 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not compute preview_mint: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not compute preview_mint: {detail}"))
         }
     };
 
@@ -206,64 +212,40 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("mint returned a non-numeric or negative value: {value}"),
-                }
+                return CheckResult::fail(name, format!("mint returned a non-numeric or negative value: {value}"))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("mint invoke failed: {e}"),
-            }
+            return CheckResult::fail(name, format!("mint invoke failed: {e}"))
         }
     };
 
     if assets_pulled != expected_assets {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "assets pulled ({assets_pulled}) does not match preview_mint({MINT_SHARES}) = \
                  {expected_assets}"
-            ),
-        };
+            ));
     }
 
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets after mint: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets after mint: {detail}"))
         }
     };
 
     let expected_after = before + assets_pulled;
     if after != expected_after {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "total_assets after mint ({after}) != before ({before}) + assets pulled \
                  ({assets_pulled}) = {expected_after}"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "minted {MINT_SHARES} shares, pulled {assets_pulled} assets matching \
              preview_mint(), total_assets {before} -> {after}"
-        ),
-    }
+        ))
 }
 
 /// Withdraws a fixed amount of underlying assets from the vault
@@ -280,11 +262,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets before withdraw: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets before withdraw: {detail}"))
         }
     };
 
@@ -299,11 +277,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not compute preview_withdraw: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not compute preview_withdraw: {detail}"))
         }
     };
 
@@ -323,64 +297,40 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("withdraw returned a non-numeric or negative value: {value}"),
-                }
+                return CheckResult::fail(name, format!("withdraw returned a non-numeric or negative value: {value}"))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("withdraw invoke failed: {e}"),
-            }
+            return CheckResult::fail(name, format!("withdraw invoke failed: {e}"))
         }
     };
 
     if shares_burned != expected_shares {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "shares burned ({shares_burned}) does not match preview_withdraw({WITHDRAW_AMOUNT}) \
                  = {expected_shares}"
-            ),
-        };
+            ));
     }
 
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets after withdraw: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets after withdraw: {detail}"))
         }
     };
 
     let expected_after = before - WITHDRAW_AMOUNT;
     if after != expected_after {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "total_assets after withdraw ({after}) != before ({before}) - withdrawn \
                  ({WITHDRAW_AMOUNT}) = {expected_after}"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "withdrew {WITHDRAW_AMOUNT} stroops, burned {shares_burned} shares matching \
              preview_withdraw(), total_assets {before} -> {after}"
-        ),
-    }
+        ))
 }
 
 /// Redeems a fixed amount of vault shares (receiver = owner = operator =
@@ -397,11 +347,7 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets before redeem: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets before redeem: {detail}"))
         }
     };
 
@@ -416,11 +362,7 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not compute preview_redeem: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not compute preview_redeem: {detail}"))
         }
     };
 
@@ -440,64 +382,40 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("redeem returned a non-numeric or negative value: {value}"),
-                }
+                return CheckResult::fail(name, format!("redeem returned a non-numeric or negative value: {value}"))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("redeem invoke failed: {e}"),
-            }
+            return CheckResult::fail(name, format!("redeem invoke failed: {e}"))
         }
     };
 
     if assets_received != expected_assets {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "assets received ({assets_received}) does not match preview_redeem({REDEEM_SHARES}) \
                  = {expected_assets}"
-            ),
-        };
+            ));
     }
 
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets after redeem: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets after redeem: {detail}"))
         }
     };
 
     let expected_after = before - assets_received;
     if after != expected_after {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "total_assets after redeem ({after}) != before ({before}) - assets received \
                  ({assets_received}) = {expected_after}"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "redeemed {REDEEM_SHARES} shares, received {assets_received} assets matching \
              preview_redeem(), total_assets {before} -> {after}"
-        ),
-    }
+        ))
 }
 
 /// Calls `convert_to_shares(assets = 4_000_000)` (a read-only conversion,
@@ -531,75 +449,51 @@ pub async fn check_convert_to_shares(contract_id: &str, source_account: &str) ->
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "could not read total_assets before convert_to_shares: {detail}"
-                ),
-            }
+                ))
         }
     };
 
     let shares = match convert_to_shares(contract_id, source_account, CONVERT_ASSETS).await {
         Ok(amount) => amount,
-        Err(detail) => return CheckResult { name, passed: false, detail },
+        Err(detail) => return CheckResult::fail(name, detail),
     };
 
     let roundtrip_assets = match convert_to_assets(contract_id, source_account, shares).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("round-trip convert_to_assets call failed: {detail}"),
-            }
+            return CheckResult::fail(name, format!("round-trip convert_to_assets call failed: {detail}"))
         }
     };
 
     if roundtrip_assets > CONVERT_ASSETS {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "round-trip violation: convert_to_assets(convert_to_shares({CONVERT_ASSETS})) \
                  = convert_to_assets({shares}) = {roundtrip_assets}, which EXCEEDS \
                  {CONVERT_ASSETS} — floor/floor round-tripping must never gain value"
-            ),
-        };
+            ));
     }
 
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets after convert_to_shares: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets after convert_to_shares: {detail}"))
         }
     };
 
     if after != before {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "convert_to_shares is not read-only: total_assets changed from {before} \
                  to {after}"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "convert_to_shares({CONVERT_ASSETS}) = {shares}, round-trip \
              convert_to_assets({shares}) = {roundtrip_assets} (<= {CONVERT_ASSETS}, \
              as required of floor/floor round-tripping), total_assets unchanged at {before}"
-        ),
-    }
+        ))
 }
 
 /// Calls `convert_to_assets(shares = 4_000_000)` (a read-only conversion)
@@ -619,75 +513,51 @@ pub async fn check_convert_to_assets(contract_id: &str, source_account: &str) ->
     let before = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "could not read total_assets before convert_to_assets: {detail}"
-                ),
-            }
+                ))
         }
     };
 
     let assets = match convert_to_assets(contract_id, source_account, CONVERT_SHARES).await {
         Ok(amount) => amount,
-        Err(detail) => return CheckResult { name, passed: false, detail },
+        Err(detail) => return CheckResult::fail(name, detail),
     };
 
     let roundtrip_shares = match convert_to_shares(contract_id, source_account, assets).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("round-trip convert_to_shares call failed: {detail}"),
-            }
+            return CheckResult::fail(name, format!("round-trip convert_to_shares call failed: {detail}"))
         }
     };
 
     if roundtrip_shares > CONVERT_SHARES {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "round-trip violation: convert_to_shares(convert_to_assets({CONVERT_SHARES})) \
                  = convert_to_shares({assets}) = {roundtrip_shares}, which EXCEEDS \
                  {CONVERT_SHARES} — floor/floor round-tripping must never gain value"
-            ),
-        };
+            ));
     }
 
     let after = match read_total_assets(contract_id, source_account).await {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not read total_assets after convert_to_assets: {detail}"),
-            }
+            return CheckResult::fail(name, format!("could not read total_assets after convert_to_assets: {detail}"))
         }
     };
 
     if after != before {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "convert_to_assets is not read-only: total_assets changed from {before} \
                  to {after}"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "convert_to_assets({CONVERT_SHARES}) = {assets}, round-trip \
              convert_to_shares({assets}) = {roundtrip_shares} (<= {CONVERT_SHARES}, \
              as required of floor/floor round-tripping), total_assets unchanged at {before}"
-        ),
-    }
+        ))
 }
 
 /// Calls `convert_to_shares(assets)` and parses the result as a
@@ -778,7 +648,7 @@ pub async fn check_donation_attack(
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, attacker_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult { name, passed: false, detail },
+            Err(detail) => return CheckResult::fail(name, detail),
         };
 
     let constructor_args = vec![
@@ -795,13 +665,9 @@ pub async fn check_donation_attack(
     let vault_id = match deploy_contract(&wasm_hash, attacker_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "could not deploy a fresh vault instance for the attack simulation: {e}"
-                ),
-            }
+                ))
         }
     };
 
@@ -826,21 +692,13 @@ pub async fn check_donation_attack(
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!(
+                return CheckResult::fail(name, format!(
                         "attacker dust deposit on {vault_id} returned an unexpected value: {value}"
-                    ),
-                }
+                    ))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("attacker dust deposit failed on {vault_id}: {e}"),
-            }
+            return CheckResult::fail(name, format!("attacker dust deposit failed on {vault_id}: {e}"))
         }
     };
 
@@ -855,11 +713,7 @@ pub async fn check_donation_attack(
     if let Err(e) =
         invoke_contract(&underlying_asset, "transfer", &donation_args, attacker_account).await
     {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!("attacker donation transfer to {vault_id} failed: {e}"),
-        };
+        return CheckResult::fail(name, format!("attacker donation transfer to {vault_id} failed: {e}"));
     }
 
     let victim_deposit_args = vec![
@@ -877,21 +731,13 @@ pub async fn check_donation_attack(
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
-                    return CheckResult {
-                        name,
-                        passed: false,
-                        detail: format!(
+                    return CheckResult::fail(name, format!(
                             "victim deposit on {vault_id} returned an unexpected value: {value}"
-                        ),
-                    }
+                        ))
                 }
             },
             Err(e) => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("victim deposit failed on {vault_id}: {e}"),
-                }
+                return CheckResult::fail(name, format!("victim deposit failed on {vault_id}: {e}"))
             }
         };
 
@@ -960,17 +806,9 @@ pub async fn check_donation_attack(
     );
 
     if victim_shares < min_acceptable_shares {
-        CheckResult {
-            name,
-            passed: false,
-            detail: format!("VULNERABLE to donation/inflation attack — {verdict_detail}"),
-        }
+        CheckResult::fail(name, format!("VULNERABLE to donation/inflation attack — {verdict_detail}"))
     } else {
-        CheckResult {
-            name,
-            passed: true,
-            detail: format!("resilient to donation/inflation attack — {verdict_detail}"),
-        }
+        CheckResult::pass(name, format!("resilient to donation/inflation attack — {verdict_detail}"))
     }
 }
 
@@ -1020,7 +858,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult { name, passed: false, detail },
+            Err(detail) => return CheckResult::fail(name, detail),
         };
 
     let constructor_args = vec![
@@ -1037,13 +875,9 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
     let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "could not deploy a fresh vault instance for the overflow test: {e}"
-                ),
-            }
+                ))
         }
     };
 
@@ -1071,37 +905,25 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
                 Ok(v) => format!("unexpectedly SUCCEEDED, returned {v}"),
                 Err(e) => format!("failed as expected ({e})"),
             };
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "deposit(assets=i128::MAX) {outcome}; additionally could not read \
                      total_assets afterwards to confirm clean state: {detail}"
-                ),
-            };
+                ));
         }
     };
 
     match deposit_result {
-        Ok(shares) => CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        Ok(shares) => CheckResult::fail(name, format!(
                 "VULNERABLE: deposit(assets=i128::MAX) unexpectedly SUCCEEDED and minted \
                  {shares} shares on fresh vault {vault_id} (total_assets afterwards: \
                  {total_assets_after}) — an extreme input should be rejected cleanly, not \
                  accepted with a possibly-wrong result"
-            ),
-        },
-        Err(e) if total_assets_after != 0 => CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+            )),
+        Err(e) if total_assets_after != 0 => CheckResult::fail(name, format!(
                 "VULNERABLE: deposit(assets=i128::MAX) failed as expected ({e}), but \
                  total_assets on {vault_id} is {total_assets_after} instead of 0 — the failed \
                  transaction left behind corrupted/partial state"
-            ),
-        },
+            )),
         Err(e) => {
             let layer_detail = if decimals_offset >= 1 {
                 format!(
@@ -1137,14 +959,10 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
                 }
             };
 
-            CheckResult {
-                name,
-                passed: true,
-                detail: format!(
+            CheckResult::pass(name, format!(
                     "deposit(assets=i128::MAX) on fresh vault {vault_id} failed cleanly ({e}), \
                      and total_assets remained 0 — no silent-wrong-result observed. {layer_detail}."
-                ),
-            }
+                ))
         }
     }
 }
@@ -1185,7 +1003,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, deployer_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult { name, passed: false, detail },
+            Err(detail) => return CheckResult::fail(name, detail),
         };
 
     let constructor_args = vec![
@@ -1202,11 +1020,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
     let vault_id = match deploy_contract(&wasm_hash, deployer_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("could not deploy a fresh vault instance for the rounding test: {e}"),
-            }
+            return CheckResult::fail(name, format!("could not deploy a fresh vault instance for the rounding test: {e}"))
         }
     };
 
@@ -1221,11 +1035,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         deployer_account.to_string(),
     ];
     if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, deployer_account).await {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!("seed deposit failed on {vault_id}: {e}"),
-        };
+        return CheckResult::fail(name, format!("seed deposit failed on {vault_id}: {e}"));
     }
 
     let donation_args = vec![
@@ -1239,11 +1049,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
     if let Err(e) =
         invoke_contract(&underlying_asset, "transfer", &donation_args, deployer_account).await
     {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!("donation transfer to {vault_id} failed: {e}"),
-        };
+        return CheckResult::fail(name, format!("donation transfer to {vault_id} failed: {e}"));
     }
 
     // --- Test A: deposit() must floor, matching preview_deposit() ---
@@ -1258,21 +1064,13 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!(
+                return CheckResult::fail(name, format!(
                         "preview_deposit on {vault_id} returned an unexpected value: {value}"
-                    ),
-                }
+                    ))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("preview_deposit failed on {vault_id}: {e}"),
-            }
+            return CheckResult::fail(name, format!("preview_deposit failed on {vault_id}: {e}"))
         }
     };
 
@@ -1291,33 +1089,21 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
-                    return CheckResult {
-                        name,
-                        passed: false,
-                        detail: format!(
+                    return CheckResult::fail(name, format!(
                             "deposit on {vault_id} returned an unexpected value: {value}"
-                        ),
-                    }
+                        ))
                 }
             },
             Err(e) => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("deposit failed on {vault_id}: {e}"),
-                }
+                return CheckResult::fail(name, format!("deposit failed on {vault_id}: {e}"))
             }
         };
 
     if actual_deposit_shares != preview_deposit_shares {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "Test A failed: actual deposit() shares ({actual_deposit_shares}) does not \
                  match preview_deposit() ({preview_deposit_shares}) on {vault_id}"
-            ),
-        };
+            ));
     }
 
     // --- Test B: mint() must ceil, matching preview_mint() and strictly
@@ -1333,21 +1119,13 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!(
+                return CheckResult::fail(name, format!(
                         "preview_mint on {vault_id} returned an unexpected value: {value}"
-                    ),
-                }
+                    ))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("preview_mint failed on {vault_id}: {e}"),
-            }
+            return CheckResult::fail(name, format!("preview_mint failed on {vault_id}: {e}"))
         }
     };
 
@@ -1362,21 +1140,13 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
         Ok(value) => match parse_non_negative_i128(&value) {
             Some(amount) => amount,
             None => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!(
+                return CheckResult::fail(name, format!(
                         "convert_to_assets on {vault_id} returned an unexpected value: {value}"
-                    ),
-                }
+                    ))
             }
         },
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!("convert_to_assets failed on {vault_id}: {e}"),
-            }
+            return CheckResult::fail(name, format!("convert_to_assets failed on {vault_id}: {e}"))
         }
     };
 
@@ -1395,50 +1165,31 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
-                    return CheckResult {
-                        name,
-                        passed: false,
-                        detail: format!("mint on {vault_id} returned an unexpected value: {value}"),
-                    }
+                    return CheckResult::fail(name, format!("mint on {vault_id} returned an unexpected value: {value}"))
                 }
             },
             Err(e) => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("mint failed on {vault_id}: {e}"),
-                }
+                return CheckResult::fail(name, format!("mint failed on {vault_id}: {e}"))
             }
         };
 
     if actual_mint_assets != preview_mint_assets {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "Test B failed: actual mint() assets pulled ({actual_mint_assets}) does not \
                  match preview_mint() ({preview_mint_assets}) on {vault_id}"
-            ),
-        };
+            ));
     }
 
     if actual_mint_assets <= idealized_assets {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "Test B failed: mint() assets pulled ({actual_mint_assets}) is not strictly \
                  greater than the idealized convert_to_assets() ({idealized_assets}) on \
                  {vault_id} at a fractional ratio — mint() should round UP (ceil), charging the \
                  user strictly more, distinct from the always-floor idealized rate"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "fresh vault {vault_id} at fractional ratio (seed {SEED_DEPOSIT} + donation \
              {DONATION}): Test A — deposit({DEPOSIT_TEST_ASSETS}) minted \
              {actual_deposit_shares} shares matching preview_deposit() (floor, favors vault); \
@@ -1446,8 +1197,7 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
              matching preview_mint() (ceil) and strictly greater than the idealized \
              convert_to_assets() ({idealized_assets}) — rounding direction confirmed to always \
              favor the vault over the user"
-        ),
-    }
+        ))
 }
 
 /// Probes the vault's access-control (allowance) enforcement on
@@ -1493,7 +1243,7 @@ pub async fn check_access_control_probing(
     let (wasm_hash, underlying_asset, decimals_offset) =
         match resolve_target_vault(target_vault, owner_account).await {
             Ok(triple) => triple,
-            Err(detail) => return CheckResult { name, passed: false, detail },
+            Err(detail) => return CheckResult::fail(name, detail),
         };
 
     let constructor_args = vec![
@@ -1510,13 +1260,9 @@ pub async fn check_access_control_probing(
     let vault_id = match deploy_contract(&wasm_hash, owner_account, &constructor_args).await {
         Ok(id) => id,
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "could not deploy a fresh vault instance for the access-control probe: {e}"
-                ),
-            }
+                ))
         }
     };
 
@@ -1531,11 +1277,7 @@ pub async fn check_access_control_probing(
         owner_account.to_string(),
     ];
     if let Err(e) = invoke_contract(&vault_id, "deposit", &seed_args, owner_account).await {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!("owner seed deposit failed on {vault_id}: {e}"),
-        };
+        return CheckResult::fail(name, format!("owner seed deposit failed on {vault_id}: {e}"));
     }
 
     // --- Step 1: unauthorized withdraw (0 allowance) must fail ---
@@ -1552,14 +1294,10 @@ pub async fn check_access_control_probing(
     if let Ok(shares) =
         invoke_contract(&vault_id, "withdraw", &unauthorized_args, operator_account).await
     {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "VULNERABLE: operator withdrew {shares} shares from owner on {vault_id} \
                  WITHOUT any prior approve() — access control was not enforced"
-            ),
-        };
+            ));
     }
 
     // Determine how many shares WITHDRAW_WITHIN_ALLOWANCE actually requires
@@ -1577,14 +1315,10 @@ pub async fn check_access_control_probing(
     {
         Ok(amount) => amount,
         Err(detail) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "could not compute preview_withdraw on {vault_id} to size the allowance: \
                      {detail}"
-                ),
-            }
+                ))
         }
     };
     let approved_allowance = shares_needed_for_within.saturating_mul(2);
@@ -1593,14 +1327,10 @@ pub async fn check_access_control_probing(
     let current_ledger = match fetch_current_ledger_sequence().await {
         Ok(seq) => seq,
         Err(e) => {
-            return CheckResult {
-                name,
-                passed: false,
-                detail: format!(
+            return CheckResult::fail(name, format!(
                     "could not fetch current ledger sequence to compute a valid \
                      live_until_ledger for approve() on {vault_id}: {e}"
-                ),
-            }
+                ))
         }
     };
     let live_until_ledger = current_ledger + LIVE_UNTIL_LEDGER_HORIZON;
@@ -1616,11 +1346,7 @@ pub async fn check_access_control_probing(
         live_until_ledger.to_string(),
     ];
     if let Err(e) = invoke_contract(&vault_id, "approve", &approve_args, owner_account).await {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!("owner approve() failed on {vault_id}: {e}"),
-        };
+        return CheckResult::fail(name, format!("owner approve() failed on {vault_id}: {e}"));
     }
 
     // --- Step 3: withdraw within the allowance must succeed, decrementing
@@ -1640,25 +1366,17 @@ pub async fn check_access_control_probing(
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
-                    return CheckResult {
-                        name,
-                        passed: false,
-                        detail: format!(
+                    return CheckResult::fail(name, format!(
                             "authorized withdraw on {vault_id} returned an unexpected value: \
                              {value}"
-                        ),
-                    }
+                        ))
                 }
             },
             Err(e) => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!(
+                return CheckResult::fail(name, format!(
                         "authorized withdraw within allowance unexpectedly failed on \
                          {vault_id}: {e}"
-                    ),
-                }
+                    ))
             }
         };
 
@@ -1673,36 +1391,24 @@ pub async fn check_access_control_probing(
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
-                    return CheckResult {
-                        name,
-                        passed: false,
-                        detail: format!(
+                    return CheckResult::fail(name, format!(
                             "allowance query on {vault_id} returned an unexpected value: {value}"
-                        ),
-                    }
+                        ))
                 }
             },
             Err(e) => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("allowance query failed on {vault_id}: {e}"),
-                }
+                return CheckResult::fail(name, format!("allowance query failed on {vault_id}: {e}"))
             }
         };
 
     let expected_remaining = approved_allowance - shares_spent;
     if allowance_after_spend != expected_remaining {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "VULNERABLE: after operator spent {shares_spent} shares of a \
                  {approved_allowance}-share allowance on {vault_id}, remaining allowance is \
                  {allowance_after_spend}, expected {expected_remaining} — allowance was not \
                  decremented correctly (reset to 0, left unchanged, or otherwise wrong)"
-            ),
-        };
+            ));
     }
 
     // --- Step 4: withdraw exceeding the remaining allowance must fail,
@@ -1721,15 +1427,11 @@ pub async fn check_access_control_probing(
     if let Ok(shares) =
         invoke_contract(&vault_id, "withdraw", &exceeding_args, operator_account).await
     {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "VULNERABLE: operator withdrew {shares} shares on {vault_id} exceeding the \
                  remaining allowance of {allowance_after_spend} — allowance limit was not \
                  enforced"
-            ),
-        };
+            ));
     }
 
     let allowance_final =
@@ -1737,41 +1439,26 @@ pub async fn check_access_control_probing(
             Ok(value) => match parse_non_negative_i128(&value) {
                 Some(amount) => amount,
                 None => {
-                    return CheckResult {
-                        name,
-                        passed: false,
-                        detail: format!(
+                    return CheckResult::fail(name, format!(
                             "final allowance query on {vault_id} returned an unexpected value: \
                              {value}"
-                        ),
-                    }
+                        ))
                 }
             },
             Err(e) => {
-                return CheckResult {
-                    name,
-                    passed: false,
-                    detail: format!("final allowance query failed on {vault_id}: {e}"),
-                }
+                return CheckResult::fail(name, format!("final allowance query failed on {vault_id}: {e}"))
             }
         };
 
     if allowance_final != allowance_after_spend {
-        return CheckResult {
-            name,
-            passed: false,
-            detail: format!(
+        return CheckResult::fail(name, format!(
                 "VULNERABLE: allowance on {vault_id} changed from {allowance_after_spend} to \
                  {allowance_final} after a REJECTED over-allowance withdraw attempt — a failed \
                  transaction must not partially spend allowance"
-            ),
-        };
+            ));
     }
 
-    CheckResult {
-        name,
-        passed: true,
-        detail: format!(
+    CheckResult::pass(name, format!(
             "fresh vault {vault_id} (decimals_offset={decimals_offset}): unauthorized withdraw \
              (no approval) correctly rejected; after owner approved operator for \
              {approved_allowance} shares, operator withdrew {shares_spent} shares (allowance \
@@ -1779,8 +1466,7 @@ pub async fn check_access_control_probing(
              over-allowance withdraw attempt of {withdraw_exceeding_assets} assets (requiring \
              more shares than the remaining {allowance_after_spend}-share allowance) correctly \
              rejected with allowance left untouched at {allowance_final}"
-        ),
-    }
+        ))
 }
 
 /// Calls `total_assets()` and parses it as a non-negative `i128`, collapsing

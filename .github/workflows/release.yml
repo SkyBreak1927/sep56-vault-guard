@@ -68,7 +68,10 @@ jobs:
   linux:
     name: Linux x86_64
     needs: windows
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: a binary links against the glibc of the image
+    # that built it and will not run on an older one. 22.04 ships glibc 2.35,
+    # so the result runs on any distribution at least that new.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -79,6 +82,21 @@ jobs:
 
       - name: Build
         run: cargo build --release -p sep56-vault-guard
+
+      # Fail the job if the binary needs a newer glibc than 2.35, and print
+      # the highest version it does need.
+      - name: Check glibc requirement
+        run: |
+          max=2.35
+          highest=$(objdump -T target/release/sep56-vault-guard |
+            grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/^GLIBC_//' |
+            sort -uV | tail -n 1)
+          echo "Highest GLIBC symbol version required: ${highest:-none}"
+          top=$(printf '%s\n' "$max" "${highest:-0}" | sort -V | tail -n 1)
+          if [ "$top" != "$max" ]; then
+            echo "::error::binary requires GLIBC_$highest, newer than GLIBC_$max"
+            exit 1
+          fi
 
       - name: Package
         run: |

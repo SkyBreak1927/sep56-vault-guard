@@ -252,24 +252,28 @@ const GROUP_LABEL = { conformance: "Core function checks", security: "Basic secu
 
 // Headline for the report: what the run as a whole amounts to. A warn is kept
 // on the "Remediation needed" side, as it was before the two new statuses.
-function summaryTitle(counts) {
+function summaryTitle(counts, total) {
   if (counts.fail > 0 || counts.warn > 0) return "Remediation needed";
   if (counts.inconclusive > 0) return "Some checks could not finish";
+  if (total - counts.not_applicable === 0) return "No applicable checks";
   if (counts.not_applicable > 0) return "All applicable checks passed";
   return "All checks passed";
 }
 
 // Per-group "X of N passed", where N is the number of checks the data puts in
-// that group. There is deliberately no single overall percentage.
+// that group that are not "not applicable" (inconclusive ones still count).
+// There is deliberately no single overall percentage.
 function groupProgress(group) {
+  const counts = countStatuses(defsInGroup(group));
   const defs = defsInGroup(group);
-  return { passed: countStatuses(defs).pass, total: defs.length };
+  return { passed: counts.pass, total: defs.length - counts.not_applicable };
 }
 
 function summaryLines(summary) {
-  const lines = ["conformance", "security"].map(
-    (group) => `${GROUP_LABEL[group]}: ${summary.groups[group].passed} of ${summary.groups[group].total} passed`
-  );
+  const lines = ["conformance", "security"].map((group) => {
+    const { passed, total } = summary.groups[group];
+    return total === 0 ? `${GROUP_LABEL[group]}: not applicable` : `${GROUP_LABEL[group]}: ${passed} of ${total} passed`;
+  });
   if (summary.inconclusive > 0) lines.push(`Inconclusive: ${summary.inconclusive}`);
   if (summary.not_applicable > 0) lines.push(`Not applicable: ${summary.not_applicable}`);
   return lines;
@@ -292,7 +296,7 @@ function reportData() {
       inconclusive: counts.inconclusive,
       not_applicable: counts.not_applicable,
       groups: { conformance: groupProgress("conformance"), security: groupProgress("security") },
-      title: summaryTitle(counts),
+      title: summaryTitle(counts, checkState.size),
     },
     checks: CHECK_DEFS.map((def, i) => {
       const state = checkState.get(def.id);
@@ -332,9 +336,9 @@ function reportRowsHtml(group, offset) {
 }
 
 function groupCountText(group) {
-  const defs = defsInGroup(group);
-  const counts = countStatuses(defs);
-  const parts = [`${counts.pass} of ${defs.length} passed`];
+  const counts = countStatuses(defsInGroup(group));
+  const { passed, total } = groupProgress(group);
+  const parts = total === 0 ? [] : [`${passed} of ${total} passed`];
   if (counts.inconclusive > 0) parts.push(`${counts.inconclusive} inconclusive`);
   if (counts.not_applicable > 0) parts.push(`${counts.not_applicable} not applicable`);
   return parts.join(" · ");
@@ -360,7 +364,7 @@ function renderReport() {
   ].join("");
   const scoreEl = document.getElementById("report-score");
   scoreEl.innerHTML = summaryLines(s).map((line) => `<div class="report-score-line">${escapeHtml(line)}</div>`).join("");
-  const allClear = s.title === "All checks passed" || s.title === "All applicable checks passed";
+  const allClear = ["All checks passed", "All applicable checks passed"].includes(s.title);
   scoreEl.className = `report-stat-value ${allClear ? "score-pass" : "score-attention"}`;
   document.getElementById("report-score-label").textContent = s.title;
 

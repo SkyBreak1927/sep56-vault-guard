@@ -94,6 +94,59 @@ pub(crate) async fn run_stellar(args: &[String]) -> Result<String, RpcError> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// The full argument list for `stellar contract invoke`.
+///
+/// `quiet` adds `--quiet` and `simulate_only` adds `--send=no`, which makes the
+/// CLI simulate the call and never sign or submit a transaction. The normal
+/// call ([`invoke_contract`]) is `quiet = true, simulate_only = false`; the
+/// other combinations exist only for [`diagnose_invoke`].
+fn invoke_args(
+    contract_id: &str,
+    function_name: &str,
+    args: &[String],
+    source_account: &str,
+    quiet: bool,
+    simulate_only: bool,
+) -> Vec<String> {
+    let mut full_args: Vec<String> = vec![
+        "contract".to_string(),
+        "invoke".to_string(),
+        "--id".to_string(),
+        contract_id.to_string(),
+        "--source-account".to_string(),
+        source_account.to_string(),
+        "--network".to_string(),
+        "testnet".to_string(),
+    ];
+    if quiet {
+        full_args.push("--quiet".to_string());
+    }
+    if simulate_only {
+        full_args.push("--send=no".to_string());
+    }
+    full_args.push("--".to_string());
+    full_args.push(function_name.to_string());
+    full_args.extend(args.iter().cloned());
+    full_args
+}
+
+/// The full argument list for `stellar contract info hash`.
+fn info_hash_args(contract_id: &str, quiet: bool) -> Vec<String> {
+    let mut args = vec![
+        "contract".to_string(),
+        "info".to_string(),
+        "hash".to_string(),
+        "--contract-id".to_string(),
+        contract_id.to_string(),
+        "--network".to_string(),
+        "testnet".to_string(),
+    ];
+    if quiet {
+        args.push("--quiet".to_string());
+    }
+    args
+}
+
 /// Invokes a function on a deployed Soroban contract by wrapping
 /// `stellar contract invoke` as a subprocess (rather than talking to
 /// RPC/XDR directly), and parses its stdout as JSON.
@@ -107,20 +160,7 @@ pub async fn invoke_contract(
     args: &[String],
     source_account: &str,
 ) -> Result<Value, RpcError> {
-    let mut full_args: Vec<String> = vec![
-        "contract".to_string(),
-        "invoke".to_string(),
-        "--id".to_string(),
-        contract_id.to_string(),
-        "--source-account".to_string(),
-        source_account.to_string(),
-        "--network".to_string(),
-        "testnet".to_string(),
-        "--quiet".to_string(),
-        "--".to_string(),
-        function_name.to_string(),
-    ];
-    full_args.extend(args.iter().cloned());
+    let full_args = invoke_args(contract_id, function_name, args, source_account, true, false);
 
     let stdout = run_stellar(&full_args).await?;
 
@@ -173,18 +213,7 @@ pub async fn deploy_contract(
 /// of its own — a useful signal that `contract_id` isn't actually a
 /// Soroban vault contract if this errors unexpectedly.
 pub async fn fetch_wasm_hash(contract_id: &str) -> Result<String, RpcError> {
-    let args = vec![
-        "contract".to_string(),
-        "info".to_string(),
-        "hash".to_string(),
-        "--contract-id".to_string(),
-        contract_id.to_string(),
-        "--network".to_string(),
-        "testnet".to_string(),
-        "--quiet".to_string(),
-    ];
-
-    run_stellar(&args).await
+    run_stellar(&info_hash_args(contract_id, true)).await
 }
 
 /// Fetches the current ledger sequence from Horizon testnet.
@@ -373,6 +402,124 @@ fn resulting_balance_is_negative(text: &str) -> bool {
     let list = rest.split(']').next().unwrap_or("");
     let numbers: Vec<i128> = list.split(',').filter_map(|n| n.trim().parse().ok()).collect();
     numbers.len() == 3 && numbers[1] < 0
+}
+
+/// What is known about a failed `stellar` command after [`diagnose_invoke`],
+/// [`diagnose_info_hash`] or [`diagnose_deploy`].
+#[derive(Debug, PartialEq, Eq)]
+pub struct Diagnosis {
+    pub class: ErrorClass,
+    /// The error text the class was read from, when there was any.
+    pub raw: Option<String>,
+    pub retry: RetryNote,
+}
+
+/// Whether the command was run a second time to find out why it failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RetryNote {
+    /// The first failure already carried text, or the command is never repeated.
+    NotRetried,
+    /// Repeated without `--quiet`, and the repeat printed the cause.
+    RetriedFoundText,
+    /// Repeated without `--quiet`; the CLI still printed nothing about the cause.
+    RetriedNoText,
+    /// Repeated without `--quiet` and the repeat succeeded, so the failure
+    /// could not be reproduced and the cause is unknown.
+    RetriedSucceeded,
+}
+
+/// Whether a failure printed anything about its cause.
+enum FirstLook<'a> {
+    /// Text is there: classify it.
+    Text(&'a str),
+    /// The command failed and printed nothing (what `--quiet` does to
+    /// simulation and connection failures): worth one repeat.
+    Silent,
+    /// No text and nothing to repeat (the process did not start, or its output
+    /// was not JSON).
+    Nothing,
+}
+
+fn first_look(err: &RpcError) -> FirstLook<'_> {
+    match err {
+        RpcError::CommandFailed { stderr, .. } if stderr.trim().is_empty() => FirstLook::Silent,
+        RpcError::CommandFailed { stderr, .. } => FirstLook::Text(stderr),
+        RpcError::UnexpectedStderr(text) if !text.trim().is_empty() => FirstLook::Text(text),
+        RpcError::UnexpectedStderr(_) | RpcError::Spawn(_) | RpcError::InvalidJson { .. } => {
+            FirstLook::Nothing
+        }
+    }
+}
+
+/// Works out why `err` happened, repeating the command at most once.
+///
+/// Text already in `err` is classified as it is. Only when the command failed
+/// and printed nothing is `repeat` awaited, once, and its failure text
+/// classified. A repeat that succeeds, or that again prints nothing, gives
+/// `Unclassified`: it is never read as success. A `Deploy` is never repeated
+/// (`repeat` is not even called), so no second contract can be created.
+async fn diagnose_with<F, Fut>(kind: CommandKind, err: &RpcError, repeat: F) -> Diagnosis
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<String, RpcError>>,
+{
+    let unknown = |retry| Diagnosis { class: ErrorClass::Unclassified, raw: None, retry };
+    match first_look(err) {
+        FirstLook::Text(text) => Diagnosis {
+            class: classify_error_text(kind, text),
+            raw: Some(text.trim().to_string()),
+            retry: RetryNote::NotRetried,
+        },
+        FirstLook::Nothing => unknown(RetryNote::NotRetried),
+        FirstLook::Silent if kind == CommandKind::Deploy => unknown(RetryNote::NotRetried),
+        FirstLook::Silent => match repeat().await {
+            Err(RpcError::CommandFailed { stderr, .. }) if !stderr.trim().is_empty() => Diagnosis {
+                class: classify_error_text(kind, &stderr),
+                raw: Some(stderr.trim().to_string()),
+                retry: RetryNote::RetriedFoundText,
+            },
+            Err(_) => unknown(RetryNote::RetriedNoText),
+            Ok(_) => unknown(RetryNote::RetriedSucceeded),
+        },
+    }
+}
+
+/// [`diagnose_with`] for a failed `stellar contract invoke`. The repeat runs
+/// the same call without `--quiet` and with `--send=no`, so it only simulates
+/// and can never submit a transaction.
+#[allow(dead_code)]
+pub async fn diagnose_invoke(
+    contract_id: &str,
+    function_name: &str,
+    args: &[String],
+    source_account: &str,
+    err: &RpcError,
+) -> Diagnosis {
+    diagnose_with(CommandKind::Invoke, err, || {
+        run_stellar_owned(invoke_args(contract_id, function_name, args, source_account, false, true))
+    })
+    .await
+}
+
+/// [`diagnose_with`] for a failed `stellar contract info hash`; the repeat
+/// runs it without `--quiet`.
+#[allow(dead_code)]
+pub async fn diagnose_info_hash(contract_id: &str, err: &RpcError) -> Diagnosis {
+    diagnose_with(CommandKind::Info, err, || run_stellar_owned(info_hash_args(contract_id, false))).await
+}
+
+/// Classifies a failed `stellar contract deploy` from the text it already has.
+/// Nothing is run: a deploy is never repeated, and empty text is
+/// `Unclassified`.
+#[allow(dead_code)]
+pub async fn diagnose_deploy(err: &RpcError) -> Diagnosis {
+    // The closure is never called for a deploy; it only has to type-check.
+    diagnose_with(CommandKind::Deploy, err, || async { Err(RpcError::UnexpectedStderr(String::new())) })
+        .await
+}
+
+async fn run_stellar_owned(args: Vec<String>) -> Result<String, RpcError> {
+    run_stellar(&args).await
 }
 
 #[cfg(test)]
@@ -581,5 +728,139 @@ Event log (newest first):
         assert_eq!(ErrorClass::NotAStandardVault.reason_code(), "not_a_standard_vault");
         assert_eq!(ErrorClass::Network.reason_code(), "network_error");
         assert_eq!(ErrorClass::Unclassified.reason_code(), "unclassified_error");
+    }
+
+    // ---- argument lists ---------------------------------------------------
+
+    #[test]
+    fn the_normal_invoke_arguments_are_exactly_what_they_were() {
+        let args = vec!["--assets".to_string(), "5".to_string()];
+        assert_eq!(
+            invoke_args("CID", "deposit", &args, "alice", true, false),
+            vec![
+                "contract", "invoke", "--id", "CID", "--source-account", "alice", "--network",
+                "testnet", "--quiet", "--", "deposit", "--assets", "5",
+            ]
+        );
+        assert_eq!(
+            info_hash_args("CID", true),
+            vec![
+                "contract", "info", "hash", "--contract-id", "CID", "--network", "testnet",
+                "--quiet",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_diagnostic_invoke_drops_quiet_and_only_simulates() {
+        let args = vec!["--assets".to_string(), "5".to_string()];
+        let full = invoke_args("CID", "deposit", &args, "alice", false, true);
+        assert!(!full.contains(&"--quiet".to_string()));
+        let send = full.iter().position(|a| a == "--send=no").expect("--send=no is present");
+        let separator = full.iter().position(|a| a == "--").unwrap();
+        assert!(send < separator, "--send=no must come before the `--` separator");
+        assert_eq!(info_hash_args("CID", false).last().unwrap(), "testnet");
+    }
+
+    // ---- diagnosis ----------------------------------------------------------
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn silent_failure() -> RpcError {
+        RpcError::CommandFailed { exit_code: Some(1), stderr: String::new() }
+    }
+
+    #[tokio::test]
+    async fn text_that_is_already_there_is_classified_without_a_repeat() {
+        let repeats = AtomicUsize::new(0);
+        let err = RpcError::CommandFailed { exit_code: Some(2), stderr: D_NO_SUCH_FUNCTION.to_string() };
+        let diag = diagnose_with(CommandKind::Invoke, &err, || {
+            repeats.fetch_add(1, Ordering::SeqCst);
+            async { Ok(String::new()) }
+        })
+        .await;
+        assert_eq!(diag.class, ErrorClass::NotAStandardVault);
+        assert_eq!(diag.retry, RetryNote::NotRetried);
+        assert_eq!(repeats.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_silent_failure_is_repeated_once_and_the_new_text_classified() {
+        let repeats = AtomicUsize::new(0);
+        let diag = diagnose_with(CommandKind::Invoke, &silent_failure(), || {
+            repeats.fetch_add(1, Ordering::SeqCst);
+            async {
+                Err(RpcError::CommandFailed {
+                    exit_code: Some(1),
+                    stderr: A_TOKEN_BALANCE_ZERO.to_string(),
+                })
+            }
+        })
+        .await;
+        assert_eq!(diag.class, ErrorClass::InsufficientTokenBalance);
+        assert_eq!(diag.retry, RetryNote::RetriedFoundText);
+        assert_eq!(diag.raw.as_deref(), Some(A_TOKEN_BALANCE_ZERO));
+        assert_eq!(repeats.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_repeat_that_succeeds_is_unclassified_not_success() {
+        let diag = diagnose_with(CommandKind::Invoke, &silent_failure(), || async {
+            Ok("\"42\"".to_string())
+        })
+        .await;
+        assert_eq!(diag.class, ErrorClass::Unclassified);
+        assert_eq!(diag.retry, RetryNote::RetriedSucceeded);
+        assert_eq!(diag.raw, None);
+    }
+
+    #[tokio::test]
+    async fn a_repeat_that_prints_nothing_is_unclassified() {
+        let diag = diagnose_with(CommandKind::Info, &silent_failure(), || async {
+            Err(RpcError::CommandFailed { exit_code: Some(1), stderr: String::new() })
+        })
+        .await;
+        assert_eq!(diag.class, ErrorClass::Unclassified);
+        assert_eq!(diag.retry, RetryNote::RetriedNoText);
+    }
+
+    #[tokio::test]
+    async fn a_deploy_is_never_repeated() {
+        let repeats = AtomicUsize::new(0);
+        // Empty text: Unclassified, and the repeat is not awaited.
+        let diag = diagnose_with(CommandKind::Deploy, &silent_failure(), || {
+            repeats.fetch_add(1, Ordering::SeqCst);
+            async { Ok(String::new()) }
+        })
+        .await;
+        assert_eq!(diag.class, ErrorClass::Unclassified);
+        assert_eq!(diag.retry, RetryNote::NotRetried);
+        // Text present: classified from it.
+        let err = RpcError::CommandFailed {
+            exit_code: Some(2),
+            stderr: C_UNKNOWN_CONSTRUCTOR_ARG.to_string(),
+        };
+        let diag = diagnose_with(CommandKind::Deploy, &err, || {
+            repeats.fetch_add(1, Ordering::SeqCst);
+            async { Ok(String::new()) }
+        })
+        .await;
+        assert_eq!(diag.class, ErrorClass::ConstructorMismatch);
+        assert_eq!(repeats.load(Ordering::SeqCst), 0);
+        // The public entry point takes no way to run anything at all.
+        assert_eq!(diagnose_deploy(&silent_failure()).await.class, ErrorClass::Unclassified);
+    }
+
+    #[tokio::test]
+    async fn a_process_that_did_not_start_is_not_repeated() {
+        let repeats = AtomicUsize::new(0);
+        let err = RpcError::Spawn(std::io::Error::other("no such file"));
+        let diag = diagnose_with(CommandKind::Invoke, &err, || {
+            repeats.fetch_add(1, Ordering::SeqCst);
+            async { Ok(String::new()) }
+        })
+        .await;
+        assert_eq!(diag.class, ErrorClass::Unclassified);
+        assert_eq!(repeats.load(Ordering::SeqCst), 0);
     }
 }

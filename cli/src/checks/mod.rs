@@ -1,6 +1,10 @@
 use serde_json::Value;
 
-use crate::rpc::{deploy_contract, fetch_current_ledger_sequence, fetch_wasm_hash, invoke_contract};
+use crate::rpc::{
+    deploy_contract, diagnose_deploy, diagnose_info_hash, diagnose_invoke,
+    fetch_current_ledger_sequence, fetch_wasm_hash, invoke_contract, Diagnosis, ErrorClass,
+    RetryNote,
+};
 
 /// How a single check ended.
 ///
@@ -60,6 +64,250 @@ impl CheckResult {
     /// A `Fail` result.
     pub fn fail(name: String, detail: String) -> Self {
         CheckResult { name, status: CheckStatus::Fail, reason_code: None, detail }
+    }
+}
+
+impl CheckResult {
+    /// An `Inconclusive` result: the check could not reach a verdict about the
+    /// vault. `reason_code` says why, in a form a program can read.
+    #[allow(dead_code)]
+    pub fn inconclusive(name: String, reason_code: &'static str, detail: String) -> Self {
+        CheckResult { name, status: CheckStatus::Inconclusive, reason_code: Some(reason_code), detail }
+    }
+
+    /// A `NotApplicable` result: the check does not fit this vault's design.
+    #[allow(dead_code)]
+    pub fn not_applicable(name: String, reason_code: &'static str, detail: String) -> Self {
+        CheckResult { name, status: CheckStatus::NotApplicable, reason_code: Some(reason_code), detail }
+    }
+}
+
+/// Why a step of a check stopped it. `Fail` keeps the check's existing FAIL
+/// text; the other two carry the new status, its reason code and its detail.
+#[allow(dead_code)]
+pub(crate) enum Stop {
+    Fail(String),
+    Inconclusive { reason: &'static str, detail: String },
+    NotApplicable { reason: &'static str, detail: String },
+}
+
+impl std::fmt::Display for Stop {
+    /// The message of a `Fail`, or the detail of the other two.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stop::Fail(text) => f.write_str(text),
+            Stop::Inconclusive { detail, .. } | Stop::NotApplicable { detail, .. } => f.write_str(detail),
+        }
+    }
+}
+
+impl Stop {
+    /// Turns this into the check's result. `wrap` builds the existing FAIL text
+    /// around the message of a `Fail`, and is not used for the other two.
+    #[allow(dead_code)]
+    pub(crate) fn finish(self, name: String, wrap: impl FnOnce(&str) -> String) -> CheckResult {
+        match self {
+            Stop::Fail(message) => CheckResult::fail(name, wrap(&message)),
+            Stop::Inconclusive { reason, detail } => CheckResult::inconclusive(name, reason, detail),
+            Stop::NotApplicable { reason, detail } => CheckResult::not_applicable(name, reason, detail),
+        }
+    }
+
+    /// Rewrites the message of a `Fail`; the other two pass through unchanged.
+    #[allow(dead_code)]
+    fn wrap_fail(self, wrap: impl FnOnce(&str) -> String) -> Stop {
+        match self {
+            Stop::Fail(message) => Stop::Fail(wrap(&message)),
+            other => other,
+        }
+    }
+}
+
+/// What a failed command was doing, for [`verdict`].
+#[allow(dead_code)]
+enum Subject<'a> {
+    /// A `stellar contract invoke` of `function`, started as test account
+    /// `account`. `na_if_missing` is true only for a function that is not part
+    /// of SEP-56 and that the tool calls anyway (`query_asset` on the vault,
+    /// `decimals` on the underlying asset); a missing SEP-56 function stays a
+    /// FAIL, as before.
+    Call { function: &'a str, account: &'a str, na_if_missing: bool },
+    /// Deploying the comparison copy of the vault.
+    Deploy,
+    /// Reading the target's Wasm hash.
+    WasmHash,
+}
+
+/// Longest stretch of raw error text copied into a detail.
+#[allow(dead_code)]
+const RAW_ERROR_LIMIT: usize = 1500;
+
+#[allow(dead_code)]
+fn truncate_raw(raw: &str) -> String {
+    match raw.char_indices().nth(RAW_ERROR_LIMIT) {
+        Some((end, _)) => format!("{} [truncated]", &raw[..end]),
+        None => raw.to_string(),
+    }
+}
+
+/// Maps a diagnosis to a status, or `None` to leave the result a FAIL.
+#[allow(dead_code)]
+fn verdict(subject: &Subject<'_>, diag: &Diagnosis) -> Option<Stop> {
+    let phrase = match subject {
+        Subject::Call { function, .. } => format!("the call to {function}()"),
+        Subject::Deploy => "the deploy of the comparison copy".to_string(),
+        Subject::WasmHash => "the lookup of the target's Wasm hash".to_string(),
+    };
+
+    let (reason, lead, not_applicable) = match (diag.class, subject) {
+        (ErrorClass::InsufficientTokenBalance, Subject::Call { account, .. }) => (
+            "insufficient_token_balance",
+            format!(
+                "the token transfer needed for this check was rejected, which appears to be \
+                 insufficient balance on the account paying for it (this check started the \
+                 call as test account '{account}'). Fund that account with the vault's \
+                 underlying asset and run again. This is a precondition problem, not a \
+                 finding about the vault."
+            ),
+            false,
+        ),
+        (ErrorClass::ConstructorMismatch, Subject::Deploy) => (
+            "constructor_mismatch",
+            "this check deploys a comparison copy of the vault with the constructor arguments \
+             --name, --symbol, --asset, --decimals_offset; the target vault's constructor does \
+             not accept them, so the copy could not be deployed. No finding about the vault."
+                .to_string(),
+            true,
+        ),
+        (ErrorClass::NotAStandardVault, Subject::Call { function, na_if_missing: true, .. }) => (
+            "not_a_standard_vault",
+            format!(
+                "the target does not expose the interface this check needs ({function}). No \
+                 finding about the vault."
+            ),
+            true,
+        ),
+        (ErrorClass::NotAStandardVault, Subject::Call { .. }) => return None,
+        (ErrorClass::NotAStandardVault, Subject::WasmHash) => (
+            "not_a_standard_vault",
+            "the target does not expose the interface this check needs (a contract with Wasm \
+             code of its own, which a comparison copy is deployed from). No finding about the \
+             vault."
+                .to_string(),
+            true,
+        ),
+        (ErrorClass::Network, _) => (
+            "network_error",
+            format!("{phrase} did not reach the RPC or network. Run again later."),
+            false,
+        ),
+        _ => (
+            "unclassified_error",
+            format!(
+                "{phrase} failed for a reason the tool could not classify. No finding about the \
+                 vault."
+            ),
+            false,
+        ),
+    };
+
+    let tail = match (&diag.raw, diag.retry) {
+        (Some(raw), _) => format!(" Raw error: {}", truncate_raw(raw)),
+        (None, RetryNote::RetriedSucceeded) => " The call succeeded when repeated as a simulation, \
+            so the first failure could not be reproduced and its cause is unknown."
+            .to_string(),
+        (None, RetryNote::RetriedNoText) => " The CLI printed no error text, also when the call \
+            was repeated without --quiet."
+            .to_string(),
+        (None, _) => " No error text was available.".to_string(),
+    };
+    let detail = format!("{lead}{tail}");
+
+    Some(if not_applicable {
+        Stop::NotApplicable { reason, detail }
+    } else {
+        Stop::Inconclusive { reason, detail }
+    })
+}
+
+/// Calls a contract function like [`invoke_contract`]. A failure is diagnosed
+/// (see [`diagnose_invoke`]) and becomes a [`Stop`]; the success path is
+/// exactly `invoke_contract`, with no extra call.
+#[allow(dead_code)]
+pub(crate) async fn invoke_checked(
+    contract_id: &str,
+    function_name: &str,
+    args: &[String],
+    account: &str,
+    na_if_missing: bool,
+) -> Result<Value, Stop> {
+    match invoke_contract(contract_id, function_name, args, account).await {
+        Ok(value) => Ok(value),
+        Err(e) => {
+            let diag = diagnose_invoke(contract_id, function_name, args, account, &e).await;
+            let subject = Subject::Call { function: function_name, account, na_if_missing };
+            Err(verdict(&subject, &diag).unwrap_or_else(|| Stop::Fail(e.to_string())))
+        }
+    }
+}
+
+/// Deploys like [`deploy_contract`]. A failure is classified from the text it
+/// already has and is never repeated; it never stays a FAIL.
+#[allow(dead_code)]
+pub(crate) async fn deploy_checked(
+    wasm_hash: &str,
+    account: &str,
+    constructor_args: &[String],
+) -> Result<String, Stop> {
+    match deploy_contract(wasm_hash, account, constructor_args).await {
+        Ok(id) => Ok(id),
+        Err(e) => {
+            let diag = diagnose_deploy(&e).await;
+            Err(verdict(&Subject::Deploy, &diag)
+                .unwrap_or_else(|| Stop::Fail(e.to_string())))
+        }
+    }
+}
+
+/// Fetches the target's Wasm hash like [`fetch_wasm_hash`], diagnosing a failure.
+#[allow(dead_code)]
+async fn wasm_hash_checked(target_vault: &str) -> Result<String, Stop> {
+    match fetch_wasm_hash(target_vault).await {
+        Ok(hash) => Ok(hash),
+        Err(e) => {
+            let diag = diagnose_info_hash(target_vault, &e).await;
+            Err(verdict(&Subject::WasmHash, &diag)
+                .unwrap_or_else(|| Stop::Fail(e.to_string())))
+        }
+    }
+}
+
+/// Reads the current ledger sequence like [`fetch_current_ledger_sequence`].
+/// That function only talks to Horizon, so a failed request is a network
+/// problem; a reply that could not be read is not classified.
+#[allow(dead_code)]
+async fn ledger_checked() -> Result<u32, Stop> {
+    match fetch_current_ledger_sequence().await {
+        Ok(sequence) => Ok(sequence),
+        Err(message) => {
+            let (reason, lead) = if message.starts_with("Horizon request failed") {
+                (
+                    "network_error",
+                    "the request for the current ledger sequence did not reach Horizon. Run \
+                     again later.",
+                )
+            } else {
+                (
+                    "unclassified_error",
+                    "the reply with the current ledger sequence could not be read, for a \
+                     reason the tool could not classify. No finding about the vault.",
+                )
+            };
+            Err(Stop::Inconclusive {
+                reason,
+                detail: format!("{lead} Raw error: {}", truncate_raw(&message)),
+            })
+        }
     }
 }
 

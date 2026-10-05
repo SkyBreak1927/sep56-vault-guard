@@ -25,6 +25,12 @@ const DONATION_ATTACKER_ACCOUNT: &str = "grace";
 /// meaning "the checks ran and at least one of them failed", so a caller can
 /// tell "could not run" apart from "ran and found something".
 const EXIT_PREFLIGHT_FAILED: i32 = 2;
+/// Exit code when at least one check failed. A failure always wins over any
+/// other status.
+const EXIT_CHECKS_FAILED: i32 = 1;
+/// Exit code when no check failed but at least one was inconclusive, so the
+/// vault was not fully checked.
+const EXIT_INCONCLUSIVE: i32 = 3;
 const OVERFLOW_DEPLOYER_ACCOUNT: &str = "carol";
 const ROUNDING_DEPLOYER_ACCOUNT: &str = "dave";
 const ACCESS_OWNER_ACCOUNT: &str = "erin";
@@ -92,8 +98,37 @@ fn tally(results: &[CheckResult]) -> Tally {
     }
 }
 
+/// The summary line. The original part, `Summary: N checks, X passed, Y
+/// failed`, never changes; `, K inconclusive` and `, L not applicable` follow
+/// it only when they are above zero, so a run with only passes and failures
+/// prints exactly what it always has.
 fn summary_line(tally: &Tally) -> String {
-    format!("Summary: {} checks, {} passed, {} failed", tally.total, tally.passed, tally.failed)
+    let mut line = format!(
+        "Summary: {} checks, {} passed, {} failed",
+        tally.total, tally.passed, tally.failed
+    );
+    if tally.inconclusive > 0 {
+        line.push_str(&format!(", {} inconclusive", tally.inconclusive));
+    }
+    if tally.not_applicable > 0 {
+        line.push_str(&format!(", {} not applicable", tally.not_applicable));
+    }
+    line
+}
+
+/// The process exit code for a finished run: 1 if any check failed, otherwise 3
+/// if any was inconclusive, otherwise 0. "Not applicable" does not count
+/// either way, so a run in which no check applied also exits 0; a caller that
+/// reads only the exit code cannot tell that from a clean pass and has to read
+/// the summary line or the JSON.
+fn exit_code(tally: &Tally) -> i32 {
+    if tally.failed > 0 {
+        EXIT_CHECKS_FAILED
+    } else if tally.inconclusive > 0 {
+        EXIT_INCONCLUSIVE
+    } else {
+        0
+    }
 }
 
 fn json_results(results: &[CheckResult]) -> Vec<JsonCheckResult<'_>> {
@@ -292,10 +327,9 @@ async fn main() {
         }
     }
 
-    // Exit codes are unchanged in this step: 1 whenever a check failed. The
-    // other two statuses do not affect it yet.
-    if tally.failed > 0 {
-        std::process::exit(1);
+    let code = exit_code(&tally);
+    if code != 0 {
+        std::process::exit(code);
     }
 }
 
@@ -372,7 +406,10 @@ mod tests {
         ];
         let t = tally(&results);
         assert_eq!(t.failed, 1);
-        assert_eq!(summary_line(&t), "Summary: 4 checks, 1 passed, 1 failed");
+        assert_eq!(
+            summary_line(&t),
+            "Summary: 4 checks, 1 passed, 1 failed, 1 inconclusive, 1 not applicable"
+        );
     }
 
     #[test]
@@ -382,5 +419,84 @@ mod tests {
             result("deposit", CheckStatus::Fail, None),
         ];
         assert_eq!(summary_line(&tally(&results)), "Summary: 2 checks, 1 passed, 1 failed");
+    }
+
+    fn tally_of(statuses: &[CheckStatus]) -> Tally {
+        let results: Vec<CheckResult> = statuses
+            .iter()
+            .enumerate()
+            .map(|(i, status)| result(&format!("check_{i}"), *status, None))
+            .collect();
+        tally(&results)
+    }
+
+    #[test]
+    fn a_failure_wins_over_an_inconclusive_result() {
+        let t = tally_of(&[CheckStatus::Pass, CheckStatus::Fail, CheckStatus::Inconclusive]);
+        assert_eq!(exit_code(&t), 1);
+    }
+
+    #[test]
+    fn inconclusive_without_a_failure_exits_3() {
+        let t = tally_of(&[CheckStatus::Pass, CheckStatus::Inconclusive, CheckStatus::NotApplicable]);
+        assert_eq!(exit_code(&t), 3);
+    }
+
+    #[test]
+    fn not_applicable_alone_exits_0() {
+        let t = tally_of(&[CheckStatus::Pass, CheckStatus::NotApplicable, CheckStatus::NotApplicable]);
+        assert_eq!(exit_code(&t), 0);
+        // A run in which nothing applied exits 0 as well.
+        let none = tally_of(&[CheckStatus::NotApplicable, CheckStatus::NotApplicable]);
+        assert_eq!(exit_code(&none), 0);
+    }
+
+    #[test]
+    fn passes_alone_exit_0_and_failures_alone_exit_1() {
+        assert_eq!(exit_code(&tally_of(&[CheckStatus::Pass, CheckStatus::Pass])), 0);
+        assert_eq!(exit_code(&tally_of(&[CheckStatus::Pass, CheckStatus::Fail])), 1);
+    }
+
+    #[test]
+    fn the_exit_codes_are_the_documented_ones() {
+        assert_eq!(EXIT_CHECKS_FAILED, 1);
+        assert_eq!(EXIT_PREFLIGHT_FAILED, 2);
+        assert_eq!(EXIT_INCONCLUSIVE, 3);
+    }
+
+    #[test]
+    fn the_summary_line_adds_counts_only_when_they_are_above_zero() {
+        let only_inconclusive = tally_of(&[CheckStatus::Pass, CheckStatus::Inconclusive]);
+        assert_eq!(
+            summary_line(&only_inconclusive),
+            "Summary: 2 checks, 1 passed, 0 failed, 1 inconclusive"
+        );
+        let only_not_applicable = tally_of(&[CheckStatus::Pass, CheckStatus::NotApplicable]);
+        assert_eq!(
+            summary_line(&only_not_applicable),
+            "Summary: 2 checks, 1 passed, 0 failed, 1 not applicable"
+        );
+    }
+
+    #[test]
+    fn the_original_summary_pattern_still_matches_every_summary_line() {
+        // What a consumer written against the original line looks for.
+        let original = |line: &str| -> Option<(usize, usize, usize)> {
+            let rest = line.strip_prefix("Summary: ")?;
+            let mut parts = rest.split(", ");
+            let total = parts.next()?.strip_suffix(" checks")?.parse().ok()?;
+            let passed = parts.next()?.strip_suffix(" passed")?.parse().ok()?;
+            let failed = parts.next()?.strip_suffix(" failed")?.parse().ok()?;
+            Some((total, passed, failed))
+        };
+        let mixed = tally_of(&[
+            CheckStatus::Pass,
+            CheckStatus::Fail,
+            CheckStatus::Inconclusive,
+            CheckStatus::NotApplicable,
+        ]);
+        assert_eq!(original(&summary_line(&mixed)), Some((4, 1, 1)));
+        let plain = tally_of(&[CheckStatus::Pass, CheckStatus::Fail]);
+        assert_eq!(original(&summary_line(&plain)), Some((2, 1, 1)));
     }
 }

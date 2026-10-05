@@ -130,9 +130,10 @@ Install the Stellar CLI and create the seven identities first (see
 4. Run it: `sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text`
 
 A run prints 11 result lines followed by one summary line. The process exits
-with `0` when all 11 checks pass, `1` when the checks ran and at least one
-failed, and `2` when a prerequisite is missing and no check ran. See
-[Exit codes](#exit-codes) for the detail.
+with `0` when no check failed and none was inconclusive, `1` when at least one
+check failed, `3` when none failed but at least one was inconclusive, and `2`
+when a prerequisite is missing and no check ran. See [Exit codes](#exit-codes)
+for the detail.
 
 ### Windows
 
@@ -173,9 +174,26 @@ network round trips to testnet.
 
 | Code | Meaning |
 |---|---|
-| `0` | All 11 checks passed. |
-| `1` | The checks ran and at least one failed. |
+| `0` | No check failed and none was inconclusive. Checks that do not apply to this vault do not count either way. |
+| `1` | The checks ran and at least one failed. A failure always wins: a run with a failed check and an inconclusive one exits 1. |
 | `2` | A prerequisite is missing. No check ran. |
+| `3` | No check failed, but at least one was inconclusive: it could not reach a verdict, for example because a test account holds none of the vault's token. The vault was not fully checked. |
+
+Each check ends as `PASS`, `FAIL`, `INCONCLUSIVE` or `NOT_APPLICABLE`. An
+inconclusive check says the tool could not decide; it is not a finding about the
+vault. A not-applicable check does not fit this vault's design, for example a
+vault whose constructor does not take the arguments the security checks use to
+deploy their copy. In `--output json` a result with either of those two statuses
+also carries a `reason_code`.
+
+The summary line is `Summary: N checks, X passed, Y failed`. When there are
+inconclusive or not-applicable results, `, K inconclusive` and `, L not
+applicable` follow it, each only when it is above zero.
+
+**Reading only the exit code is not enough in one case.** `NOT_APPLICABLE` does
+not change the exit code, so a run in which no check applied to the vault exits
+`0`, the same as a run in which every check passed. A caller that looks only at
+the exit code cannot tell them apart and should read the summary line or the JSON.
 
 Exit 2 covers a `stellar` that cannot be started or is older than v28, a missing
 identity, and an address that is not a contract on testnet. Under

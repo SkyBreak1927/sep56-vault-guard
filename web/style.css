@@ -1227,6 +1227,12 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.report-score-line {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
 .report-stat-value.score-pass {
   color: var(--pass);
 }

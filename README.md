@@ -112,13 +112,6 @@ longer build that produces nothing the checker needs.
 
 The binary lands at `target/release/sep56-vault-guard` (`.exe` on Windows).
 
-<!-- ============================================================
-     AKTIFKAN SETELAH RILIS PERTAMA TERBIT DAN TERUJI.
-     Jangan dibuka sebelum ada rilis di
-     https://github.com/SkyBreak1927/sep56-vault-guard/releases —
-     teks di bawah menjanjikan tautan yang belum ada.
-     ============================================================
-
 ## Download a release binary
 
 Prebuilt binaries are attached to each release: a `.zip` for Windows x86_64 and
@@ -136,19 +129,29 @@ Install the Stellar CLI and create the seven identities first (see
 3. Extract the archive.
 4. Run it: `sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text`
 
-A run prints 11 result lines followed by one summary line. See
-[Exit codes](#exit-codes) for what the process returns.
+A run prints 11 result lines followed by one summary line. The process exits
+with `0` when all 11 checks pass, `1` when the checks ran and at least one
+failed, and `2` when a prerequisite is missing and no check ran. See
+[Exit codes](#exit-codes) for the detail.
 
-The Windows binary links the C runtime statically, so it needs nothing beyond
+### Windows
+
+Tested on Windows 11, started both from `cmd` and by double-clicking the
+`.exe`. The binary links the C runtime statically, so it needs nothing beyond
 the Stellar CLI.
 
-NOTE, BELUM DIUJI: a browser download marks the file with the Mark-of-the-Web,
-and because the binary is not code-signed, Windows may show a "Windows protected
-your PC" screen — "More info", then "Run anyway". This was not reproduced: the
-artifacts were fetched with `gh run download`, which does not set that mark.
-Confirm before publishing this section.
+The binary is not code-signed. On the test PC, Windows SmartScreen did not
+appear, but that is one machine and not a promise: a file downloaded through a
+browser carries the Mark-of-the-Web, and on other machines or settings Windows
+may show "Windows protected your PC". If it does, choose "More info", then
+"Run anyway".
 
-     ============================================================ -->
+### Linux
+
+x86_64 only, and it needs glibc 2.35 or newer (the version in Ubuntu 22.04).
+The release workflow builds on Ubuntu 22.04 and fails if the binary asks for a
+newer glibc symbol. Check yours with `ldd --version`. On a distribution with an
+older glibc, build from source instead.
 
 ## Usage
 

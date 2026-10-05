@@ -600,7 +600,7 @@ async fn convert_to_assets(
 /// instance rather than touching `target_vault` itself. The wasm hash,
 /// underlying asset, and decimals_offset are all resolved from
 /// `target_vault` first (via [`resolve_target_vault`]), so the throwaway
-/// instance matches whatever vault is actually being audited — not a
+/// instance matches whatever vault is actually being checked — not a
 /// hardcoded reference — and this check can be re-run against any SEP-56
 /// vault regardless of its configured decimals_offset.
 ///
@@ -1482,7 +1482,7 @@ async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i1
 /// Resolves the wasm hash, underlying asset, and actual `decimals_offset`
 /// of `target_vault`, so the self-contained adversarial checks can deploy
 /// their own throwaway instances that match the *exact* configuration of
-/// whatever vault is actually being audited, instead of a hardcoded
+/// whatever vault is actually being checked, instead of a hardcoded
 /// reference (`decimals_offset = 0`).
 ///
 /// The vault contract doesn't expose its decimals offset directly, so it's

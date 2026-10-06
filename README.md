@@ -98,6 +98,10 @@ foreach ($n in "alice","bob","carol","dave","erin","frank","grace") {
 }
 ```
 
+If the vault's underlying asset is a custom token rather than native XLM, some of
+these accounts also need a balance of that token. See
+[docs/INTEGRATE.md](docs/INTEGRATE.md).
+
 ## Build from source
 
 ```bash

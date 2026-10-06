@@ -240,10 +240,10 @@ function runCheckJob(jobId, vault, statusFilePath, onFinished) {
       return;
     }
 
-    // The CLI exits 1 (not 0) whenever any check fails — that's an
-    // expected, valid result (e.g. the known donation_attack finding), not
-    // a server error. So a parseable stdout payload is treated as success
-    // regardless of the process exit code.
+    // The server does not use the CLI's exit code to decide the outcome. As
+    // long as stdout parses as JSON, the job counts as a success. The exit
+    // codes 0, 1 and 3 (check results) and 2 (a prerequisite failed, which
+    // prints an error object that is handled just below) do not change this.
     if (stdout) {
       try {
         const result = JSON.parse(stdout);

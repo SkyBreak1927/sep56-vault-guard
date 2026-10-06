@@ -57,8 +57,18 @@ vault is only read.
 Because those copies are deployed from the target's own Wasm, the 4 security
 checks need the vault contract to accept a constructor of
 `(name, symbol, asset, decimals_offset)` and to expose a `query_asset` function.
-A vault that does not will fail those four checks on deployment, not on
-behaviour.
+A vault that does not is reported as `NOT_APPLICABLE` on those four checks, not
+as `FAIL`:
+
+- a constructor that does not accept those arguments gives the reason code
+  `constructor_mismatch`;
+- a vault without `query_asset` (or whose underlying asset has no `decimals()`)
+  gives `not_a_standard_vault`.
+
+`NOT_APPLICABLE` is not a finding about the vault, and it does not change the
+exit code (see [Exit codes](#exit-codes)). The 7 conformance checks still run. A
+copy that cannot be deployed for any other reason, such as an unreachable
+network, is reported as `INCONCLUSIVE` instead.
 
 ## Prerequisites
 

@@ -35,7 +35,7 @@
   <section class="hero container">
     <p class="hero-eyebrow">SEP-56 conformance and security suite for Soroban</p>
     <h1>Automated Conformance &amp; Economic Security<br>for Stellar Tokenized Vaults</h1>
-    <p class="hero-lede">Aegis Vault runs 11 automated checks against any SEP-56 tokenized vault contract and tells you exactly what passes, what fails, and why — usually in about a minute.</p>
+    <p class="hero-lede">Aegis Vault runs 11 automated checks against any SEP-56 tokenized vault contract and tells you what passes, what fails, what could not be checked, and why — usually in about a minute.</p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#try-it">Try it now</a>
       <a class="btn btn-secondary" href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md" target="_blank" rel="noreferrer">Read the SEP-56 spec ↗</a>
@@ -68,7 +68,7 @@
         </span>
         <span class="stat-text">
           <span class="stat-value"><span class="live-dot" aria-hidden="true"></span>Live on Soroban Testnet</span>
-          <span class="stat-label">Soroban v21+ environment</span>
+          <span class="stat-label">Stellar Testnet</span>
         </span>
       </div>
     </div>
@@ -200,7 +200,7 @@
           <h2>Run the full check suite against any SEP-56 vault</h2>
           <p class="section-lede">Paste a deployed vault contract address, or load one of the vaults we use to validate the checker itself.</p>
         </div>
-        <div class="env-chip"><span class="env-chip-label">Environment:</span><span class="env-chip-value"><span class="live-dot" aria-hidden="true"></span>Soroban v21+ Testnet</span></div>
+        <div class="env-chip"><span class="env-chip-label">Environment:</span><span class="env-chip-value"><span class="live-dot" aria-hidden="true"></span>Stellar Testnet</span></div>
       </div>
 
       <div class="panel run-panel">
@@ -225,6 +225,7 @@
         <p class="run-hint" id="run-hint">
           <span id="run-hint-text">Stellar contract address — starts with "C", 56 characters.</span>
         </p>
+        <p class="run-hint">The 7 conformance checks make real deposit, mint, withdraw and redeem calls on the target vault with Testnet funds; only the four security checks use a temporary copy.</p>
 
         <div class="preset-row">
           <span class="preset-label">Load a showcase vault:</span>
@@ -290,7 +291,6 @@
             <button type="button" class="segmented-btn" data-format="md" aria-pressed="false">Markdown</button>
           </div>
           <button type="button" class="btn btn-secondary btn-sm" id="export-btn">Export Proof (JSON / MD)</button>
-          <button type="button" class="btn btn-secondary btn-sm" disabled aria-disabled="true">Grant Review Certificate (Coming Soon)</button>
         </div>
       </div>
 
@@ -348,7 +348,7 @@
       <a href="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md" target="_blank" rel="noreferrer">SEP-0041 Token Interface ↗</a>
     </div>
     <div class="footer-col">
-      <div class="footer-col-title">Security &amp; auditing</div>
+      <div class="footer-col-title">Security &amp; checking</div>
       <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Findings &amp; scope</a>
       <a href="https://github.com/SkyBreak1927/sep56-vault-guard/blob/main/VAULT_CHECKS.md" target="_blank" rel="noreferrer">Check documentation</a>
     </div>
@@ -362,7 +362,7 @@
   <div class="footer-bottom">
     <div class="container footer-bottom-inner">
       <span>© 2026 Aegis Vault</span>
-      <span>Not a substitute for a formal audit.</span>
+      <span>Not a substitute for a professional security review.</span>
     </div>
   </div>
 </footer>

@@ -127,7 +127,10 @@ Install the Stellar CLI and create the seven identities first (see
    against the contents of the `.sha256` file. On Linux:
    `sha256sum -c sep56-vault-guard-linux-x86_64.tar.gz.sha256`.
 3. Extract the archive.
-4. Run it: `sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text`
+4. Run it. On Windows, from `cmd`:
+   `.\sep56-vault-guard.exe --vault <CONTRACT_ADDRESS> --output text`
+   On Linux:
+   `./sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text`
 
 A run prints 11 result lines followed by one summary line. The process exits
 with `0` when no check failed and none was inconclusive, `1` when at least one

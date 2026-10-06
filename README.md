@@ -212,10 +212,17 @@ identity, and an address that is not a contract on testnet. Under
 
 Windows x86_64 and Linux x86_64. The release workflow builds both.
 
-Honest state of testing: the Windows binary has been built, downloaded and run
-end to end against the reference vault. The Linux release binary has been built
-and its archive verified, but has not been run from the release artifact — the
-Linux path is exercised by the backend, which runs the checker in a container.
+Honest state of testing for v0.3.0:
+
+- **Windows x86_64:** the v0.3.0 zip was downloaded with `gh release download`,
+  its SHA-256 matched the `.sha256` file, and it was run from `cmd` against the
+  Testnet reference vault: 10 PASS, 1 FAIL (`donation_attack`), exit code 1.
+- **Windows SmartScreen:** downloaded through a browser, Windows SmartScreen shows
+  a warning because the binary is not code-signed; choose "More info", then "Run
+  anyway". Check the hash first and run it from `cmd` with `--vault`;
+  double-clicking closes the window before the result can be read.
+- **Linux x86_64:** built and glibc-checked in CI (highest symbol 2.34), but not
+  run by the maintainer.
 
 ## Project Structure
 

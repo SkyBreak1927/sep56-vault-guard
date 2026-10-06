@@ -10,5 +10,5 @@ services:
       - key: ALLOWED_ORIGINS
         value: https://skybreak1927.github.io
       - key: CHECK_TIMEOUT_MS
-        value: "180000"
+        value: "280000"
     autoDeployTrigger: commit

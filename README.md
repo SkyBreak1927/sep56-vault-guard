@@ -137,15 +137,29 @@ for the detail.
 
 ### Windows
 
-Tested on Windows 11, started both from `cmd` and by double-clicking the
-`.exe`. The binary links the C runtime statically, so it needs nothing beyond
-the Stellar CLI.
+Run the binary from `cmd` or another terminal, in the folder where you extracted
+it:
 
-The binary is not code-signed. On the test PC, Windows SmartScreen did not
-appear, but that is one machine and not a promise: a file downloaded through a
-browser carries the Mark-of-the-Web, and on other machines or settings Windows
-may show "Windows protected your PC". If it does, choose "More info", then
-"Run anyway".
+```bat
+.\sep56-vault-guard.exe --vault <CONTRACT_ADDRESS> --output text
+```
+
+Do not start it by double-clicking the `.exe`: the window closes before the
+result can be read.
+
+Before you run it, compare the SHA-256 of the zip with the contents of its
+`.sha256` file:
+
+```bat
+certutil -hashfile sep56-vault-guard-windows-x86_64.zip SHA256
+```
+
+The release binary is built with the C runtime linked in statically.
+
+The binary is not code-signed. Downloaded with `gh release download`, no
+SmartScreen warning appeared on the test PC. Downloaded through a browser,
+Windows SmartScreen shows a warning ("Windows protected your PC"); after you
+have checked the hash, choose "More info", then "Run anyway".
 
 ### Linux
 
@@ -217,10 +231,9 @@ Honest state of testing for v0.3.0:
 - **Windows x86_64:** the v0.3.0 zip was downloaded with `gh release download`,
   its SHA-256 matched the `.sha256` file, and it was run from `cmd` against the
   Testnet reference vault: 10 PASS, 1 FAIL (`donation_attack`), exit code 1.
-- **Windows SmartScreen:** downloaded through a browser, Windows SmartScreen shows
-  a warning because the binary is not code-signed; choose "More info", then "Run
-  anyway". Check the hash first and run it from `cmd` with `--vault`;
-  double-clicking closes the window before the result can be read.
+- **Windows SmartScreen:** no warning when the zip was downloaded with
+  `gh release download`; a warning when it was downloaded through a browser (see
+  [Windows](#windows)).
 - **Linux x86_64:** built and glibc-checked in CI (highest symbol 2.34), but not
   run by the maintainer.
 

@@ -8,7 +8,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: ALLOWED_ORIGINS
-        value: https://skybreak1927.github.io
+        value: https://skybreak1927.github.io,https://aegis-vault-beta.vercel.app,http://localhost:3000,http://localhost:5173
       - key: CHECK_TIMEOUT_MS
         value: "280000"
     autoDeployTrigger: commit

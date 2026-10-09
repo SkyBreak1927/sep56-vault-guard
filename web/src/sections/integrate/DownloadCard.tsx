@@ -74,6 +74,14 @@ export function DownloadCard() {
             Download for {current.label}
           </a>
         )}
+        {user && (
+          <a
+            href={`${current.href}.sha256`}
+            className="text-body-sm text-muted underline decoration-line-strong underline-offset-4 transition-colors duration-150 ease-out hover:text-fg"
+          >
+            Verify checksum (SHA256)
+          </a>
+        )}
       </div>
     </article>
   )

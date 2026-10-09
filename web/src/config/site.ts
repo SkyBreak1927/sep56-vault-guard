@@ -45,15 +45,14 @@ export const siteLinks = {
 const repoPath = (path: string) => `${siteLinks.github.replace(/\/$/, '')}/${path}`
 
 /**
- * Prebuilt CLI binaries (see .github/workflows/release.yml). Both platforms
- * link to the latest release page, where the Windows .zip and Linux .tar.gz
- * (each with a .sha256) are listed.
+ * Prebuilt CLI binaries (see .github/workflows/release.yml). `releases/latest/download/`
+ * always resolves to the newest release; each package has a `.sha256` beside it.
  */
-const latestRelease = repoPath('releases/latest')
+const latestAsset = (file: string) => repoPath(`releases/latest/download/${file}`)
 
 export const downloads = {
-  windows: latestRelease,
-  linux: latestRelease,
+  windows: latestAsset('sep56-vault-guard-windows-x86_64.zip'),
+  linux: latestAsset('sep56-vault-guard-linux-x86_64.tar.gz'),
 }
 
 /** README section the Build from Source card points to. */

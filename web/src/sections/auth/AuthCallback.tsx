@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { authConfigured } from '@/lib/supabase'
+import { takeReturnTo } from '@/lib/returnTo'
 import { useAuth } from '@/lib/useAuth'
 import { AuthHeading, AuthNotice, AuthShell, NOT_CONFIGURED, inlineLink, type Notice } from './AuthShell'
 
@@ -16,14 +17,14 @@ function redirectError() {
 
 /**
  * Landing page for OAuth sign-in and email confirmation links. The Supabase
- * client exchanges the `?code=` on load; once a user appears we go home.
+ * client exchanges the `?code=` on load; once a user appears we go back to where they started (or home).
  */
 export function AuthCallback() {
   const router = useRouter()
   const { user, loading } = useAuth()
 
   useEffect(() => {
-    if (user) router.replace('/')
+    if (user) router.replace(takeReturnTo())
   }, [user, router])
 
   // Loading ends once any ?code= has been exchanged; no user by then means it failed.

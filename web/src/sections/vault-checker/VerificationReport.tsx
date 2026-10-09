@@ -18,6 +18,9 @@ const FORMATS: { id: ReportFormat; label: string }[] = [
 /** Security checks that have an explainer in "Why it matters". */
 const RISK_CHECKS = new Set(['donation_attack', 'rounding_direction', 'overflow_protection', 'access_control_probing'])
 
+/** Tells "Why it matters" which risk to show; detail is the check id. */
+export const SELECT_RISK_EVENT = 'aegis:select-risk'
+
 const EVIDENCE_TITLE = 'Evidence from execution'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -255,6 +258,7 @@ function CheckDetail({ def, run }: { def: CheckDef; run: CheckRun }) {
       {RISK_CHECKS.has(def.id) && (
         <a
           href={siteLinks.whyItMatters}
+          onClick={() => window.dispatchEvent(new CustomEvent(SELECT_RISK_EVENT, { detail: def.id }))}
           className="inline-flex w-fit items-center gap-1.5 text-body-md text-accent underline decoration-accent/40 underline-offset-4 transition-colors duration-150 ease-out hover:text-accent-hover hover:decoration-accent-hover"
         >
           Explore this risk

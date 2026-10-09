@@ -7,6 +7,7 @@ import type { Provider } from '@supabase/supabase-js'
 import { GithubIcon, GoogleIcon } from '@/components/Icons'
 import { fieldLabel, primaryButton, raisedField, secondaryButton } from '@/components/styles'
 import { getSupabase, siteUrl } from '@/lib/supabase'
+import { rememberReturnTo, takeReturnTo, withNext } from '@/lib/returnTo'
 import { useAuth } from '@/lib/useAuth'
 import { AuthHeading, AuthIntro, AuthNotice, AuthShell, NOT_CONFIGURED, inlineLink, type Notice } from './AuthShell'
 
@@ -47,6 +48,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const { user } = useAuth()
   const [notice, setNotice] = useState<Notice>(null)
   const [pending, setPending] = useState(false)
+  const [next, setNext] = useState<string>()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   // The submit button stays disabled until both fields could plausibly succeed.
@@ -57,8 +59,13 @@ export function AuthPage({ mode }: { mode: Mode }) {
 
   // Already signed in (or just signed in): nothing to do here.
   useEffect(() => {
-    if (user) router.replace('/')
+    if (user) router.replace(takeReturnTo())
   }, [user, router])
+
+  // Remember where the user came from (e.g. the download section) across sign-in.
+  useEffect(() => {
+    setNext(rememberReturnTo())
+  }, [])
 
   const oauth = async (provider: Provider) => {
     const supabase = getSupabase()
@@ -102,7 +109,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const switchLink = (
     <>
       {copy.prompt}{' '}
-      <Link href={copy.switchHref} className={inlineLink}>
+      <Link href={next ? withNext(copy.switchHref, next) : copy.switchHref} className={inlineLink}>
         {copy.switchLabel}
       </Link>
     </>

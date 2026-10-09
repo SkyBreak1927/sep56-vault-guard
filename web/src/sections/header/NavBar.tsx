@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { primaryNav } from '@/config/site'
 import { BrandLogo } from '@/components/BrandLogo'
-import { CloseIcon, MenuIcon } from '@/components/Icons'
+import { CloseIcon, MenuIcon, UserIcon } from '@/components/Icons'
 import { SmartLink } from '@/components/SmartLink'
 import { secondaryButton } from '@/components/styles'
 import { useAuth } from '@/lib/useAuth'
@@ -183,6 +183,7 @@ export function NavBar() {
             ) : (
               // Hidden (but holding its space) until the stored session has been read.
               <Link href="/sign-in" className={`${secondaryButton} max-lg:h-11 ${loading ? 'invisible' : ''}`}>
+                <UserIcon className="size-4" />
                 Sign In
               </Link>
             )}

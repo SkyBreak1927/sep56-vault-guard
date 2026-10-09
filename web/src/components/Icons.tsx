@@ -244,3 +244,11 @@ export function SignOutIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function UserIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 20a7.5 7.5 0 0 1 15 0" />
+    </svg>
+  )
+}

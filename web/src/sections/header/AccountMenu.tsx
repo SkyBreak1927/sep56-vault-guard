@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { SignOutIcon } from '@/components/Icons'
+import { GithubIcon, GoogleIcon, SignOutIcon } from '@/components/Icons'
 import { secondaryButton } from '@/components/styles'
 import { getSupabase } from '@/lib/supabase'
 
@@ -14,30 +14,52 @@ function profile(user: User) {
   return { name, avatar, label: name ?? user.email ?? 'Account' }
 }
 
+const PROVIDERS: Record<string, { name: string; Icon: typeof GoogleIcon }> = {
+  google: { name: 'Google', Icon: GoogleIcon },
+  github: { name: 'GitHub', Icon: GithubIcon },
+}
+
+/** OAuth provider of the latest sign-in: the identity used most recently (email sign-in has none). */
+function provider(user: User) {
+  const latest = user.identities?.reduce((a, b) => ((b.last_sign_in_at ?? '') > (a.last_sign_in_at ?? '') ? b : a))
+  return PROVIDERS[latest?.provider ?? user.app_metadata?.provider ?? '']
+}
+
 /** Provider photo, or the first letter of the name / email when there isn't one (or it fails to load). */
 function Avatar({ user, className }: { user: User; className: string }) {
   const { avatar, label } = profile(user)
   const [broken, setBroken] = useState(false)
-  const base = `${className} shrink-0 rounded-full border border-line-strong bg-interactive`
-  if (avatar && !broken) {
-    // Plain <img>: images are unoptimized (next.config). no-referrer keeps Google avatars from 403ing.
-    return <img src={avatar} alt="" referrerPolicy="no-referrer" className={`${base} object-cover`} onError={() => setBroken(true)} />
-  }
+  const Badge = provider(user)?.Icon
+  const base = `${className} rounded-full border border-line-strong bg-interactive`
   return (
-    <span aria-hidden="true" className={`${base} grid place-items-center text-label-md text-fg uppercase`}>
-      {label.charAt(0)}
+    <span className="relative shrink-0">
+      {avatar && !broken ? (
+        // Plain <img>: images are unoptimized (next.config). no-referrer keeps Google avatars from 403ing.
+        <img src={avatar} alt="" referrerPolicy="no-referrer" className={`${base} object-cover`} onError={() => setBroken(true)} />
+      ) : (
+        <span aria-hidden="true" className={`${base} grid place-items-center text-label-md text-fg uppercase`}>
+          {label.charAt(0)}
+        </span>
+      )}
+      {Badge && (
+        <span aria-hidden="true" className="absolute -right-1 -bottom-1 grid size-4 place-items-center rounded-full border border-line-strong bg-raised text-fg">
+          <Badge className="size-2.5" />
+        </span>
+      )}
     </span>
   )
 }
 
 function Identity({ user }: { user: User }) {
   const { name } = profile(user)
+  const via = provider(user)?.name
   return (
     <div className="flex min-w-0 items-center gap-space-sm">
       <Avatar user={user} className="size-8" />
       <div className="flex min-w-0 flex-col">
         {name && <span className="truncate text-label-md text-fg">{name}</span>}
         <span className={`truncate text-body-sm ${name ? 'text-muted' : 'text-fg'}`}>{user.email}</span>
+        {via && <span className="truncate text-body-sm text-subtle">Signed in with {via}</span>}
       </div>
     </div>
   )
@@ -127,7 +149,7 @@ export function AccountMenu({ user, onAction }: { user: User; onAction: () => vo
           onClick={() => setOpen((v) => hovered.current || !v)}
         >
           <Avatar user={user} className="size-8" />
-          <span className="sr-only">Account menu for {label}</span>
+          <span className="sr-only">Account menu for {label}{provider(user) && ` (${provider(user)?.name})`}</span>
         </button>
 
         <div

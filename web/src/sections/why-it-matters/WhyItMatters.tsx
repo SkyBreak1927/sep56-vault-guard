@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ComponentType, type CSSProperties, ty
 import { STORY_SPEED, type RiskSceneKind } from '@/artwork/riskScenes'
 import { CHECK_DEFS } from '@/config/checks'
 import { AlertIcon, LockIcon, ShieldCheckIcon, SwapIcon, TrendUpIcon } from '@/components/Icons'
+import { SELECT_RISK_EVENT } from '@/sections/vault-checker/VerificationReport'
 import { RiskSceneArt } from './RiskSceneArt'
 import { SectionAmbience } from '@/components/Ambience'
 import { SectionEyebrow, SectionHeadline } from '@/components/Section'
@@ -116,6 +117,16 @@ export function WhyItMatters() {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     scroller.scrollTo({ left: tab.offsetLeft - scroller.offsetLeft, behavior: reduce ? 'auto' : 'smooth' })
   }, [active])
+
+  // "Explore this risk" in a report picks the matching risk before the page scrolls here.
+  useEffect(() => {
+    const onSelect = (e: Event) => {
+      const i = risks.findIndex((r) => r.checkId === (e as CustomEvent<string>).detail)
+      if (i >= 0) setActive(i)
+    }
+    window.addEventListener(SELECT_RISK_EVENT, onSelect)
+    return () => window.removeEventListener(SELECT_RISK_EVENT, onSelect)
+  }, [])
 
   const select = (i: number, focus = false) => {
     const next = Math.max(0, Math.min(risks.length - 1, i))

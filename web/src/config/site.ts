@@ -45,19 +45,15 @@ export const siteLinks = {
 const repoPath = (path: string) => `${siteLinks.github.replace(/\/$/, '')}/${path}`
 
 /**
- * Prebuilt CLI binaries (see .github/workflows/release.yml), pinned to one
- * release. The client has not cleared them for the site yet, so the download
- * buttons read "(upcoming)" until DOWNLOADS_READY is flipped.
+ * Prebuilt CLI binaries (see .github/workflows/release.yml). Both platforms
+ * link to the latest release page, where the Windows .zip and Linux .tar.gz
+ * (each with a .sha256) are listed.
  */
-export const DOWNLOADS_READY = false
-const CLI_VERSION = 'v0.2.0'
-
-const asset = (file: string) => repoPath(`releases/download/${CLI_VERSION}/${file}`)
+const latestRelease = repoPath('releases/latest')
 
 export const downloads = {
-  windows: asset('sep56-vault-guard-windows-x86_64.zip'),
-  linux: asset('sep56-vault-guard-linux-x86_64.tar.gz'),
-  allReleases: repoPath('releases'),
+  windows: latestRelease,
+  linux: latestRelease,
 }
 
 /** README section the Build from Source card points to. */

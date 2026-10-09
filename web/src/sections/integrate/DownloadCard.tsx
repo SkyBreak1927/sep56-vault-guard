@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { useState, type ComponentType, type SVGProps } from 'react'
+import { withNext } from '@/lib/returnTo'
 import { useAuth } from '@/lib/useAuth'
-import { DOWNLOADS_READY, downloads } from '@/config/site'
-import { DownloadIcon, ExternalIcon, LinuxIcon, PackageIcon, WindowsIcon } from '@/components/Icons'
+import { downloads } from '@/config/site'
+import { DownloadIcon, LinuxIcon, PackageIcon, WindowsIcon } from '@/components/Icons'
 import { primaryButton } from '@/components/styles'
 import { CardHeading, integrateCard } from './CardHeading'
 
@@ -22,7 +23,7 @@ const PLATFORMS: {
   { id: 'linux', label: 'Linux', meta: 'x86_64 · .tar.gz', href: downloads.linux, Icon: LinuxIcon },
 ]
 
-/** Prebuilt binary per platform; "(upcoming)" until the client releases them (DOWNLOADS_READY). */
+/** Prebuilt binary per platform; sign-up required to download. */
 export function DownloadCard() {
   const [platform, setPlatform] = useState<Platform>('windows')
   const current = PLATFORMS.find((p) => p.id === platform) ?? PLATFORMS[0]
@@ -62,31 +63,15 @@ export function DownloadCard() {
 
       <div className="flex flex-wrap items-center justify-between gap-space-md">
         {/* ponytail: UX gate only; the release files stay public on GitHub. A real gate needs private hosting + a server check. */}
-        {DOWNLOADS_READY && !user ? (
-          <Link className={`${primaryButton} h-11 px-5 text-body-md`} href="/sign-in">
+        {!user ? (
+          <Link className={`${primaryButton} h-11 px-5 text-body-md`} href={withNext('/sign-up', '/#integrate')}>
             <DownloadIcon className="size-4" />
-            Sign in to download
+            Sign up to download
           </Link>
-        ) : DOWNLOADS_READY ? (
+        ) : (
           <a className={`${primaryButton} h-11 px-5 text-body-md`} href={current.href}>
             <DownloadIcon className="size-4" />
             Download for {current.label}
-          </a>
-        ) : (
-          <button type="button" className={`${primaryButton} h-11 px-5 text-body-md`} disabled>
-            <DownloadIcon className="size-4" />
-            Download for {current.label} (upcoming)
-          </button>
-        )}
-        {DOWNLOADS_READY && (
-          <a
-            className="inline-flex min-h-11 items-center gap-1 text-label-md text-accent no-underline underline-offset-4 can-hover:text-accent-hover can-hover:underline"
-            href={downloads.allReleases}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            All releases
-            <ExternalIcon className="size-4" />
           </a>
         )}
       </div>

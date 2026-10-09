@@ -74,7 +74,7 @@ export function useCheckRun() {
     const stale = () => token !== runToken.current
     const fail = (message: string) => setRun((r) => ({ ...r, phase: 'error', message, completedAt: Date.now() }))
 
-    setRun({ ...initialRun, phase: 'running', vault, message: 'Starting checks…', startedAt: Date.now() })
+    setRun({ ...initialRun, phase: 'running', vault, message: 'Starting checks… this can take about a minute or longer.', startedAt: Date.now() })
 
     let jobId: string
     try {
@@ -98,7 +98,7 @@ export function useCheckRun() {
       if (stale()) return
 
       if (job.status === 'processing') {
-        const message = job.queued ? `Waiting in queue — position ${job.position}` : 'Processing… usually 1–2 minutes.'
+        const message = job.queued ? `Waiting in queue — position ${job.position}` : 'Processing… this can take about a minute or longer.'
         setRun((r) => ({ ...r, message, checks: job.checks ? applyChecks(r.checks, job.checks) : r.checks }))
         await sleep(POLL_INTERVAL_MS)
         if (stale()) return

@@ -89,7 +89,7 @@ describe('useCheckRun', () => {
     expect(result.current.run.message).toBe('Waiting in queue — position 2')
 
     await advance(POLL_INTERVAL_MS)
-    expect(result.current.run.message).toBe('Processing… usually 1–2 minutes.')
+    expect(result.current.run.message).toBe('Processing… this can take about a minute or longer.')
     expect(result.current.run.checks.deposit).toEqual({ status: 'pass', detail: 'ok', settledAt: T0 + POLL_INTERVAL_MS, group: 'conformance' })
     expect(result.current.run.checks.mint).toEqual({ status: 'running', detail: null, settledAt: null, group: 'conformance' })
 

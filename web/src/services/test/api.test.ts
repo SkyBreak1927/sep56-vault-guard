@@ -80,6 +80,16 @@ describe('startCheck', () => {
 
     await expect(startCheck('CVAULT')).rejects.toThrow('Failed to start the check.')
   })
+
+  it.each([
+    [429, 'Too many requests. Wait a moment, then try again.'],
+    [503, 'The checker is busy or unavailable right now. Try again in a few minutes.'],
+  ])('uses a clear fallback for a non-JSON HTTP %i', async (status, message) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html></html>', { status })))
+    const { startCheck } = await loadApi()
+
+    await expect(startCheck('CVAULT')).rejects.toThrow(message)
+  })
 })
 
 describe('request', () => {

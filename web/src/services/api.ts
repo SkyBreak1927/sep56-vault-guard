@@ -46,14 +46,21 @@ async function request(path: string, init?: RequestInit) {
   return { ok: res.ok, status: res.status, body }
 }
 
+/** Fallback when the response has no JSON `error` (e.g. a proxy or a sleeping host answered). */
+function startFailureMessage(status: number) {
+  if (status === 429) return 'Too many requests. Wait a moment, then try again.'
+  if (status === 503) return 'The checker is busy or unavailable right now. Try again in a few minutes.'
+  return 'Failed to start the check.'
+}
+
 /** Queues a run; resolves with the job id and, if it is waiting, its queue position. */
 export async function startCheck(vault: string): Promise<{ jobId: string; position: number | null }> {
-  const { ok, body } = await request('/api/check', {
+  const { ok, status, body } = await request('/api/check', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ vault }),
   })
-  if (!ok || typeof body.jobId !== 'string') throw new CheckerApiError(body.error || 'Failed to start the check.')
+  if (!ok || typeof body.jobId !== 'string') throw new CheckerApiError(body.error || startFailureMessage(status))
   return { jobId: body.jobId, position: body.queued ? body.position : null }
 }
 

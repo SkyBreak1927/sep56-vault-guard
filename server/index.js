@@ -319,6 +319,12 @@ app.post('/api/check', checkLimiter, (req, res) => {
   // them would lock everyone else out.
   const ip = req.ip;
   const held = ipHolders.get(ip);
+  // TEMPORARY diagnostics (remove after the per-IP limit is verified): show
+  // which address the limiter keys on and the raw forwarding chain.
+  console.log(
+    `[${new Date().toISOString()}] [ip-debug] req.ip=${ip} xff=${req.headers['x-forwarded-for'] || '-'} ` +
+      `held=${held ? 'yes' : 'no'}`
+  );
   if (held) {
     return res.status(429).json({
       error: 'You already have a check running. Wait for it to finish before starting another.',

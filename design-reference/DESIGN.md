@@ -146,7 +146,7 @@ The color architecture is built strictly for dark mode, relying on an obsidian-t
 
 ### Baseline Canvas & Surfaces
 - **Canvas Base (`#0C0D0E`):** Root viewport background, grounding low-priority framing and sidebars.
-- **Surface Level 1 (`#141618`):** Primary panel, card, and modular audit container background.
+- **Surface Level 1 (`#0e0f11`):** Primary panel, card, and modular audit container background.
 - **Surface Level 2 (`#1C1E22`):** Elevated modals, dropdown drawers, nested code execution blocks, and table row hover states.
 - **Surface Interactive (`#25282E`):** Hover states for secondary actions, active segmented controls, and selected table cells.
 
@@ -193,9 +193,9 @@ This system intentionally rejects heavy diffuse dropshadows and 3D skeuomorphism
 
 ### Structural Depth
 - **Level 0 (Root `#0C0D0E`):** Global canvas behind workspaces and secondary toolbars.
-- **Level 1 (Panels `#141618`):** Audit cards, data tables, and telemetry grids. Border: `1px solid rgba(255, 255, 255, 0.08)`.
+- **Level 1 (Panels `#0e0f11`):** Audit cards, data tables, and telemetry grids. Border: `1px solid rgba(255, 255, 255, 0.08)`.
 - **Level 2 (Overlays `#1C1E22`):** Dropdowns, tooltips, popovers, and diagnostic drill-downs. Border: `1px solid rgba(255, 255, 255, 0.14)`. Shadows are strictly restricted to a crisp edge-depth ring: `box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08)`.
-- **Interactive State Depth:** Focused elements and active tab bars do not float; they gain surface luminosity (advancing from `#141618` to `#1C1E22`) paired with an amber indicator line or border highlight (`#D97706`).
+- **Interactive State Depth:** Focused elements and active tab bars do not float; they gain surface luminosity (advancing from `#0e0f11` to `#1C1E22`) paired with an amber indicator line or border highlight (`#D97706`).
 
 ## Shapes
 
@@ -211,7 +211,7 @@ A soft, controlled corner radius (`roundedness: 1` / base 4px) is utilized acros
 
 ### Buttons
 - **Primary:** Background `#D97706`, text `#2F1500` (`on-primary-fixed`, 5.37:1, passes WCAG AA; white on this amber is only 3.19:1), 4px radius, 0 1px shadow. Hover: lightens to `#E8900C` so the dark text stays legible (6.86:1); darkening the fill instead would drop contrast. Focus: 2px offset ring with `#D97706`. Height: 36px (desktop standard).
-- **Secondary / Outline:** Background `#141618`, border `1px solid rgba(255, 255, 255, 0.08)`, text `#F3F4F6`. Hover: Background `#1C1E22`, border `rgba(255, 255, 255, 0.16)`.
+- **Secondary / Outline:** Background `#0e0f11`, border `1px solid rgba(255, 255, 255, 0.08)`, text `#F3F4F6`. Hover: Background `#1C1E22`, border `rgba(255, 255, 255, 0.16)`.
 - **Destructive:** Background `rgba(239, 68, 68, 0.12)`, border `1px solid rgba(239, 68, 68, 0.24)`, text `#F87171`. Hover: Background `rgba(239, 68, 68, 0.20)`.
 
 ### Chips & Test Badges
@@ -226,12 +226,12 @@ A soft, controlled corner radius (`roundedness: 1` / base 4px) is utilized acros
 - **Checkboxes & Radios:** 16x16px square with 2px radius (checkbox) or circular (radio). Background `#0C0D0E`, border `1px solid rgba(255, 255, 255, 0.20)`. Checked: Background `#D97706`, border `#D97706`.
 
 ### Cards & Audit Panels
-- Base surface `#141618`, border `1px solid rgba(255, 255, 255, 0.08)`, radius 8px, padding `1.5rem`.
+- Base surface `#0e0f11`, border `1px solid rgba(255, 255, 255, 0.08)`, radius 8px, padding `1.5rem`.
 - Card Header contains title in `Geist 16px weight 600`, right-aligned test status chip, and optional action dropdown.
 - Card footers are separated by a 1px border `rgba(255, 255, 255, 0.08)` and render secondary metadata in `Geist 12px #9CA3AF`.
 
 ### Data Tables & Invariant Lists
-- **Structure:** Alternate row striping is omitted. Surface is `#141618`. Header row uses background `#0C0D0E`, font `Geist 11px uppercase tracking-wider weight 600 #9CA3AF`.
+- **Structure:** Alternate row striping is omitted. Surface is `#0e0f11`. Header row uses background `#0C0D0E`, font `Geist 11px uppercase tracking-wider weight 600 #9CA3AF`.
 - **Rows:** 44px minimum height, border-bottom `1px solid rgba(255, 255, 255, 0.05)`. Hover state: `#1C1E22`.
 - Cells containing Soroban addresses display copy-to-clipboard actions on row hover.
 

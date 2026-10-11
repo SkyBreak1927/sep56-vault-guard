@@ -15,6 +15,12 @@ export interface CheckState {
 
 export type RunPhase = 'idle' | 'running' | 'done' | 'error'
 
+/** Which build of the checker produced a run; null parts mean the backend did not say. */
+export interface RunMeta {
+  cliVersion: string | null
+  cliCommit: string | null
+}
+
 export interface CheckRun {
   phase: RunPhase
   vault: string | null
@@ -23,4 +29,6 @@ export interface CheckRun {
   /** Set when the run stops, whether it completed or errored. */
   completedAt: number | null
   checks: Record<string, CheckState>
+  /** Set when a run completes against a backend that reports its build; absent otherwise. */
+  meta?: RunMeta | null
 }

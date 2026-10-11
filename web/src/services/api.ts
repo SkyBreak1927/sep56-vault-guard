@@ -27,9 +27,15 @@ export interface ApiLegacyResult {
   reason_code?: string | null
 }
 
+/** Build info the backend sends with a completed job (absent on older backends). */
+export interface ApiMeta {
+  cli_version?: string | null
+  cli_commit?: string | null
+}
+
 export type JobUpdate =
   | { status: 'processing'; checks?: ApiCheck[]; queued?: boolean; position?: number }
-  | { status: 'complete'; checks?: ApiCheck[] | null; result?: ApiLegacyResult[] }
+  | { status: 'complete'; checks?: ApiCheck[] | null; result?: ApiLegacyResult[]; meta?: ApiMeta | null }
   | { status: 'error'; error: string; checks?: ApiCheck[] | null }
 
 export class CheckerApiError extends Error {}

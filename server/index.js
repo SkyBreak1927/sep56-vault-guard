@@ -102,7 +102,12 @@ const app = express();
 
 // Render (and most PaaS hosts) sit behind a reverse proxy, so req.ip needs
 // the X-Forwarded-For chain to reflect the real client IP for rate limiting.
-app.set('trust proxy', 1);
+// On Render the chain seen by this app is `client, Cloudflare edge, Render
+// internal proxy` and the socket peer is one more internal hop (confirmed in
+// the production logs on 2026-10-11). `1` therefore resolved req.ip to an
+// internal 10.x address shared by many visitors, so two people on different
+// networks could block each other (429). Trusting three hops yields the client.
+app.set('trust proxy', 3);
 
 app.use(
   cors({

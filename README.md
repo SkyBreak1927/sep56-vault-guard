@@ -262,7 +262,7 @@ sep56-vault-guard/
 ├── contracts/
 │   └── reference-vault/    # OpenZeppelin-pattern reference SEP-56 vault
 ├── server/                 # Backend that runs the CLI for the web UI
-└── web/                    # Landing page + check runner (Next.js, static export)
+└── web/                    # Landing page + check runner (Next.js, deployed on Vercel)
 ```
 
 ## Scope & Limitations

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { CHECK_DEFS, type CheckStatus } from '@/config/checks'
-import { describeCheck } from '../findings'
+import { describeCheck, passCaveat } from '../findings'
 import type { CheckState } from '../types'
 
 const def = (id: string) => CHECK_DEFS.find((d) => d.id === id)!
 const donation = def('donation_attack')
 const deposit = def('deposit')
+const overflow = def('overflow_protection')
 
 const state = (status: CheckStatus, detail: string | null = null): CheckState => ({ status, detail, settledAt: null, group: 'conformance' })
 
@@ -35,6 +36,7 @@ describe('describeCheck', () => {
           alert: true,
           note: "Reported separately — it does not affect this check's verdict.",
         },
+        caveat: null,
       })
     })
 
@@ -74,6 +76,7 @@ describe('describeCheck', () => {
         explanation: donation.description,
         evidence: [],
         outcome: null,
+        caveat: null,
       })
       expect(describeCheck(donation, state('pass')).headline).toBe(donation.description)
     })
@@ -93,6 +96,7 @@ describe('describeCheck', () => {
         explanation: null,
         evidence: [],
         outcome: null,
+        caveat: null,
       })
     })
 
@@ -109,12 +113,44 @@ describe('describeCheck', () => {
         explanation: deposit.description,
         evidence: [],
         outcome: null,
+        caveat: null,
       })
     })
 
     it('ignores a donation-shaped detail on another check', () => {
       const detail = donationDetail(0, 0, 'attacker P&L: NET PROFIT of 1 stroops (spent 1, redeemed 2)')
       expect(describeCheck(deposit, state('fail', detail)).evidence).toEqual([])
+    })
+  })
+
+  describe('overflow protection caveat (PASS that does not prove the vault protects itself)', () => {
+    const note = "NOTE: this does not test the vault's own overflow protection."
+    const detail = `${note} deposit(assets=i128::MAX) on fresh vault CV failed cleanly (x), and total_assets remained 0.`
+
+    it('shows the CLI note, capitalised, when a passing overflow check leads with "NOTE:" (decimals_offset=0)', () => {
+      expect(describeCheck(overflow, state('pass', detail)).caveat).toBe("This does not test the vault's own overflow protection.")
+    })
+
+    it('does not change the check status or headline when a caveat is shown', () => {
+      const finding = describeCheck(overflow, state('pass', detail))
+      expect(finding.headline).toBe(overflow.description)
+      expect(finding.explanation).toBeNull()
+    })
+
+    it('shows no caveat when the passing overflow detail has no "NOTE:" prefix (decimals_offset >= 1)', () => {
+      expect(passCaveat(overflow, state('pass', 'failed cleanly, total_assets remained 0'))).toBeNull()
+    })
+
+    it('shows no caveat when the overflow check has no detail yet', () => {
+      expect(passCaveat(overflow, state('pass', null))).toBeNull()
+    })
+
+    it('shows no caveat when the overflow check failed, even if the detail starts with "NOTE:"', () => {
+      expect(passCaveat(overflow, state('fail', detail))).toBeNull()
+    })
+
+    it('shows no caveat on a different check whose detail starts with "NOTE:"', () => {
+      expect(passCaveat(deposit, state('pass', detail))).toBeNull()
     })
   })
 })

@@ -14,7 +14,7 @@
 
 use serde::Serialize;
 
-use crate::rpc::{run_stellar, RpcError};
+use crate::rpc::{diagnose_info_hash, run_stellar, ErrorClass, RpcError};
 
 /// Lowest `stellar` major version the checks are known to work against.
 const MIN_STELLAR_MAJOR: u32 = 28;
@@ -194,16 +194,41 @@ async fn check_vault_is_a_contract(vault: &str) -> Result<(), PreflightError> {
 
     match run_stellar(&args).await {
         Ok(_) => Ok(()),
-        Err(e) => Err(PreflightError::new(
-            "vault_not_a_contract",
-            format!(
-                "{vault} is not a contract on testnet, or has no Wasm of its own \
-                 (a Stellar Asset Contract has none): {e}"
-            ),
-            "Check the address, and that it is deployed on testnet rather than \
-             another network."
-                .to_string(),
-        )),
+        Err(e) => {
+            // With `--quiet` the CLI prints nothing about why it failed, so the
+            // raw error would only say "exit code Some(1)". Ask once, without
+            // `--quiet` (read-only), and name the actual cause.
+            let diagnosis = diagnose_info_hash(vault, &e).await;
+            Err(PreflightError::new(
+                "vault_not_a_contract",
+                vault_not_a_contract_problem(vault, diagnosis.class, diagnosis.raw.as_deref()),
+                "Check the address, and that it is deployed on testnet rather than \
+                 another network."
+                    .to_string(),
+            ))
+        }
+    }
+}
+
+/// The sentence shown when the target could not be confirmed as a contract
+/// with Wasm of its own. Built from what `stellar` said when asked again
+/// without `--quiet`; never relays an exit code or a placeholder.
+fn vault_not_a_contract_problem(vault: &str, class: ErrorClass, raw: Option<&str>) -> String {
+    let raw = raw.unwrap_or("");
+    if raw.contains("network built-in asset contract") {
+        format!(
+            "{vault} is a Stellar Asset Contract. It has no Wasm of its own, so it is \
+             not a SEP-56 vault."
+        )
+    } else if raw.contains("contract not found") {
+        format!("{vault} is not a contract on testnet.")
+    } else if class == ErrorClass::Network {
+        format!("The testnet RPC could not be reached, so {vault} could not be looked up.")
+    } else {
+        format!(
+            "{vault} could not be confirmed as a contract on testnet: it does not exist \
+             there, or it has no Wasm of its own (a Stellar Asset Contract has none)."
+        )
     }
 }
 
@@ -266,7 +291,37 @@ async fn native_balance(address: &str) -> Result<Option<f64>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_major;
+    use super::{parse_major, vault_not_a_contract_problem};
+    use crate::rpc::ErrorClass;
+
+    const V: &str = "CAAA";
+
+    #[test]
+    fn a_stellar_asset_contract_is_named_as_such() {
+        let text = "error: cannot fetch wasm for contract because the contract is a network built-in asset contract that does not have a downloadable code binary";
+        let msg = vault_not_a_contract_problem(V, ErrorClass::NotAStandardVault, Some(text));
+        assert!(msg.contains("Stellar Asset Contract"));
+        assert!(!msg.contains("exit code") && !msg.contains("no stderr"));
+    }
+
+    #[test]
+    fn a_missing_contract_says_it_is_not_on_testnet() {
+        let msg = vault_not_a_contract_problem(V, ErrorClass::NotAStandardVault, Some("error: contract not found: CAAA"));
+        assert_eq!(msg, "CAAA is not a contract on testnet.");
+    }
+
+    #[test]
+    fn an_unreachable_rpc_is_not_blamed_on_the_address() {
+        let msg = vault_not_a_contract_problem(V, ErrorClass::Network, Some("client error (Connect)"));
+        assert!(msg.contains("could not be reached"));
+    }
+
+    #[test]
+    fn no_text_at_all_still_gives_a_plain_message() {
+        let msg = vault_not_a_contract_problem(V, ErrorClass::Unclassified, None);
+        assert!(msg.contains("could not be confirmed"));
+        assert!(!msg.contains("exit code") && !msg.contains("no stderr"));
+    }
 
     #[test]
     fn reads_the_major_version_from_the_cli_banner() {

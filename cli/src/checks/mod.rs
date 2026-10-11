@@ -1208,9 +1208,27 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
                 }
             };
 
+            // A bare "exit code Some(1): <no stderr output>" says nothing a reader can
+            // use (rpc.rs runs `stellar` with --quiet), so say it plainly instead.
+            let rejection = match e.error_text() {
+                Some(text) if text.trim().is_empty() => {
+                    "rejected by the network, with no error text".to_string()
+                }
+                _ => e.to_string(),
+            };
+
+            // At decimals_offset == 0 the PASS does not show the vault's own overflow
+            // protection, so lead with that. Status and PASS/FAIL criteria are unchanged.
+            let lead = if decimals_offset >= 1 {
+                String::new()
+            } else {
+                "NOTE: this does not test the vault's own overflow protection. ".to_string()
+            };
+
             CheckResult::pass(name, format!(
-                    "deposit(assets=i128::MAX) on fresh vault {vault_id} failed cleanly ({e}), \
-                     and total_assets remained 0 — no silent-wrong-result observed. {layer_detail}."
+                    "{lead}deposit(assets=i128::MAX) on fresh vault {vault_id} failed cleanly \
+                     ({rejection}), and total_assets remained 0 — no silent-wrong-result \
+                     observed. {layer_detail}."
                 ))
         }
     }

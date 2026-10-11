@@ -58,8 +58,8 @@ that's a plain asset transfer, unaffected by the offset. Our fixed donation
 regardless of offset, and that ratio is what actually drives the dilution.
 
 **Revised recommendation:** `decimals_offset` raises the *cost* of this
-attack for the attacker (see the P&L analysis above) but is not on its own a
-guarantee of victim safety against a well-funded attacker. Pair it with a
+attack for the attacker (see the P&L analysis above) but is not on its own
+enough to protect a victim against a well-funded attacker. Pair it with a
 deployment-time safeguard — e.g. the deployer seeding a non-trivial initial
 deposit themselves — rather than relying on offset alone.
 
@@ -106,7 +106,7 @@ before/after and the regression testing done against every other vault in
 this document to confirm nothing else changed.
 
 **Combined recommendation (§1a + §1b):** neither `decimals_offset` nor a
-fixed dead-shares constant, alone or combined, guarantees safety against a
+fixed dead-shares constant, alone or combined, is enough to protect against a
 sufficiently well-funded attacker — both are fixed-size defenses against a
 donation size the attacker chooses. Real protection for a given deployment
 still requires sizing a mitigation (or a deployer-seeded initial deposit) to
@@ -213,7 +213,7 @@ donation attack evaluated honestly rather than tuned to pass, and Blind
 Vault is an unmodified reference-vault clone deployed with a non-native
 custom asset and `decimals_offset=3` — parameters fixed before seeing any
 result — specifically to stress-test the checker itself, which is how §2a
-was found. None represents a third-party vault under audit. See
+was found. None represents a third-party vault under review. See
 [VAULT_CHECKS.md](./VAULT_CHECKS.md) for full per-check results on all of
 them.
 

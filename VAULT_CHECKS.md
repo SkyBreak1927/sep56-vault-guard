@@ -67,7 +67,7 @@ These validate that the target vault correctly implements the seven core read/wr
 
 - **Function**: `check_convert_to_shares` — [cli/src/checks/mod.rs:527](cli/src/checks/mod.rs#L527)
 - **Validates**: Round-trip bound — `convert_to_assets(convert_to_shares(x))` does not *exceed* `x` — rather than a hardcoded 1:1 expectation, so it stays meaningful on vaults at any share:asset ratio or `decimals_offset`; and that `convert_to_shares()` is read-only (does not change `total_assets()`).
-  **Note (updated during hardened-vault testing):** this was originally an exact-equality check. Composing two floor divisions is only ever guaranteed to lose precision, never gain it — `floor(floor(x·n/d)·d/n) <= x` holds for any positive integers `x, n, d` — so exact equality only ever held by coincidence, at ratios that happen to divide evenly (a fresh 1:1 vault, or an exact power-of-ten `decimals_offset`). Testing `contracts/hardened-vault` (a non-1:1, non-power-of-ten ratio by design) exposed this: the round trip legitimately landed 1 unit below the original, which the old exact check flagged as a false FAIL. The bound is now `<=`, which still catches an actual defect — a round trip that *creates* value — and still fails a vault that rounds up instead of down (its round trip is provably `>= x` instead), just as `contracts/rounding-bug-vault` continues to demonstrate via [`rounding_direction`](#10-rounding_direction).
+  **Note (updated during hardened-vault testing):** this was originally an exact-equality check. Composing two floor divisions can only lose precision, never gain it — `floor(floor(x·n/d)·d/n) <= x` holds for any positive integers `x, n, d` — so exact equality only ever held by coincidence, at ratios that happen to divide evenly (a fresh 1:1 vault, or an exact power-of-ten `decimals_offset`). Testing `contracts/hardened-vault` (a non-1:1, non-power-of-ten ratio by design) exposed this: the round trip legitimately landed 1 unit below the original, which the old exact check flagged as a false FAIL. The bound is now `<=`, which still catches an actual defect — a round trip that *creates* value — and still fails a vault that rounds up instead of down (its round trip is provably `>= x` instead), just as `contracts/rounding-bug-vault` continues to demonstrate via [`rounding_direction`](#10-rounding_direction).
 - **SEP-56 reference** (`## Interface`, `fn convert_to_shares`):
   > "Converts an amount of underlying assets to the equivalent amount of vault shares (rounded down)."
 - **Category**: Positive Conformance
@@ -148,7 +148,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 ## Demo/Validation Vaults
 
 Five additional testnet deployments exist alongside our own reference
-deployment — none represent third-party audits. Vault A and Vault B exist
+deployment — none represent reviews of third-party vaults. Vault A and Vault B exist
 purely to validate that the checks above actually generalize to vaults
 other than the reference deployment; Demo Vault exists as a public showcase
 target with a standard, unmodified configuration; Hardened Vault implements

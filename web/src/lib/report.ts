@@ -4,6 +4,9 @@ import { countStatuses, defsInGroup } from './useCheckRun'
 
 export type ReportFormat = 'json' | 'md'
 
+/** The SEP-56 text the checks were written against; keep in step with VAULT_CHECKS.md. */
+export const SPEC_REFERENCE = 'SEP-0056 v0.1.2 (Draft)'
+
 const GROUP_LABEL: Record<CheckGroup, string> = { conformance: 'Core function checks', security: 'Basic security checks' }
 
 /**
@@ -48,6 +51,9 @@ export function buildReport(run: CheckRun) {
     tool: 'Aegis Vault',
     vault: run.vault ?? '',
     network: 'testnet',
+    spec: SPEC_REFERENCE,
+    cli_version: run.meta?.cliVersion ?? null,
+    cli_commit: run.meta?.cliCommit ?? null,
     started_at: new Date(startedAt).toISOString(),
     completed_at: new Date(completedAt).toISOString(),
     duration_seconds: Math.round((completedAt - startedAt) / 1000),
@@ -85,6 +91,8 @@ function reportMarkdown(data: Report) {
     '',
     `- Vault: \`${data.vault}\``,
     `- Network: ${data.network}`,
+    `- Spec: ${data.spec}`,
+    `- Checker: sep56-vault-guard ${data.cli_version ?? 'version unknown'}${data.cli_commit ? ` (commit ${data.cli_commit})` : ''}`,
     `- Started: ${data.started_at}`,
     `- Completed: ${data.completed_at}`,
     `- Duration: ${data.duration_seconds} s`,

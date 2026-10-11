@@ -72,6 +72,18 @@ describe('buildReport', () => {
     expect(checks.find((c) => c.id === 'redeem')).toMatchObject({ status: 'pending', detail: null, settled_at: null })
   })
 
+  it('names the spec and leaves the build unknown when the backend did not report it', () => {
+    const report = buildReport(run)
+
+    expect(report).toMatchObject({ spec: 'SEP-0056 v0.1.2 (Draft)', cli_version: null, cli_commit: null })
+  })
+
+  it('records the build the backend reported', () => {
+    const report = buildReport(makeRun({ meta: { cliVersion: '0.3.0', cliCommit: '6544773' } }))
+
+    expect(report).toMatchObject({ cli_version: '0.3.0', cli_commit: '6544773' })
+  })
+
   it('treats a run that never completed as zero-length', () => {
     const report = buildReport(makeRun({ completedAt: null }))
 
@@ -188,6 +200,15 @@ describe('downloadReport', () => {
     expect(md).toContain('| Mint conformance | FAIL | 2026-01-01T00:00:20.000Z | got 0 \\| expected 5 shares |')
     expect(md).toContain('| Redeem conformance | PENDING | — |  |')
     expect(md.trimEnd().endsWith(`_${buildReport(run).timing_note}_`)).toBe(true)
+  })
+
+  it('puts the spec and checker build in the Markdown header', async () => {
+    downloadReport(makeRun({ meta: { cliVersion: '0.3.0', cliCommit: '6544773' } }), 'md')
+    const withBuild = await blob!.text()
+    expect(withBuild).toContain('- Spec: SEP-0056 v0.1.2 (Draft)\n- Checker: sep56-vault-guard 0.3.0 (commit 6544773)\n')
+
+    downloadReport(run, 'md')
+    expect(await blob!.text()).toContain('- Checker: sep56-vault-guard version unknown\n')
   })
 
   it('removes the temporary link and revokes its URL', () => {

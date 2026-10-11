@@ -107,7 +107,8 @@ export function useCheckRun() {
 
       if (job.status === 'complete') {
         const checks = job.checks ?? (job.result ? legacyToChecks(job.result) : [])
-        setRun((r) => ({ ...r, phase: 'done', message: 'Done.', completedAt: Date.now(), checks: applyChecks(r.checks, checks) }))
+        const meta = job.meta ? { cliVersion: job.meta.cli_version ?? null, cliCommit: job.meta.cli_commit ?? null } : null
+        setRun((r) => ({ ...r, phase: 'done', message: 'Done.', completedAt: Date.now(), checks: applyChecks(r.checks, checks), meta }))
         return
       }
 

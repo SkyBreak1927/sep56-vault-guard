@@ -1,5 +1,5 @@
 const { randomUUID } = require('crypto');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const os = require('os');
@@ -37,6 +37,26 @@ const VAULT_ADDRESS_RE = /^C[A-Z2-7]{55}$/;
 // creation with its own spawn.
 const STATUS_DIR = path.join(os.tmpdir(), 'aegis-vault-status');
 fs.mkdirSync(STATUS_DIR, { recursive: true });
+
+// Which build produced the results, sent with every completed job so a report
+// can say what ran. The version comes from the CLI itself (`--version`); the
+// commit from Render's RENDER_GIT_COMMIT when present. Either is null when
+// unknown (an older CLI without --version, or a host that sets no commit).
+function readCliVersion() {
+  try {
+    const out = spawnSync(CLI_BINARY, ['--version'], { encoding: 'utf8', timeout: 5000 });
+    if (out.status !== 0) return null;
+    const match = /(\d+\.\d+\.\d+\S*)/.exec(out.stdout || '');
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+const BUILD_META = {
+  cli_version: readCliVersion(),
+  cli_commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null,
+};
+console.log(`Build: cli_version=${BUILD_META.cli_version} cli_commit=${BUILD_META.cli_commit}`);
 
 // In-memory job store: jobId -> { status: 'processing'|'complete'|'error',
 // result?, checks?, error?, createdAt, statusFilePath }. Fine for this
@@ -392,7 +412,7 @@ app.get('/api/check/:jobId', async (req, res) => {
     return res.status(502).json({ status: 'error', error: job.error, checks: job.checks });
   }
 
-  return res.json({ status: 'complete', result: job.result, checks: job.checks });
+  return res.json({ status: 'complete', result: job.result, checks: job.checks, meta: BUILD_META });
 });
 
 app.listen(PORT, () => {

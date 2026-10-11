@@ -38,6 +38,7 @@ const ACCESS_OPERATOR_ACCOUNT: &str = "frank";
 
 /// SEP-56 tokenized vault conformance checker.
 #[derive(Parser)]
+#[command(version)]
 struct Cli {
     /// Contract address of the vault to check. Defaults to our own
     /// reference vault deployment.

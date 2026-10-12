@@ -171,9 +171,10 @@ jobs:
           echo "$info" | grep -q x86_64
           echo "$info" | grep -q arm64
           otool -L out/sep56-vault-guard
-          # Everything after the first line (the file itself) must be a
-          # system library.
-          if otool -L out/sep56-vault-guard | tail -n +2 | grep -v -E '^[[:space:]]+(/usr/lib/|/System/)'; then
+          # A universal binary prints one "file (architecture ...):" header
+          # per slice; only the indented lines are libraries, and each must
+          # be a system library.
+          if otool -L out/sep56-vault-guard | grep -E '^[[:space:]]' | grep -v -E '^[[:space:]]+(/usr/lib/|/System/)'; then
             echo "::error::binary links a non-system library"
             exit 1
           fi

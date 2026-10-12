@@ -261,6 +261,38 @@ Running the exact same automated attack (1-stroop dust deposit, 100,000,000-stro
 
 **Takeaway**: a "burn dead shares in the constructor" mitigation is real, implementable, on-chain-verifiable protection — and it measurably helps (0 → 100 shares here) — but like `decimals_offset`, it is a fixed constant and cannot be sized to neutralize an attacker whose donation is chosen to be large relative to it. Meaningful protection against a well-funded attacker still requires pairing a fixed mitigation like this with a deployment-time safeguard scaled to the vault's expected usage (e.g. a real, asset-backed initial deposit sized by the deployer), as already recommended in SECURITY.md §1a.
 
+### Positive Control Vault — calibrated so `donation_attack` can PASS (`decimals_offset = 0`)
+
+- **Address**: `CAHMH3VSMNCYDCRTCZBJOKJE65HT2LJBZQFQULMRH6E2OGGGPMSNG376`
+- **Code**: `contracts/positive-control-vault` — a copy of `contracts/hardened-vault` in which the only change is `DEAD_SHARES = 100_000_000` (instead of `1_000`). Wasm sha256: `ddebaa67cfb95bdccdfb0b78d56603dc433fcc62d735ccda231028454756e32d` (40,467 bytes). Deployed with name `Positive Control Vault`, symbol `PCV`, `decimals_offset = 0`, and the same native XLM Stellar Asset Contract as the reference vault.
+- **Purpose**: a positive control. Every other vault in this document fails `donation_attack`, so on its own that result cannot show the check is *able* to pass. This vault exists to produce one run with 11 of 11 PASS.
+- **Honest framing**: the value `100_000_000` was chosen **after** the parameters of the `donation_attack` check were known (1-stroop dust deposit, 100,000,000-stroop donation, 5,000,000-stroop victim deposit), and sized to that attack. It is a control for `donation_attack` only. It is **not** a recommended design and not a value to copy into a real vault.
+- **Verified on-chain immediately after deployment, before any deposit**: `total_supply() = 100000000` and `balance(<vault address>) = 100000000`.
+- **Run**: CLI `sep56-vault-guard 0.4.0`, `--output text` and `--output json`, both exit code `0`. Summary line: `11 checks, 11 passed, 0 failed`.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `total_assets` | PASS |
+| 2 | `deposit` | PASS |
+| 3 | `mint` | PASS |
+| 4 | `withdraw` | PASS |
+| 5 | `redeem` | PASS (returns 0 assets — see below) |
+| 6 | `convert_to_shares` | PASS |
+| 7 | `convert_to_assets` | PASS (value 0 — see below) |
+| 8 | `donation_attack` | PASS — victim received 9,999,999 shares |
+| 9 | `overflow_protection` | PASS (with the usual caveat at `decimals_offset = 0`, see SECURITY.md §2) |
+| 10 | `rounding_direction` | PASS |
+| 11 | `access_control_probing` | PASS |
+
+**11 PASS, 0 FAIL.**
+
+**This vault is a positive control for `donation_attack` only, not a recommended design.** 100,000,000 dead shares with no assets behind them make the share price close to zero: the first 5,000,000-stroop deposit minted 500,000,005,000,000 shares. Consequences in this run:
+
+- `redeem` returned **0 assets** for 1,000,000 shares and still PASSed, because `preview_redeem` also returned 0. `convert_to_assets(4000000)` PASSed with the value **0** (`0 <= 4000000`). Both PASSes are correct under the checks' assertions, but they carry almost no information at this ratio.
+- `donation_attack` reports the victim received **199%** of the expected shares. The "expected" baseline assumes a 1:1 share price and does not account for the share price already present in the vault, so the percentage should not be read as the victim being better off than an undisturbed depositor. The meaningful figure is the 9,999,999 shares received for a 5,000,000-stroop deposit, versus 0 for the reference vault and 100 for Hardened Vault. The attacker's net P&L in the same run was a loss of 50,000,000 stroops.
+
+Why this works only for this attack: as noted for Hardened Vault and in SECURITY.md §1b, a fixed dead-shares constant defends against donations of roughly its own order of magnitude. Here the constant equals the donation size used by the check, so the check can PASS. A larger donation would overwhelm it, as it would the other fixed-size defenses.
+
 ### Blind Vault — custom, non-native asset, `decimals_offset = 3`
 
 - **Vault address**: `CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7`

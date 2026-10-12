@@ -29,7 +29,8 @@ export const siteLinks = {
   sep41Spec:
     optional(process.env.NEXT_PUBLIC_SEP41_SPEC_URL) ??
     'https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md',
-  docs: optional(process.env.NEXT_PUBLIC_DOCS_URL) ?? `${REPO_URL}/blob/main/VAULT_CHECKS.md`,
+  // The /docs site in this app; a plain <a>, so it carries the basePath itself.
+  docs: optional(process.env.NEXT_PUBLIC_DOCS_URL) ?? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/docs`,
   x: 'https://x.com/Aegis_Vault',
   youtube: 'https://www.youtube.com/@Aegis_Vault',
   /**

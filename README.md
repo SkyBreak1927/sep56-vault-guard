@@ -271,7 +271,7 @@ identity, and an address that is not a contract on testnet. Under
 Windows x86_64, Linux x86_64 and macOS (universal: x86_64 and arm64). The
 release workflow builds all three.
 
-Honest state of testing for v0.3.0:
+Honest state of testing:
 
 - **Windows x86_64:** the v0.3.0 zip was downloaded with `gh release download`,
   its SHA-256 matched the `.sha256` file, and it was run from `cmd` against the

@@ -345,6 +345,20 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
         }
     };
 
+    let max_limit = match read_max(contract_id, source_account, "max_deposit", "receiver").await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read max_deposit: {detail}"))
+        }
+    };
+
+    let supply_before = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply before deposit: {detail}"))
+        }
+    };
+
     let expected_shares = match call_preview(
         contract_id,
         source_account,
@@ -406,9 +420,29 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
             ));
     }
 
+    if max_limit < DEPOSIT_AMOUNT {
+        return CheckResult::fail(name, format!(
+                "max_deposit({source_account}) ({max_limit} assets) is smaller than the amount this check just deposited ({DEPOSIT_AMOUNT} assets)"
+            ));
+    }
+
+    let supply_after = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply after deposit: {detail}"))
+        }
+    };
+
+    let expected_supply = supply_before + shares_minted;
+    if supply_after != expected_supply {
+        return CheckResult::fail(name, format!(
+                "total_supply after deposit ({supply_after}) != before ({supply_before}) + shares ({shares_minted}) = {expected_supply}"
+            ));
+    }
+
     CheckResult::pass(name, format!(
             "deposited {DEPOSIT_AMOUNT} stroops, minted {shares_minted} shares matching \
-             preview_deposit(), total_assets {before} -> {after}"
+             preview_deposit(), total_assets {before} -> {after}; max_deposit={max_limit}, total_supply {supply_before} -> {supply_after}"
         ))
 }
 
@@ -427,6 +461,20 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
         Ok(amount) => amount,
         Err(detail) => {
             return detail.finish(name, |detail| format!("could not read total_assets before mint: {detail}"))
+        }
+    };
+
+    let max_limit = match read_max(contract_id, source_account, "max_mint", "receiver").await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read max_mint: {detail}"))
+        }
+    };
+
+    let supply_before = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply before mint: {detail}"))
         }
     };
 
@@ -490,9 +538,29 @@ pub async fn check_mint(contract_id: &str, source_account: &str) -> CheckResult 
             ));
     }
 
+    if max_limit < MINT_SHARES {
+        return CheckResult::fail(name, format!(
+                "max_mint({source_account}) ({max_limit} shares) is smaller than the amount this check just minted ({MINT_SHARES} shares)"
+            ));
+    }
+
+    let supply_after = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply after mint: {detail}"))
+        }
+    };
+
+    let expected_supply = supply_before + MINT_SHARES;
+    if supply_after != expected_supply {
+        return CheckResult::fail(name, format!(
+                "total_supply after mint ({supply_after}) != before ({supply_before}) + shares ({MINT_SHARES}) = {expected_supply}"
+            ));
+    }
+
     CheckResult::pass(name, format!(
             "minted {MINT_SHARES} shares, pulled {assets_pulled} assets matching \
-             preview_mint(), total_assets {before} -> {after}"
+             preview_mint(), total_assets {before} -> {after}; max_mint={max_limit}, total_supply {supply_before} -> {supply_after}"
         ))
 }
 
@@ -511,6 +579,20 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
         Ok(amount) => amount,
         Err(detail) => {
             return detail.finish(name, |detail| format!("could not read total_assets before withdraw: {detail}"))
+        }
+    };
+
+    let max_limit = match read_max(contract_id, source_account, "max_withdraw", "owner").await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read max_withdraw: {detail}"))
+        }
+    };
+
+    let supply_before = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply before withdraw: {detail}"))
         }
     };
 
@@ -575,9 +657,29 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
             ));
     }
 
+    if max_limit < WITHDRAW_AMOUNT {
+        return CheckResult::fail(name, format!(
+                "max_withdraw({source_account}) ({max_limit} assets) is smaller than the amount this check just withdrew ({WITHDRAW_AMOUNT} assets)"
+            ));
+    }
+
+    let supply_after = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply after withdraw: {detail}"))
+        }
+    };
+
+    let expected_supply = supply_before - shares_burned;
+    if supply_after != expected_supply {
+        return CheckResult::fail(name, format!(
+                "total_supply after withdraw ({supply_after}) != before ({supply_before}) - shares ({shares_burned}) = {expected_supply}"
+            ));
+    }
+
     CheckResult::pass(name, format!(
             "withdrew {WITHDRAW_AMOUNT} stroops, burned {shares_burned} shares matching \
-             preview_withdraw(), total_assets {before} -> {after}"
+             preview_withdraw(), total_assets {before} -> {after}; max_withdraw={max_limit}, total_supply {supply_before} -> {supply_after}"
         ))
 }
 
@@ -596,6 +698,20 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
         Ok(amount) => amount,
         Err(detail) => {
             return detail.finish(name, |detail| format!("could not read total_assets before redeem: {detail}"))
+        }
+    };
+
+    let max_limit = match read_max(contract_id, source_account, "max_redeem", "owner").await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read max_redeem: {detail}"))
+        }
+    };
+
+    let supply_before = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply before redeem: {detail}"))
         }
     };
 
@@ -660,9 +776,29 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
             ));
     }
 
+    if max_limit < REDEEM_SHARES {
+        return CheckResult::fail(name, format!(
+                "max_redeem({source_account}) ({max_limit} shares) is smaller than the amount this check just redeemed ({REDEEM_SHARES} shares)"
+            ));
+    }
+
+    let supply_after = match read_total_supply(contract_id, source_account).await {
+        Ok(amount) => amount,
+        Err(detail) => {
+            return detail.finish(name, |detail| format!("could not read total_supply after redeem: {detail}"))
+        }
+    };
+
+    let expected_supply = supply_before - REDEEM_SHARES;
+    if supply_after != expected_supply {
+        return CheckResult::fail(name, format!(
+                "total_supply after redeem ({supply_after}) != before ({supply_before}) - shares ({REDEEM_SHARES}) = {expected_supply}"
+            ));
+    }
+
     CheckResult::pass(name, format!(
             "redeemed {REDEEM_SHARES} shares, received {assets_received} assets matching \
-             preview_redeem(), total_assets {before} -> {after}"
+             preview_redeem(), total_assets {before} -> {after}; max_redeem={max_limit}, total_supply {supply_before} -> {supply_after}"
         ))
 }
 
@@ -1748,6 +1884,35 @@ async fn read_total_assets(contract_id: &str, source_account: &str) -> Result<i1
             Stop::Fail(format!("total_assets returned a non-numeric or negative value: {value}"))
         }),
         Err(e) => Err(e.wrap_fail(|e| format!("invoke_contract failed: {e}"))),
+    }
+}
+
+/// Calls `total_supply()` and parses it as a non-negative `i128` (vault shares).
+async fn read_total_supply(contract_id: &str, source_account: &str) -> Result<i128, Stop> {
+    match invoke_checked(contract_id, "total_supply", &[], source_account, false).await {
+        Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
+            Stop::Fail(format!("total_supply returned a non-numeric or negative value: {value}"))
+        }),
+        Err(e) => Err(e.wrap_fail(|e| format!("total_supply invoke failed: {e}"))),
+    }
+}
+
+/// Calls a SEP-56 limit function (`max_deposit`, `max_mint` with `--receiver`;
+/// `max_withdraw`, `max_redeem` with `--owner`) for `account` and parses the
+/// result as a non-negative `i128`. Assets for deposit/withdraw, shares for
+/// mint/redeem.
+async fn read_max(
+    contract_id: &str,
+    account: &str,
+    function_name: &str,
+    arg_name: &str,
+) -> Result<i128, Stop> {
+    let args = vec![format!("--{arg_name}"), account.to_string()];
+    match invoke_checked(contract_id, function_name, &args, account, false).await {
+        Ok(value) => parse_non_negative_i128(&value).ok_or_else(|| {
+            Stop::Fail(format!("{function_name} returned a non-numeric or negative value: {value}"))
+        }),
+        Err(e) => Err(e.wrap_fail(|e| format!("{function_name} invoke failed: {e}"))),
     }
 }
 

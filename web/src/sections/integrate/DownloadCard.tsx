@@ -37,7 +37,7 @@ export function DownloadCard() {
       </CardHeading>
 
       {/* Grows to fill the card, so the download button sits right under the choice. */}
-      <div role="group" aria-label="Platform" className="grid flex-1 grid-cols-3 gap-space-sm">
+      <div role="group" aria-label="Platform" className="grid flex-1 grid-cols-1 gap-space-sm md:grid-cols-3">
         {PLATFORMS.map((p) => {
           const selected = p.id === platform
           return (

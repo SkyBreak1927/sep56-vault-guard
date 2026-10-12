@@ -53,6 +53,7 @@ const latestAsset = (file: string) => repoPath(`releases/latest/download/${file}
 export const downloads = {
   windows: latestAsset('sep56-vault-guard-windows-x86_64.zip'),
   linux: latestAsset('sep56-vault-guard-linux-x86_64.tar.gz'),
+  macos: latestAsset('sep56-vault-guard-macos-universal.tar.gz'),
 }
 
 /** README section the Build from Source card points to. */

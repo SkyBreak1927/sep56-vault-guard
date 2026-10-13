@@ -23,6 +23,7 @@ export const preflight: DocsPage = {
   "problem": "…",
   "fix": "…"
 }`,
+          'ABBREVIATED EXAMPLE',
         ),
       ],
     },

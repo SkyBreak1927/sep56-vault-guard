@@ -48,7 +48,9 @@ export const limitations: DocsPage = {
           'Linux x86_64: built and glibc-checked in CI, not run by the maintainer.',
           'macOS universal: built and smoke-tested in CI. Not run against Testnet on macOS; Gatekeeper behaviour for a browser download not tried.',
         ),
-        unverified('The binaries are not code-signed.'),
+        unverified(
+          'The Windows and Linux binaries are not signed. The macOS binary is ad-hoc signed (`.github/workflows/release.yml`), not Developer-ID signed and not notarized. Gatekeeper behaviour for a browser download has not been tried.',
+        ),
       ],
     },
     {

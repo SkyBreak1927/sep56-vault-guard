@@ -96,7 +96,7 @@ tar -xzf sep56-vault-guard-macos-universal.tar.gz`,
         ),
         text('On Windows, compare the printed hash with the contents of the `.sha256` file.'),
         unverified(
-          'The binaries are not code-signed. Downloaded through a browser, Windows SmartScreen shows a warning; after checking the hash, choose "More info", then "Run anyway". macOS may show a warning the first time the binary is opened; no workaround has been tried, so none is given.',
+          'The Windows and Linux binaries are not signed. The macOS binary is ad-hoc signed (`.github/workflows/release.yml`), not Developer-ID signed and not notarized. Downloaded through a browser, Windows SmartScreen shows a warning; after checking the hash, choose "More info", then "Run anyway". Whether macOS Gatekeeper warns for a browser download has not been tried, so no workaround is given.',
         ),
         unverified(
           'The Linux binary is built and glibc-checked in CI but has not been run by the maintainer. The macOS binary is built and smoke-tested in CI only; it has not been run against Testnet on macOS.',

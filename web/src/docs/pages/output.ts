@@ -62,7 +62,7 @@ export const output: DocsPage = {
   { "name": "donation_attack", "category": "Security/Adversarial", "status": "INCONCLUSIVE",
     "detail": "…", "reason_code": "insufficient_token_balance" }
 ]`,
-          'EXAMPLE',
+          'ABBREVIATED EXAMPLE',
         ),
         verified(
           "Field names and order are taken from the CLI's unit tests. The `detail` text is shortened here; a real run prints the measured values.",
@@ -133,6 +133,7 @@ export const output: DocsPage = {
     { "id": "deposit", "group": "conformance", "status": "running", "detail": null }
   ]
 }`,
+          'ABBREVIATED EXAMPLE',
         ),
         params([
           param('checks[].id', 'string', 'One of the 11 check ids, always in the fixed order.'),
@@ -145,7 +146,7 @@ export const output: DocsPage = {
           param('checks[].detail', 'string | null', 'Set when the check finishes.'),
           optional('checks[].reason_code', 'string', 'Present only when there is one.'),
         ]),
-        verified('Field names are taken from `cli/src/status.rs`. The values in the example are illustrative.'),
+        verified('Field names are taken from `cli/src/status.rs`. The values in the example are placeholders, not output of a real run.'),
       ],
     },
   ],

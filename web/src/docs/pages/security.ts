@@ -34,7 +34,7 @@ export const security: DocsPage = {
         field('ACCOUNTS', '`grace` (attacker), `bob` (victim)'),
         field('SEP-56 REFERENCE', 'Notes On Decimals Offset; Security Concerns, "Empty vault attack".'),
         verified(
-          'This check fails on every project test vault, including the reference vault: there the victim received 0 shares. A finding on this check is a security risk, not a violation of an Interface function.',
+          'This check fails on every project test vault except the Positive Control Vault, a positive control calibrated after the parameters of `donation_attack` were known (11 of 11 on Testnet; only one donation size was tested; see `VAULT_CHECKS.md`). On the reference vault the victim received 0 shares. A finding on this check is a security risk, not a violation of an Interface function.',
         ),
       ],
     },

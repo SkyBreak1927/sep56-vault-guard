@@ -50,11 +50,20 @@ export const testVaults: DocsPage = {
               'Custom token asset, `decimals_offset = 3`',
               '10 PASS, 1 FAIL (`donation_attack`)',
             ],
+            [
+              'Positive Control Vault',
+              '`CAHMH3VSMNCYDCRTCZBJOKJE65HT2LJBZQFQULMRH6E2OGGGPMSNG376`',
+              'Hardened Vault code with `DEAD_SHARES = 100_000_000`, `decimals_offset = 0`, native XLM',
+              '11 PASS, 0 FAIL',
+            ],
           ],
         ),
         verified('Results as recorded in `VAULT_CHECKS.md`.'),
         text(
           "Vault B is the negative control: it shows `rounding_direction` catches a real, injected bug. The Hardened Vault raised the victim's shares in `donation_attack` from 0 to 100, still far below the 90% threshold.",
+        ),
+        text(
+          "The Positive Control Vault is a control for `donation_attack` only, not a recommended design. Its dead-shares value was chosen after the parameters of that check were known, and only one donation size was tested.",
         ),
       ],
     },

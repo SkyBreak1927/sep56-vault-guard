@@ -24,7 +24,10 @@ export const conformance: DocsPage = {
       title: 'total_assets',
       blocks: [
         field('WHAT IT ASSERTS', '`total_assets()` can be called and returns a valid, non-negative `i128`.'),
-        field('MUTATES TARGET VAULT', 'No.'),
+        field('MUTATES TARGET VAULT', 'Yes, as one of the 7 conformance checks.'),
+        unverified(
+          'Not yet proven whether `stellar contract invoke` sends a transaction for this view function. The statement follows the project README and `VAULT_CHECKS.md`, which count all 7 conformance checks as changing the vault.',
+        ),
         field('SEP-56 REFERENCE', 'Interface, `fn total_assets`.'),
       ],
     },
@@ -87,7 +90,7 @@ export const conformance: DocsPage = {
         text(
           'A missing `max_*` or `total_supply` function, or one that reverts, makes the check `FAIL`. A network error or an error the tool cannot classify makes it `INCONCLUSIVE`.',
         ),
-        verified('Added in v0.4.0. The six project test vaults gave the same results before and after this change.'),
+        verified('Added in v0.4.0. The six project test vaults that predate the Positive Control Vault gave the same results before and after this change.'),
         unverified(
           'The `max_*` assertion is a lower bound only: it checks that the limit allows the amount just executed, not that the limit is the exact value the vault should report.',
         ),
@@ -101,7 +104,10 @@ export const conformance: DocsPage = {
           'WHAT IT ASSERTS',
           'Round trip: `convert_to_assets(convert_to_shares(x))` does not exceed `x`, and `convert_to_shares()` does not change `total_assets()`.',
         ),
-        field('MUTATES TARGET VAULT', 'No.'),
+        field('MUTATES TARGET VAULT', 'Yes, as one of the 7 conformance checks.'),
+        unverified(
+          'Not yet proven whether `stellar contract invoke` sends a transaction for this view function. The statement follows the project README and `VAULT_CHECKS.md`, which count all 7 conformance checks as changing the vault.',
+        ),
         field('SEP-56 REFERENCE', 'Interface, `fn convert_to_shares` ("rounded down").'),
         text(
           'The check uses "does not exceed" rather than "equals": two rounded-down divisions can lose a unit but never gain one, so exact equality only holds by coincidence. A round trip that creates value still fails.',
@@ -116,7 +122,10 @@ export const conformance: DocsPage = {
           'WHAT IT ASSERTS',
           'Round trip in the other direction: `convert_to_shares(convert_to_assets(x))` does not exceed `x`, and `convert_to_assets()` does not change `total_assets()`.',
         ),
-        field('MUTATES TARGET VAULT', 'No.'),
+        field('MUTATES TARGET VAULT', 'Yes, as one of the 7 conformance checks.'),
+        unverified(
+          'Not yet proven whether `stellar contract invoke` sends a transaction for this view function. The statement follows the project README and `VAULT_CHECKS.md`, which count all 7 conformance checks as changing the vault.',
+        ),
         field('SEP-56 REFERENCE', 'Interface, `fn convert_to_assets` ("rounded down").'),
       ],
     },

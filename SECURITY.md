@@ -113,6 +113,8 @@ still requires sizing a mitigation (or a deployer-seeded initial deposit) to
 the donation size actually worth defending against, not a one-size-fits-all
 constant.
 
+**Positive control:** a variant of Hardened Vault with `DEAD_SHARES = 100_000_000`, calibrated after the `donation_attack` parameters were known, passes all 11 checks. It shows the check can PASS; it is not a recommended design (see [VAULT_CHECKS.md](./VAULT_CHECKS.md#positive-control-vault--calibrated-so-donation_attack-can-pass-decimals_offset--0)).
+
 ## 2. Overflow Protection — PASS, with an important caveat (at `decimals_offset=0`)
 
 **Status:** PASS (clean failure, not a silent wrong result)

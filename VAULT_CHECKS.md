@@ -147,17 +147,20 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ## Demo/Validation Vaults
 
-Five additional testnet deployments exist alongside our own reference
+Six additional testnet deployments exist alongside our own reference
 deployment — none represent reviews of third-party vaults. Vault A and Vault B exist
 purely to validate that the checks above actually generalize to vaults
 other than the reference deployment; Demo Vault exists as a public showcase
 target with a standard, unmodified configuration; Hardened Vault implements
 a real donation-attack mitigation in contract code, for honest before/after
-comparison against the reference vault's known finding; Blind Vault is an
+comparison against the reference vault's known finding; Positive Control
+Vault is a Hardened Vault variant calibrated after the `donation_attack`
+parameters were known, serving as a positive control for that check only;
+Blind Vault is an
 unmodified reference-vault clone deployed with parameters chosen *before*
 seeing any result, specifically to stress the checker itself rather than
-any vault code. Vault A, Vault B, Demo Vault, and Hardened Vault all use
-the same underlying native XLM asset as the reference vault; Blind Vault
+any vault code. Vault A, Vault B, Demo Vault, Hardened Vault, and Positive
+Control Vault all use the same underlying native XLM asset as the reference vault; Blind Vault
 deliberately does not (see below).
 
 ### Vault A — `decimals_offset = 6`
@@ -260,6 +263,38 @@ Running the exact same automated attack (1-stroop dust deposit, 100,000,000-stro
 **Side effect discovered during testing — `convert_to_shares`/`convert_to_assets` checker fix:** the pre-existing exact-equality round-trip assertion in these two checks (`convert_to_assets(convert_to_shares(x)) == x` and the reverse) turned out to only ever hold by coincidence, at share:asset ratios that divide evenly (a fresh vault's 1:1 ratio, or Vault A's exact power-of-ten offset) — every vault tested before this one happened to stay at such a ratio. The hardened vault's dead-shares-influenced ratio is not a clean multiple, and composing two floor divisions there legitimately loses a few units on round-trip (verified: `4000000 → 3999999` and `4000000 → 3999994` in the two directions) — a true mathematical property of floor/floor conversions, not a defect. The checks (`cli/src/checks/mod.rs`) were updated from exact equality to the provably correct bound `floor(floor(x·n/d)·d/n) <= x`, which still fails a vault whose round trip *creates* value (impossible for a correct floor-rounding vault) and still fails `contracts/rounding-bug-vault`'s round trip (which is provably `>= x` instead, since it rounds up) — verified by re-running the full suite against the reference vault, Vault A, Vault B, and Demo Vault after the fix, with no change in any of their results.
 
 **Takeaway**: a "burn dead shares in the constructor" mitigation is real, implementable, on-chain-verifiable protection — and it measurably helps (0 → 100 shares here) — but like `decimals_offset`, it is a fixed constant and cannot be sized to neutralize an attacker whose donation is chosen to be large relative to it. Meaningful protection against a well-funded attacker still requires pairing a fixed mitigation like this with a deployment-time safeguard scaled to the vault's expected usage (e.g. a real, asset-backed initial deposit sized by the deployer), as already recommended in SECURITY.md §1a.
+
+### Positive Control Vault — calibrated so `donation_attack` can PASS (`decimals_offset = 0`)
+
+- **Address**: `CAHMH3VSMNCYDCRTCZBJOKJE65HT2LJBZQFQULMRH6E2OGGGPMSNG376`
+- **Code**: `contracts/positive-control-vault` — a copy of `contracts/hardened-vault` in which the only change is `DEAD_SHARES = 100_000_000` (instead of `1_000`). Wasm sha256: `ddebaa67cfb95bdccdfb0b78d56603dc433fcc62d735ccda231028454756e32d` (40,467 bytes). Deployed with name `Positive Control Vault`, symbol `PCV`, `decimals_offset = 0`, and the same native XLM Stellar Asset Contract as the reference vault.
+- **Purpose**: a positive control. Every other vault in this document fails `donation_attack`, so on its own that result cannot show the check is *able* to pass. This vault exists to produce one run with 11 of 11 PASS.
+- **Honest framing**: the value `100_000_000` was chosen **after** the parameters of the `donation_attack` check were known (1-stroop dust deposit, 100,000,000-stroop donation, 5,000,000-stroop victim deposit), and sized to that attack. It is a control for `donation_attack` only. It is **not** a recommended design and not a value to copy into a real vault.
+- **Verified on-chain immediately after deployment, before any deposit**: `total_supply() = 100000000` and `balance(<vault address>) = 100000000`.
+- **Run**: CLI `sep56-vault-guard 0.4.0`, `--output text` and `--output json`, both exit code `0`. Summary line: `11 checks, 11 passed, 0 failed`.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `total_assets` | PASS |
+| 2 | `deposit` | PASS |
+| 3 | `mint` | PASS |
+| 4 | `withdraw` | PASS |
+| 5 | `redeem` | PASS (returns 0 assets — see below) |
+| 6 | `convert_to_shares` | PASS |
+| 7 | `convert_to_assets` | PASS (value 0 — see below) |
+| 8 | `donation_attack` | PASS — victim received 9,999,999 shares |
+| 9 | `overflow_protection` | PASS (with the usual caveat at `decimals_offset = 0`, see SECURITY.md §2) |
+| 10 | `rounding_direction` | PASS |
+| 11 | `access_control_probing` | PASS |
+
+**11 PASS, 0 FAIL.**
+
+**This vault is a positive control for `donation_attack` only, not a recommended design.** 100,000,000 dead shares with no assets behind them make the share price close to zero: the first 5,000,000-stroop deposit minted 500,000,005,000,000 shares. Consequences in this run:
+
+- `redeem` returned **0 assets** for 1,000,000 shares and still PASSed, because `preview_redeem` also returned 0. `convert_to_assets(4000000)` PASSed with the value **0** (`0 <= 4000000`). Both PASSes are correct under the checks' assertions, but they carry almost no information at this ratio.
+- `donation_attack` reports the victim received **199%** of the expected shares. The "expected" baseline assumes a 1:1 share price and does not account for the share price already present in the vault, so the percentage should not be read as the victim being better off than an undisturbed depositor. The meaningful figure is the 9,999,999 shares received for a 5,000,000-stroop deposit, versus 0 for the reference vault and 100 for Hardened Vault. The attacker's net P&L in the same run was a loss of 50,000,000 stroops.
+
+Here the dead-shares constant equals the donation size used by the check, which is why the check can PASS. Only this one donation size was run; how the vault behaves against larger donations was not tested.
 
 ### Blind Vault — custom, non-native asset, `decimals_offset = 3`
 

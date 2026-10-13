@@ -8,11 +8,13 @@ interface CopyButtonProps {
   /** Accessible name; also the visible text when `showLabel` is set. */
   label: string
   showLabel?: boolean
+  /** Text shown for a moment after copying (with `showLabel`). */
+  copiedLabel?: string
   className?: string
 }
 
 /** Copy-to-clipboard action for Soroban addresses and raw output. */
-export function CopyButton({ value, label, showLabel = false, className = '' }: CopyButtonProps) {
+export function CopyButton({ value, label, showLabel = false, copiedLabel = 'Copied', className = '' }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
   // The 24px button gets a 44px hit area from ::before, which needs a positioned box.
   const positioned = /\b(absolute|fixed|relative|sticky)\b/.test(className) ? '' : 'relative'
@@ -32,7 +34,7 @@ export function CopyButton({ value, label, showLabel = false, className = '' }: 
       }}
     >
       {copied ? <CheckIcon className="size-3.5 text-pass" /> : <CopyIcon className="size-3.5" />}
-      <span className={showLabel ? undefined : 'sr-only'}>{copied ? 'Copied' : label}</span>
+      <span className={showLabel ? undefined : 'sr-only'}>{copied ? copiedLabel : label}</span>
     </button>
   )
 }

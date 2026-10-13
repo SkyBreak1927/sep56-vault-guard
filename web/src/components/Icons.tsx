@@ -261,3 +261,21 @@ export function UserIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+  )
+}
+
+export function TerminalIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3.5" y="5" width="17" height="14" rx="2" />
+      <path d="m7.5 10 2.5 2-2.5 2M12.5 14.5h4" />
+    </svg>
+  )
+}

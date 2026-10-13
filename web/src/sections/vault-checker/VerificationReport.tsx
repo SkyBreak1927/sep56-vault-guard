@@ -36,7 +36,7 @@ const ICON_TONE: Record<CheckStatus, string> = {
   not_applicable: 'border-[1.5px] border-line-strong text-muted',
 }
 
-function StatusIcon({ status, className = 'size-5' }: { status: CheckStatus; className?: string }) {
+export function StatusIcon({ status, className = 'size-5' }: { status: CheckStatus; className?: string }) {
   return (
     <span className={`inline-grid flex-none place-items-center rounded-full ${ICON_TONE[status]} ${className}`} aria-hidden="true">
       {status === 'pass' && (

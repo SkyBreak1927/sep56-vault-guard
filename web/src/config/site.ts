@@ -33,10 +33,13 @@ export const siteLinks = {
   x: 'https://x.com/Aegis_Vault',
   youtube: 'https://www.youtube.com/@Aegis_Vault',
   /**
-   * Walkthrough video beside "Just exploring?" (an .mp4 URL). Placeholder for now:
-   * Blender's Sintel trailer (CC BY 3.0); swap in the real walkthrough here.
+   * Walkthrough video beside "Just exploring?", served from public/ (a plain path,
+   * so it needs the basePath prefix). The original HEVC recording, remuxed with
+   * faststart so playback can begin before the whole file has downloaded.
    */
-  walkthroughVideo: 'https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4',
+  walkthroughVideo: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/aegis-vault-walkthrough-demo.mp4`,
+  /** Running time shown on the walkthrough poster; update it with the video. */
+  walkthroughLength: '3:55',
   /** YouTube walkthrough for "Already have a vault?"; hidden until set. */
   checkVideo: optional(process.env.NEXT_PUBLIC_CHECK_VIDEO_URL),
 } as const

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import logo from '@/assets/logo-dark.svg'
 import { PauseIcon, PlayIcon } from '@/components/Icons'
+import { WalkthroughPoster } from './WalkthroughPoster'
 
 /** The centre button fades out after this long without pointer or keyboard activity while playing. */
 const IDLE_MS = 2500
@@ -17,11 +18,11 @@ function clock(seconds: number) {
 
 /**
  * Promo walkthrough with deliberately minimal controls: a centred play/pause
- * button and a thin progress slider along the bottom edge. A branded poster
- * covers the frame until the viewer presses play, and the file only starts
- * downloading then.
+ * button and a thin progress slider along the bottom edge. A poster
+ * (WalkthroughPoster) covers the frame until the viewer presses play, and the
+ * file only starts downloading then.
  */
-export function WalkthroughPlayer({ src }: { src: string }) {
+export function WalkthroughPlayer({ src, length }: { src: string; length?: string }) {
   const root = useRef<HTMLDivElement>(null)
   const video = useRef<HTMLVideoElement>(null)
   const idleTimer = useRef<number | undefined>(undefined)
@@ -135,7 +136,7 @@ export function WalkthroughPlayer({ src }: { src: string }) {
       role="region"
       aria-label="Walkthrough video"
       tabIndex={0}
-      className={`relative aspect-video w-full overflow-hidden rounded-lg border border-line bg-canvas [&:fullscreen]:rounded-none [&:fullscreen]:border-0 ${controlsHidden ? 'cursor-none' : ''}`}
+      className={`relative aspect-video w-full overflow-hidden rounded-lg border border-line bg-canvas transition-colors duration-150 ease-out [&:fullscreen]:rounded-none [&:fullscreen]:border-0 ${controlsHidden ? 'cursor-none' : ''} ${started || failed ? '' : 'can-hover:border-line-strong'}`}
       onPointerMove={wake}
       onPointerLeave={() => playing && setIdle(true)}
       onFocus={wake}
@@ -170,28 +171,19 @@ export function WalkthroughPlayer({ src }: { src: string }) {
       {!started || failed ? (
         <button
           type="button"
-          className="walkthrough-poster group absolute inset-0 grid cursor-pointer place-items-center bg-canvas disabled:cursor-default"
+          className={`group absolute inset-0 grid cursor-pointer place-items-center bg-canvas focus-visible:-outline-offset-2 disabled:cursor-default ${failed ? 'walkthrough-poster' : ''}`}
           aria-label={failed ? 'Video unavailable' : 'Play walkthrough'}
           disabled={failed}
           onClick={togglePlay}
         >
-          {/* The play disc sits dead centre (on the rings, where the playing-state button
-              appears); the lockup stacks above it, its bottom edge one disc-height above centre. */}
-          <span
-            className={`absolute inset-x-0 flex flex-col items-center gap-space-sm md:gap-space-md ${failed ? 'top-1/2 -translate-y-1/2' : 'bottom-1/2 mb-14 md:mb-16'}`}
-          >
-            {/* Plain <img>: the static import already carries the basePath. */}
-            <img src={logo.src} width={logo.width} height={logo.height} alt="" className="block h-7 w-auto md:h-10" />
-            <span className="text-body-md tracking-[0.4em] text-muted md:text-body-lg">
-              {failed ? 'video unavailable' : 'walkthrough'}
+          {failed ? (
+            <span className="flex flex-col items-center gap-space-sm md:gap-space-md">
+              {/* Plain <img>: the static import already carries the basePath. */}
+              <img src={logo.src} width={logo.width} height={logo.height} alt="" className="block h-7 w-auto md:h-10" />
+              <span className="text-body-md tracking-[0.4em] text-muted md:text-body-lg">video unavailable</span>
             </span>
-          </span>
-          {!failed && (
-            <span
-              className={`${playButton} absolute top-1/2 left-1/2 size-14 -translate-1/2 md:size-16 can-hover:group-hover:scale-105 can-hover:group-hover:border-accent can-hover:group-hover:text-accent`}
-            >
-              <PlayIcon className="size-5 fill-current" />
-            </span>
+          ) : (
+            <WalkthroughPoster length={length} />
           )}
         </button>
       ) : (

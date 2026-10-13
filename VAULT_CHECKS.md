@@ -147,17 +147,20 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ## Demo/Validation Vaults
 
-Five additional testnet deployments exist alongside our own reference
+Six additional testnet deployments exist alongside our own reference
 deployment — none represent reviews of third-party vaults. Vault A and Vault B exist
 purely to validate that the checks above actually generalize to vaults
 other than the reference deployment; Demo Vault exists as a public showcase
 target with a standard, unmodified configuration; Hardened Vault implements
 a real donation-attack mitigation in contract code, for honest before/after
-comparison against the reference vault's known finding; Blind Vault is an
+comparison against the reference vault's known finding; Positive Control
+Vault is a Hardened Vault variant calibrated after the `donation_attack`
+parameters were known, serving as a positive control for that check only;
+Blind Vault is an
 unmodified reference-vault clone deployed with parameters chosen *before*
 seeing any result, specifically to stress the checker itself rather than
-any vault code. Vault A, Vault B, Demo Vault, and Hardened Vault all use
-the same underlying native XLM asset as the reference vault; Blind Vault
+any vault code. Vault A, Vault B, Demo Vault, Hardened Vault, and Positive
+Control Vault all use the same underlying native XLM asset as the reference vault; Blind Vault
 deliberately does not (see below).
 
 ### Vault A — `decimals_offset = 6`
@@ -291,7 +294,7 @@ Running the exact same automated attack (1-stroop dust deposit, 100,000,000-stro
 - `redeem` returned **0 assets** for 1,000,000 shares and still PASSed, because `preview_redeem` also returned 0. `convert_to_assets(4000000)` PASSed with the value **0** (`0 <= 4000000`). Both PASSes are correct under the checks' assertions, but they carry almost no information at this ratio.
 - `donation_attack` reports the victim received **199%** of the expected shares. The "expected" baseline assumes a 1:1 share price and does not account for the share price already present in the vault, so the percentage should not be read as the victim being better off than an undisturbed depositor. The meaningful figure is the 9,999,999 shares received for a 5,000,000-stroop deposit, versus 0 for the reference vault and 100 for Hardened Vault. The attacker's net P&L in the same run was a loss of 50,000,000 stroops.
 
-Why this works only for this attack: as noted for Hardened Vault and in SECURITY.md §1b, a fixed dead-shares constant defends against donations of roughly its own order of magnitude. Here the constant equals the donation size used by the check, so the check can PASS. A larger donation would overwhelm it, as it would the other fixed-size defenses.
+Here the dead-shares constant equals the donation size used by the check, which is why the check can PASS. Only this one donation size was run; how the vault behaves against larger donations was not tested.
 
 ### Blind Vault — custom, non-native asset, `decimals_offset = 3`
 

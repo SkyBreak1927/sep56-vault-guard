@@ -5,11 +5,11 @@ import { useState, type ComponentType, type SVGProps } from 'react'
 import { withNext } from '@/lib/returnTo'
 import { useAuth } from '@/lib/useAuth'
 import { downloads } from '@/config/site'
-import { DownloadIcon, LinuxIcon, PackageIcon, WindowsIcon } from '@/components/Icons'
+import { AppleIcon, DownloadIcon, LinuxIcon, PackageIcon, WindowsIcon } from '@/components/Icons'
 import { primaryButton } from '@/components/styles'
 import { CardHeading, integrateCard } from './CardHeading'
 
-type Platform = 'windows' | 'linux'
+type Platform = 'windows' | 'linux' | 'macos'
 
 const PLATFORMS: {
   id: Platform
@@ -21,6 +21,7 @@ const PLATFORMS: {
 }[] = [
   { id: 'windows', label: 'Windows', meta: 'x86_64 · .zip', href: downloads.windows, Icon: WindowsIcon },
   { id: 'linux', label: 'Linux', meta: 'x86_64 · .tar.gz', href: downloads.linux, Icon: LinuxIcon },
+  { id: 'macos', label: 'macOS', meta: 'Apple Silicon + Intel · .tar.gz', href: downloads.macos, Icon: AppleIcon },
 ]
 
 /** Prebuilt binary per platform; sign-up required to download. */
@@ -32,11 +33,11 @@ export function DownloadCard() {
   return (
     <article className={integrateCard}>
       <CardHeading Icon={PackageIcon} iconClassName="text-fg" eyebrow="Ready to run" title="Download">
-        Get the ready-to-use version for Windows or Linux.
+        Get the ready-to-use version for Windows, Linux or macOS.
       </CardHeading>
 
       {/* Grows to fill the card, so the download button sits right under the choice. */}
-      <div role="group" aria-label="Platform" className="grid flex-1 grid-cols-2 gap-space-sm">
+      <div role="group" aria-label="Platform" className="grid flex-1 grid-cols-1 gap-space-sm md:grid-cols-3">
         {PLATFORMS.map((p) => {
           const selected = p.id === platform
           return (

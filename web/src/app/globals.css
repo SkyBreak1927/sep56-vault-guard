@@ -500,6 +500,15 @@
   }
 }
 
+/* The faint emerald glow behind the wheel. */
+@utility wheel-glow {
+  background-image: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--color-pass-base) 14%, transparent),
+    transparent 62%
+  );
+}
+
 /* Try: the walkthrough's progress slider, a thin rail flush with the frame's
    bottom edge. The fill follows --progress; hover or focus thickens the rail and
    shows the thumb. Browsers centre the rail in the input, so the input (taller

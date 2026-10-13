@@ -82,11 +82,9 @@ export function RunForm({ running, onRun }: RunFormProps) {
       lede="Explore Aegis with a test vault, or run the checks against your own."
     >
       <div className="flex flex-col gap-space-md">
-        {/* Demo controls beside the walkthrough on desktop, stacked on smaller screens. */}
-        <div
-          className={`${panel} scroll-reveal grid grid-cols-1 gap-space-lg p-space-lg lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:p-space-md`}
-        >
-          <div className="flex flex-col gap-space-lg lg:justify-center lg:p-space-md">
+        {/* Two cards: demo controls beside the walkthrough on desktop, stacked on smaller screens. */}
+        <div className="scroll-reveal grid grid-cols-1 gap-space-md lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+          <div className={`${panel} flex flex-col gap-space-lg p-space-lg lg:justify-center lg:p-margin`}>
             <PathHeading title="Just exploring?">Watch the walkthrough or run checks on a sample vault.</PathHeading>
             <div className="flex flex-col gap-space-md">
               <div className="flex max-w-md flex-col gap-space-xs">
@@ -118,7 +116,7 @@ export function RunForm({ running, onRun }: RunFormProps) {
             </div>
           </div>
 
-          <WalkthroughPlayer src={siteLinks.walkthroughVideo} />
+          <WalkthroughPlayer src={siteLinks.walkthroughVideo} length={siteLinks.walkthroughLength} />
         </div>
 
         <form

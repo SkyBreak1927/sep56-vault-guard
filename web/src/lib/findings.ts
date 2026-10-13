@@ -15,6 +15,8 @@ export interface Finding {
   evidence: EvidenceRow[]
   /** Supplementary context the CLI reports alongside, not as part of, the verdict. */
   outcome: (EvidenceRow & { note: string }) | null
+  /** Warning shown beside a PASS that does not prove what its name suggests; the status is unchanged. */
+  caveat: string | null
 }
 
 const num = (value: string) => Number(value).toLocaleString('en-US')
@@ -58,6 +60,7 @@ function donationFinding(state: CheckState): Finding | null {
       { label: 'Shares received', value: `${num(shares)} shares`, alert: failed },
     ],
     outcome,
+    caveat: null,
   }
 }
 
@@ -70,12 +73,24 @@ const GENERIC_HEADLINE = {
   not_applicable: "This check does not apply to this vault's design.",
 } as const
 
+// The CLI leads the overflow detail with "NOTE: ..." when decimals_offset is 0 and the
+// PASS comes from the asset contract's int64 limit (cli/src/checks/mod.rs).
+const NOTE_RE = /^NOTE: ([^.]*\.)/
+
+/** The CLI's own caveat on a passing overflow check, or null. Never alters the status. */
+export function passCaveat(def: CheckDef, state: CheckState): string | null {
+  if (def.id !== 'overflow_protection' || state.status !== 'pass') return null
+  const note = state.detail?.match(NOTE_RE)?.[1]
+  return note ? note.charAt(0).toUpperCase() + note.slice(1) : null
+}
+
 /** Human-readable summary of one check's result, for the report's detail pane. */
 export function describeCheck(def: CheckDef, state: CheckState): Finding {
   if (def.id === 'donation_attack' && (state.status === 'pass' || state.status === 'fail')) {
     const finding = donationFinding(state)
     if (finding) return finding
   }
-  if (state.status === 'pass') return { headline: def.description, explanation: null, evidence: [], outcome: null }
-  return { headline: GENERIC_HEADLINE[state.status], explanation: def.description, evidence: [], outcome: null }
+  const caveat = passCaveat(def, state)
+  if (state.status === 'pass') return { headline: def.description, explanation: null, evidence: [], outcome: null, caveat }
+  return { headline: GENERIC_HEADLINE[state.status], explanation: def.description, evidence: [], outcome: null, caveat }
 }

@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { CHECK_DEFS, CHECK_GROUPS, type CheckDef, type CheckStatus } from '@/config/checks'
 import { siteLinks } from '@/config/site'
-import { describeCheck } from '@/lib/findings'
+import { describeCheck, passCaveat } from '@/lib/findings'
 import { buildReport, downloadReport, summaryLines, type ReportFormat } from '@/lib/report'
 import type { CheckRun } from '@/lib/types'
 import { allSettled, countSettled, countStatuses, defsInGroup, formatDuration, useElapsed } from '@/lib/useCheckRun'
 import { CopyButton } from '@/components/CopyButton'
-import { ArrowRightIcon, ChevronRightIcon, DownloadIcon } from '@/components/Icons'
+import { AlertIcon, ArrowRightIcon, ChevronRightIcon, DownloadIcon } from '@/components/Icons'
 import { StatusBadge } from '@/components/StatusBadge'
 import { accentOutlineButton, fieldLabel, panel } from '@/components/styles'
 
@@ -149,6 +149,20 @@ function RunBanner({ run }: { run: CheckRun }) {
   )
 }
 
+/** Small "Note" chip beside a PASS whose result needs a caveat; warn tone, same shape as StatusBadge. */
+function NoteChip({ caveat }: { caveat: string }) {
+  return (
+    <span
+      title={caveat}
+      aria-label={`Note: ${caveat}`}
+      className="inline-flex h-[22px] flex-none items-center gap-1 rounded border border-warn/20 bg-warn/10 px-2 font-mono text-code-sm font-medium text-warn uppercase"
+    >
+      <AlertIcon className="size-3" aria-hidden="true" />
+      Note
+    </span>
+  )
+}
+
 function CheckList({ run, selected, onSelect }: { run: CheckRun; selected: string; onSelect: (id: string) => void }) {
   return (
     <div className="flex flex-col gap-space-md">
@@ -162,7 +176,9 @@ function CheckList({ run, selected, onSelect }: { run: CheckRun; selected: strin
             </h3>
             <ul className="border-b border-line">
               {defs.map((def) => {
-                const { status } = run.checks[def.id]
+                const state = run.checks[def.id]
+                const { status } = state
+                const caveat = passCaveat(def, state)
                 const active = def.id === selected
                 return (
                   <li key={def.id} className="border-t border-line-row first:border-t-0">
@@ -180,6 +196,7 @@ function CheckList({ run, selected, onSelect }: { run: CheckRun; selected: strin
                     >
                       <StatusIcon status={status} />
                       <span className="min-w-0 flex-1 text-body-md text-fg">{def.name}</span>
+                      {caveat && <NoteChip caveat={caveat} />}
                       <StatusBadge status={status} />
                     </button>
                   </li>
@@ -209,6 +226,18 @@ function CheckDetail({ def, run }: { def: CheckDef; run: CheckRun }) {
         <p className="text-headline-md text-fg">{finding.headline}</p>
         {finding.explanation && <p className="text-body-lg text-pretty text-muted">{finding.explanation}</p>}
       </div>
+
+      {finding.caveat && (
+        <section className={`${panel} flex gap-space-sm border-l-2 border-l-warn px-space-md py-3`} aria-label="Note">
+          <AlertIcon className="mt-0.5 size-4 flex-none text-warn" aria-hidden="true" />
+          <div className="flex flex-col gap-space-xs">
+            <p className="text-body-md text-fg">{finding.caveat}</p>
+            <p className="text-body-sm text-muted">
+              The status stays Pass: the vault rejected the deposit cleanly, but not by the vault's own overflow check.
+            </p>
+          </div>
+        </section>
+      )}
 
       {finding.evidence.length > 0 && (
         <section className={`${panel} overflow-hidden`} aria-label={EVIDENCE_TITLE}>

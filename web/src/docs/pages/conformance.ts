@@ -88,9 +88,12 @@ export const conformance: DocsPage = {
       title: 'How max_* and total_supply are judged',
       blocks: [
         text(
-          'A missing `max_*` or `total_supply` function, or one that reverts, makes the check `FAIL`. A network error or an error the tool cannot classify makes it `INCONCLUSIVE`.',
+          'A missing `max_*` or `total_supply` function, a reply that is not a non-negative number, a `max_*` smaller than the amount just executed, or a `total_supply` that did not change by exactly the shares makes the check `FAIL`. An unreachable network, a token transfer rejected for insufficient balance, and any other error the tool cannot classify make it `INCONCLUSIVE` (exit code `3` when nothing failed).',
         ),
         verified('Added in v0.4.0. The six project test vaults that predate the Positive Control Vault gave the same results before and after this change.'),
+        unverified(
+          'From reading the code, a `max_*` or `total_supply` function that exists but reverts ends as `INCONCLUSIVE` with `unclassified_error`, not as `FAIL`. This has not been tested against a vault whose `max_*` or `total_supply` actually reverts.',
+        ),
         unverified(
           'The `max_*` assertion is a lower bound only: it checks that the limit allows the amount just executed, not that the limit is the exact value the vault should report.',
         ),

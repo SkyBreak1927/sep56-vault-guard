@@ -11,6 +11,7 @@ The CLI (`cli/`) is a generic SEP-56 conformance checker, not a tool hardcoded t
 - **`--vault <contract_address>`** selects the target vault to check (defaults to our own reference vault deployment if omitted). All checks operate against whatever address is passed here.
 - The 7 **Positive Conformance** checks call read/write functions directly on the target vault and inspect real state changes (`total_assets()`, share balances, etc.) — they touch the target vault's live state.
 - The 4 **Security/Adversarial** checks never touch the target vault's own state. Each one first resolves the target vault's Wasm hash (`fetch_wasm_hash()`, via `stellar contract info hash`), underlying asset (`query_asset()`), and **actual `decimals_offset`** (derived as `vault.decimals() - underlying_asset.decimals()`, since the vault exposes no direct getter for it), then **deploys its own fresh, throwaway clone** built from that exact configuration, and runs the adversarial scenario against the clone. This makes the security checks safe to run against any real, in-use vault without risking its funds or state, while still testing the exact contract code, asset, and offset the target actually uses — see [Demo/Validation Vaults](#demovalidation-vaults) below for evidence this generalization actually works, not just for the default `decimals_offset = 0` case.
+- **Events are not checked.** The checker never reads or verifies the events a vault emits (the SEP-56 `Deposit` and `Withdraw` events included). A vault that emits wrong events, or none, can still PASS every check.
 - All checks are implemented in `cli/src/checks/mod.rs`; the subprocess wrapper around the `stellar` CLI lives in `cli/src/rpc.rs`.
 
 ---
@@ -21,7 +22,7 @@ These validate that the target vault correctly implements the seven core read/wr
 
 ### 1. `total_assets`
 
-- **Function**: `check_total_assets` — [cli/src/checks/mod.rs:17](cli/src/checks/mod.rs#L17)
+- **Function**: `check_total_assets` — [cli/src/checks/mod.rs:319](cli/src/checks/mod.rs#L319)
 - **Validates**: `total_assets()` can be called successfully and returns a valid non-negative `i128`.
 - **SEP-56 reference** (`## Interface`, `fn total_assets`):
   > "Returns the total amount of underlying assets held by the vault. This represents the vault's balance of the underlying asset, which determines the conversion rate between shares and assets."
@@ -29,43 +30,59 @@ These validate that the target vault correctly implements the seven core read/wr
 
 ### 2. `deposit`
 
-- **Function**: `check_deposit` — [cli/src/checks/mod.rs:43](cli/src/checks/mod.rs#L43)
+- **Function**: `check_deposit` — [cli/src/checks/mod.rs:337](cli/src/checks/mod.rs#L337)
 - **Validates**: Depositing a fixed amount of underlying assets mints shares matching `preview_deposit()` computed just before execution (not a hardcoded 1:1 assumption, so this holds on vaults at any share:asset ratio), and `total_assets()` increases by exactly the deposited amount.
+- **Limit and supply reads (since v0.4.0)**: the check also reads `max_deposit(receiver = alice)` and `total_supply()` before the call, and `total_supply()` again after it. It then requires `max_deposit` to be at least the 5,000,000 assets just deposited, and `total_supply()` to have risen by exactly the shares minted. See [How the limit and supply reads are judged](#how-the-limit-and-supply-reads-are-judged).
 - **SEP-56 reference** (`## Interface`, `fn deposit`):
   > "Deposits underlying assets into the vault and mints vault shares to the receiver, returning the amount of vault shares minted."
 
-  Also `## Events` → `### Deposit Event`, which defines the `Deposit` event topics (`operator`, `from`, `receiver`) and data (`assets`, `shares`) that this operation must emit.
+  Also `## Events` → `### Deposit Event`, which defines the `Deposit` event topics (`operator`, `from`, `receiver`) and data (`assets`, `shares`) that this operation is documented to emit. The checker does not verify the event.
 - **Category**: Positive Conformance
 
 ### 3. `mint`
 
-- **Function**: `check_mint` — [cli/src/checks/mod.rs:160](cli/src/checks/mod.rs#L160)
+- **Function**: `check_mint` — [cli/src/checks/mod.rs:456](cli/src/checks/mod.rs#L456)
 - **Validates**: Minting a fixed amount of shares pulls in assets matching `preview_mint()` computed just before execution, and `total_assets()` increases by exactly the assets pulled.
+- **Limit and supply reads (since v0.4.0)**: the check also reads `max_mint(receiver = alice)` and `total_supply()` before the call, and `total_supply()` again after it. It then requires `max_mint` to be at least the 3,000,000 shares just minted, and `total_supply()` to have risen by exactly those shares.
 - **SEP-56 reference** (`## Interface`, `fn mint`):
   > "Mints a specific amount of vault shares to the receiver by depositing the required amount of underlying assets, returning the amount of assets deposited."
 - **Category**: Positive Conformance
 
 ### 4. `withdraw`
 
-- **Function**: `check_withdraw` — [cli/src/checks/mod.rs:276](cli/src/checks/mod.rs#L276)
+- **Function**: `check_withdraw` — [cli/src/checks/mod.rs:574](cli/src/checks/mod.rs#L574)
 - **Validates**: Withdrawing a fixed amount of underlying assets burns shares matching `preview_withdraw()` computed just before execution, and `total_assets()` decreases by exactly the withdrawn amount.
+- **Limit and supply reads (since v0.4.0)**: the check also reads `max_withdraw(owner = alice)` and `total_supply()` before the call, and `total_supply()` again after it. It then requires `max_withdraw` to be at least the 2,000,000 assets just withdrawn, and `total_supply()` to have fallen by exactly the shares burned (the value `withdraw` returned).
 - **SEP-56 reference** (`## Interface`, `fn withdraw`):
   > "Withdraws a specific amount of underlying assets from the vault by burning the required amount of vault shares from the owner, returning the amount of vault shares burned."
 
-  Also `## Events` → `### Withdraw Event` (topics `operator`, `receiver`, `owner`; data `assets`, `shares`).
+  Also `## Events` → `### Withdraw Event` (topics `operator`, `receiver`, `owner`; data `assets`, `shares`). The checker does not verify the event.
 - **Category**: Positive Conformance
 
 ### 5. `redeem`
 
-- **Function**: `check_redeem` — [cli/src/checks/mod.rs:393](cli/src/checks/mod.rs#L393)
+- **Function**: `check_redeem` — [cli/src/checks/mod.rs:693](cli/src/checks/mod.rs#L693)
 - **Validates**: Redeeming a fixed amount of shares returns assets matching `preview_redeem()` computed just before execution, and `total_assets()` decreases by exactly the assets received.
+- **Limit and supply reads (since v0.4.0)**: the check also reads `max_redeem(owner = alice)` and `total_supply()` before the call, and `total_supply()` again after it. It then requires `max_redeem` to be at least the 1,000,000 shares just redeemed, and `total_supply()` to have fallen by exactly those 1,000,000 shares.
 - **SEP-56 reference** (`## Interface`, `fn redeem`):
   > "Redeems a specific amount of vault shares for underlying assets, returning the amount of underlying assets received."
 - **Category**: Positive Conformance
 
+#### How the limit and supply reads are judged
+
+Applies to checks 2-5 (`deposit`, `mint`, `withdraw`, `redeem`). Read from `cli/src/checks/mod.rs` (`read_max`, `read_total_supply`, `invoke_checked`, `verdict`) and `cli/src/rpc.rs` (`classify_error_text`).
+
+- **Order**: the `max_*` and `total_supply` reads happen before the state-changing call. The comparisons run after it, following the existing `preview_*` and `total_assets()` assertions, in this order: `max_*` lower bound, then `total_supply` change.
+- **`max_*` is a lower bound only.** The assertion is `max_* >= amount just executed`. It does not check that the limit is the exact value the vault should report. The reads use the account `alice` and the same 5,000,000 / 3,000,000 / 2,000,000 / 1,000,000 amounts the checks execute.
+- **`total_supply` is an exact change**: `+ shares minted` for deposit and mint, `- shares burned` for withdraw and redeem.
+- **FAIL**: a `max_*` or `total_supply` function that is missing (the CLI reports an unrecognized subcommand; the code states that a missing SEP-56 function "stays a FAIL"); a reply that is not a non-negative number; a `max_*` smaller than the executed amount; a `total_supply` that did not change by the expected amount.
+- **INCONCLUSIVE** (exit code 3 when nothing failed): an unreachable network (`network_error`), a rejected token transfer that the tool classifies as insufficient balance (`insufficient_token_balance`), and any other error the tool cannot classify (`unclassified_error`).
+- **Not verified**: from reading the code, a function that exists but *reverts* produces an error text the tool does not classify, so it ends as INCONCLUSIVE with `unclassified_error`, not as FAIL. This has not been exercised against a vault whose `max_*` or `total_supply` reverts.
+- **Compatibility**: the 11 check ids, their groups and their order are unchanged. The recorded results for the project's test vaults in the sections below were not re-recorded for each vault after this change, except the [Positive Control Vault](#positive-control-vault--calibrated-so-donation_attack-can-pass-decimals_offset--0) run, which used CLI 0.4.0.
+
 ### 6. `convert_to_shares`
 
-- **Function**: `check_convert_to_shares` — [cli/src/checks/mod.rs:527](cli/src/checks/mod.rs#L527)
+- **Function**: `check_convert_to_shares` — [cli/src/checks/mod.rs:829](cli/src/checks/mod.rs#L829)
 - **Validates**: Round-trip bound — `convert_to_assets(convert_to_shares(x))` does not *exceed* `x` — rather than a hardcoded 1:1 expectation, so it stays meaningful on vaults at any share:asset ratio or `decimals_offset`; and that `convert_to_shares()` is read-only (does not change `total_assets()`).
   **Note (updated during hardened-vault testing):** this was originally an exact-equality check. Composing two floor divisions can only lose precision, never gain it — `floor(floor(x·n/d)·d/n) <= x` holds for any positive integers `x, n, d` — so exact equality only ever held by coincidence, at ratios that happen to divide evenly (a fresh 1:1 vault, or an exact power-of-ten `decimals_offset`). Testing `contracts/hardened-vault` (a non-1:1, non-power-of-ten ratio by design) exposed this: the round trip legitimately landed 1 unit below the original, which the old exact check flagged as a false FAIL. The bound is now `<=`, which still catches an actual defect — a round trip that *creates* value — and still fails a vault that rounds up instead of down (its round trip is provably `>= x` instead), just as `contracts/rounding-bug-vault` continues to demonstrate via [`rounding_direction`](#10-rounding_direction).
 - **SEP-56 reference** (`## Interface`, `fn convert_to_shares`):
@@ -74,7 +91,7 @@ These validate that the target vault correctly implements the seven core read/wr
 
 ### 7. `convert_to_assets`
 
-- **Function**: `check_convert_to_assets` — [cli/src/checks/mod.rs:615](cli/src/checks/mod.rs#L615)
+- **Function**: `check_convert_to_assets` — [cli/src/checks/mod.rs:893](cli/src/checks/mod.rs#L893)
 - **Validates**: Round-trip bound in the other direction — `convert_to_shares(convert_to_assets(x))` does not *exceed* `x` — and that `convert_to_assets()` is read-only (no change to `total_assets()`). See the note under [`convert_to_shares`](#6-convert_to_shares) above for why this is `<=` rather than exact equality.
 - **SEP-56 reference** (`## Interface`, `fn convert_to_assets`):
   > "Converts an amount of vault shares to the equivalent amount of underlying assets (rounded down)."
@@ -88,7 +105,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 8. `donation_attack` — ⚠️ Known Finding
 
-- **Function**: `check_donation_attack` — [cli/src/checks/mod.rs:767](cli/src/checks/mod.rs#L767)
+- **Function**: `check_donation_attack` — [cli/src/checks/mod.rs:1021](cli/src/checks/mod.rs#L1021)
 - **Validates**: Simulates the exact donation/inflation attack described in the spec — an attacker deposits a dust amount, then donates a large amount directly to the vault's contract address (bypassing `deposit()`), then a victim deposits normally. PASS requires the victim receive at least 90% of the shares they would proportionally be owed; attacker profit/loss is recorded as supplementary context only (see rationale below).
 - **SEP-56 reference** (`## Notes On Decimals Offset`), which describes this exact attack mechanism almost verbatim:
   > "Attacker deposits minimal amount (e.g. 1 token) → receives 1 share
@@ -110,7 +127,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 9. `overflow_protection`
 
-- **Function**: `check_overflow_protection` — [cli/src/checks/mod.rs:1017](cli/src/checks/mod.rs#L1017)
+- **Function**: `check_overflow_protection` — [cli/src/checks/mod.rs:1240](cli/src/checks/mod.rs#L1240)
 - **Validates**: Calling `deposit(assets = i128::MAX)` on a fresh vault fails **cleanly** (returns an error, leaves `total_assets()` at `0`, no corrupted state) rather than silently succeeding with a wrong result.
 - **SEP-56 reference** (`## Security Concerns`):
   > "Overflow Protection - Using Rust checked arithmetic operations that fail on overflow."
@@ -124,7 +141,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 10. `rounding_direction`
 
-- **Function**: `check_rounding_direction` — [cli/src/checks/mod.rs:1178](cli/src/checks/mod.rs#L1178)
+- **Function**: `check_rounding_direction` — [cli/src/checks/mod.rs:1399](cli/src/checks/mod.rs#L1399)
 - **Validates**: At a deliberately fractional share:asset ratio, `deposit()` rounds shares **down** (floor, matching `preview_deposit()`), while `mint()` rounds the assets charged **up** (ceil, matching `preview_mint()` and strictly exceeding the always-floor `convert_to_assets()`) — i.e. rounding always favors the vault over the user, never the reverse.
 - **SEP-56 reference** (`## Security Concerns`):
   > "Rounding Errors and Precision Loss - Using Soroban fixed-point code for vault's 'muldiv' operations."
@@ -135,7 +152,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ### 11. `access_control_probing`
 
-- **Function**: `check_access_control_probing` — [cli/src/checks/mod.rs:1478](cli/src/checks/mod.rs#L1478)
+- **Function**: `check_access_control_probing` — [cli/src/checks/mod.rs:1634](cli/src/checks/mod.rs#L1634)
 - **Validates**: An operator withdrawing on an owner's behalf without any prior `approve()` is rejected; after the owner grants a limited share allowance, an operator withdrawal within that limit succeeds and decrements the allowance by exactly the amount spent (not reset to `0`, not left unchanged); a withdrawal exceeding the remaining allowance is rejected, and a rejected transaction leaves the allowance untouched.
 - **SEP-56 reference** (`### Authorization Pattern`, under `## Design Rationale`):
   > "This standard does not enforce any specific authorization patterns for vault operations. Implementations are expected to add appropriate access controls based on their requirements, typically by: Using `operator.require_auth()` to verify the caller's authorization [...]"
@@ -236,7 +253,7 @@ deliberately does not (see below).
 
 - **Address**: `CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG`
 - **Code**: `contracts/hardened-vault` — a copy of the reference vault whose constructor additionally burns `DEAD_SHARES = 1000` vault shares to the vault's own contract address (which can never authorize spending them), before any deposit is possible. `decimals_offset = 0`, same underlying native XLM asset as the reference vault.
-- **Purpose**: implement and honestly evaluate the SEP-56 spec's own recommended donation-attack mitigation — "burning a minimum initial deposit as dead shares" (SECURITY.md §1) — as real contract logic, not a parameter change like Vault A.
+- **Purpose**: implement and honestly evaluate a second donation-attack mitigation, burning dead shares in the constructor, as real contract logic rather than a parameter change like Vault A. SEP-56 itself proposes only the virtual decimals offset (`## Notes On Decimals Offset`); the dead-shares approach is a mitigation we chose and implemented in this contract, not a recommendation of the SEP.
 - **Why the mint happens in the constructor, not lazily on the first `deposit()`/`mint()` call**: an earlier design minted the dead shares inside `deposit()`/`mint()`, guarded by `total_supply() == 0`. That breaks a different invariant: SEP-56 requires `deposit()`'s returned shares to exactly match a `preview_deposit()` computed immediately beforehand, which the CLI's own `deposit`/`mint` checks enforce. Minting the dead shares *inside* the call would move `total_supply` between an external caller's `preview_deposit()` and the actual `deposit()` — but only for the vault's very first transaction, i.e. exactly the transaction the CLI's own `deposit` check performs. Minting once in the constructor, before the vault can receive any call at all, avoids this: `total_supply` is already `1000` before any `preview_*`/execute pair is ever observed.
 - **Verified on-chain immediately after deployment, before any deposit**: `total_supply() = 1000` and `balance(<vault address>) = 1000` — confirming the mitigation is live, not just present in source.
 

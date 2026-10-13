@@ -37,15 +37,16 @@ to the attacker's single existing share.
 
 **Confirmed on:** fresh vault `CAYTWFAAJREXQ2TEOO4L7ZG6733PIJUOO6KLF2JZN6ZCIA62OX7GCOJP`, `decimals_offset=0`.
 
-**Recommendation:** adopt a standard mitigation — e.g. a `decimals_offset`/virtual
-shares approach, or burning a minimum initial deposit as dead shares — so a
-fresh vault can't be manipulated before any real depositor arrives.
+**Recommendation:** adopt a mitigation — e.g. a `decimals_offset`/virtual
+shares approach (the one SEP-56 proposes), or burning a minimum initial deposit
+as dead shares (our own addition, tested in §1b) — so a fresh vault can't be
+manipulated before any real depositor arrives.
 
 ### 1a. Follow-up: raising `decimals_offset` did NOT fix it
 
 We deployed a second vault (**Vault A**, `CAWUBSRHD4DUDWAJENO7XHI3QVEXKIU3ZZ4HRM3RFZ4PNBSCCYXH4VTA`) —
 identical code, `decimals_offset=6` instead of `0` — specifically to test
-whether raising the offset, the standard recommended mitigation, actually
+whether raising the offset, the mitigation SEP-56 proposes, actually
 neutralizes this attack. It did not: re-running the exact same attack
 (1-stroop dust deposit, 100,000,000-stroop donation, 5,000,000-stroop victim
 deposit) still left the victim with only **99,999 shares out of the
@@ -66,9 +67,11 @@ deposit themselves — rather than relying on offset alone.
 ### 1b. Follow-up: a real "dead shares" mitigation helps, but doesn't fix it either
 
 `decimals_offset` is a *virtual* mitigation — it scales share arithmetic but
-never actually locks up any real shares. To test the other mitigation SEP-56
-itself suggests — "burning a minimum initial deposit as dead shares" — we
-implemented it for real: **Hardened Vault**
+never actually locks up any real shares. SEP-56 (v0.1.2, Draft) proposes only
+this virtual decimals offset (`## Notes On Decimals Offset`); it does not
+recommend dead shares. To test a second, different approach, burning a minimum
+initial deposit as dead shares — a mitigation we chose ourselves, not one the
+SEP suggests — we implemented it for real: **Hardened Vault**
 (`CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG`, source in
 `contracts/hardened-vault`) burns 1,000 vault shares to the vault's own
 contract address — which can never authorize spending them — at construction
@@ -218,6 +221,12 @@ result — specifically to stress-test the checker itself, which is how §2a
 was found. None represents a third-party vault under review. See
 [VAULT_CHECKS.md](./VAULT_CHECKS.md) for full per-check results on all of
 them.
+
+## Known limitations
+
+- **Events are not checked.** The checker never reads or verifies the events a vault emits, including the SEP-56 `Deposit` and `Withdraw` events. A vault that emits wrong events, or none, can still PASS every check.
+- **Observed on the Positive Control Vault run** (CLI 0.4.0, see [VAULT_CHECKS.md](./VAULT_CHECKS.md#positive-control-vault--calibrated-so-donation_attack-can-pass-decimals_offset--0)): a check can PASS with a value of zero. At that vault's near-zero share price, `redeem` returned 0 assets for 1,000,000 shares and `convert_to_assets(4000000)` returned 0. Both PASSed because their assertions held (`preview_redeem` also returned 0, and `0 <= 4000000`), but they carry almost no information at that ratio.
+- **Observed on the Positive Control Vault run**: the baseline `donation_attack` expects ignores the share price already present in the vault. The CLI computes it as the victim's deposit times `10^decimals_offset`, i.e. what an undisturbed, empty vault would mint for a first deposit (`cli/src/checks/mod.rs`). On a vault that already holds shares, the reported percentage (199% on that run) is therefore not a measure of how well off the victim is compared with an undisturbed depositor.
 
 ## Reporting a Vulnerability
 

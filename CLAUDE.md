@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Aegis Vault: a Rust CLI (`sep56-vault-guard`) that runs 11 checks (7 conformance + 4 security) against a SEP-56 tokenized vault contract on Stellar **testnet**, plus a Node backend that runs the CLI for a Next.js web UI. Some internal docs (`docs/`, `.claude/skills/aegis-vault-design/`) are in Indonesian.
+Aegis Vault: a Rust CLI (`sep56-vault-guard`) that runs 11 checks (7 conformance + 4 security) against a SEP-56 tokenized vault contract on Stellar **testnet**, plus a Node backend that runs the CLI for a Next.js web UI. Some internal docs (`.claude/skills/aegis-vault-design/`) are in Indonesian.
 
 ## Commands
 
@@ -77,4 +77,4 @@ Unit tests: `web/src/lib/test/` covers `useCheckRun` (polling, queue position, s
 
 ## Reference docs
 
-`VAULT_CHECKS.md` (what each check asserts), `SECURITY.md` (known findings/limitations), `docs/GUIDELINE.md` (internal overview).
+`VAULT_CHECKS.md` (what each check asserts), `SECURITY.md` (known findings/limitations), `docs/INTEGRATE.md` (funding the test accounts for a custom-token vault).

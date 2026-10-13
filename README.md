@@ -1,17 +1,17 @@
 # Aegis Vault — SEP-56 Conformance Checker
 
-A CLI tool (with companion web UI) for testing the conformance and security
-of Soroban-based tokenized vault contracts against the [SEP-56](https://github.com/stellar/stellar-protocol/discussions/1826)
-standard on the Stellar network.
+A CLI tool (with companion web UI) that checks 7 core SEP-56 functions and four
+basic security risks of a Soroban tokenized vault, on Stellar Testnet. The
+specification is [SEP-56](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md).
 
 Built for the Stellar Instawards program.
 
 ## Features
 
-Aegis Vault runs two categories of checks against a deployed SEP-56 vault contract:
+Aegis Vault runs two groups of checks against a deployed SEP-56 vault contract:
 
 ### Positive Conformance
-Verifies the vault correctly implements the SEP-56 interface:
+Calls 7 core SEP-56 functions on the vault and checks their results:
 - `total_assets`
 - `deposit`
 - `mint`
@@ -21,18 +21,17 @@ Verifies the vault correctly implements the SEP-56 interface:
 - `convert_to_assets`
 
 ### Security / Adversarial
-Probes the vault against known attack vectors on tokenized vault standards:
+Probes four basic security risks:
 - `donation_attack` — inflation/donation attack simulation
 - `overflow_protection` — arithmetic overflow handling
 - `rounding_direction` — verifies rounding favors the vault, not the attacker
 - `access_control_probing` — unauthorized operator/allowance handling
 
-## Live Results
+## Live checker
 
-A hosted instance of the checker output (run against our own reference vault)
-is available at:
+The web checker runs the same CLI on a hosted backend, against Stellar Testnet:
 
-**https://skybreak1927.github.io/sep56-vault-guard/**
+**https://aegisvault.site**
 
 > ⚠️ Note: our reference vault currently **fails** the `donation_attack` check —
 > a real inflation-attack vulnerability was confirmed under `decimals_offset=0`.

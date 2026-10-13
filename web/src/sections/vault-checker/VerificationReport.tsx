@@ -233,7 +233,7 @@ function CheckDetail({ def, run }: { def: CheckDef; run: CheckRun }) {
           <div className="flex flex-col gap-space-xs">
             <p className="text-body-md text-fg">{finding.caveat}</p>
             <p className="text-body-sm text-muted">
-              The status stays Pass: the vault rejected the deposit cleanly, but the limit that stopped it belongs to the asset contract, not the vault.
+              The status stays Pass: the vault rejected the deposit cleanly, but not by the vault's own overflow check.
             </p>
           </div>
         </section>

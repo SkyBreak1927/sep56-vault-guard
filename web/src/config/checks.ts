@@ -51,4 +51,5 @@ export const SHOWCASE_VAULTS: { label: string; address: string; note: string }[]
   { label: 'Blind Vault', address: 'CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7', note: 'Unmodified vault clone with a custom non-native asset, decimals_offset=3' },
   { label: 'Vault A', address: 'CAWUBSRHD4DUDWAJENO7XHI3QVEXKIU3ZZ4HRM3RFZ4PNBSCCYXH4VTA', note: 'Reference vault with decimals_offset=6' },
   { label: 'Vault B', address: 'CAZBXMYP5TQWEHCFMUD6ZEON7DUWAC2BCKNCKKVBIRX7GZN7M6I2P6HV', note: "Deliberately buggy vault — rounds in the user's favor" },
+  { label: 'Positive Control Vault', address: 'CAHMH3VSMNCYDCRTCZBJOKJE65HT2LJBZQFQULMRH6E2OGGGPMSNG376', note: 'Positive control: donation_attack passes for one donation size' },
 ]

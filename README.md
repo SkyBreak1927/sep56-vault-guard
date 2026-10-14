@@ -222,7 +222,16 @@ has not been tested.
 
 # Get machine-readable JSON output
 ./target/release/sep56-vault-guard --output json
+
+# Get a Markdown report
+./target/release/sep56-vault-guard --output markdown > report.md
 ```
+
+`--output markdown` prints a report with the same parts as the web checker's
+Markdown export: a header (vault, network, spec, checker version, start and end
+time), a result summary, and one table per group. It has no "Settled at" column
+and no commit in the checker line, because the CLI records neither. The `text`
+and `json` formats and the exit codes are the same whichever format you pick.
 
 A run usually takes about a minute, sometimes longer — every check is a chain of
 network round trips to testnet.
@@ -264,6 +273,9 @@ identity, and an address that is not a contract on testnet. Under
   "fix": "…"
 }
 ```
+
+Under `--output markdown` the same information is printed to standard output as
+a report with an `Error` section (code, problem, fix) and no check table.
 
 ## Platforms
 

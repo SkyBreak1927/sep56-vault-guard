@@ -1,5 +1,6 @@
 mod rpc;
 mod checks;
+mod markdown;
 mod preflight;
 mod status;
 
@@ -45,8 +46,8 @@ struct Cli {
     #[arg(long, default_value = REFERENCE_VAULT_CONTRACT_ID)]
     vault: String,
 
-    /// Output format: human-readable text, or a JSON array for
-    /// programmatic consumption (e.g. by the web UI).
+    /// Output format: human-readable text, a JSON array for programmatic
+    /// consumption (e.g. by the web UI), or a Markdown report.
     #[arg(long, value_enum, default_value = "text")]
     output: OutputFormat,
 
@@ -63,6 +64,7 @@ struct Cli {
 enum OutputFormat {
     Text,
     Json,
+    Markdown,
 }
 
 /// One check's result, shaped for JSON export (`--output json`).
@@ -159,6 +161,14 @@ fn category_for(check_name: &str) -> &'static str {
     }
 }
 
+/// The current time as Unix milliseconds, for the Markdown report's timestamps.
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -199,11 +209,16 @@ async fn main() {
                         .expect("the preflight error is serializable");
                     println!("{output}");
                 }
+                OutputFormat::Markdown => {
+                    // On stdout, like the JSON payload, so a redirect keeps the report.
+                    print!("{}", markdown::preflight_report(vault, env!("CARGO_PKG_VERSION"), &failure));
+                }
             }
             std::process::exit(EXIT_PREFLIGHT_FAILED);
         }
     }
 
+    let started_ms = now_ms();
     let status_reporter = StatusReporter::new(cli.status_file.clone(), vault).await;
 
     // The 7 Positive Conformance checks all read and mutate the SAME live
@@ -307,6 +322,7 @@ async fn main() {
         ])
         .collect();
 
+    let completed_ms = now_ms();
     let tally = tally(&results);
 
     match cli.output {
@@ -325,6 +341,15 @@ async fn main() {
             let output = serde_json::to_string_pretty(&json_results(&results))
                 .expect("results are serializable");
             println!("{output}");
+        }
+        OutputFormat::Markdown => {
+            let info = markdown::RunInfo {
+                vault,
+                cli_version: env!("CARGO_PKG_VERSION"),
+                started_ms,
+                completed_ms,
+            };
+            print!("{}", markdown::run_report(&info, &results));
         }
     }
 

@@ -43,6 +43,7 @@ export function RunForm({ running, onRun }: RunFormProps) {
   const trimmed = address.trim()
   const valid = VAULT_ADDRESS_RE.test(trimmed)
   const demoRunning = running && source === 'demo'
+  const demoNote = SHOWCASE_VAULTS.find((vault) => vault.address === demo)?.note
   const ownRunning = running && source === 'own'
 
   const run = (vault: string, from: 'demo' | 'own') => {
@@ -100,6 +101,11 @@ export function RunForm({ running, onRun }: RunFormProps) {
                   disabled={running}
                   className="h-11"
                 />
+                {demoNote && (
+                  <p className="text-body-sm text-muted" aria-live="polite">
+                    {demoNote}
+                  </p>
+                )}
               </div>
               <div className="flex flex-col items-start gap-space-sm">
                 <button

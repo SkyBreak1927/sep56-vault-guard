@@ -61,6 +61,7 @@ There are no automated end-to-end tests. Checker changes are verified by running
 | Vault B (rounding bug) | `CAZBXMYP5TQWEHCFMUD6ZEON7DUWAC2BCKNCKKVBIRX7GZN7M6I2P6HV` | 9 PASS, 2 FAIL (`donation_attack`, `rounding_direction`) | `rounding_direction` catches the injected bug |
 | Hardened Vault | `CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG` | 10 PASS, 1 FAIL (`donation_attack`) | Mitigation doesn't break conformance (non-1:1 ratio) |
 | Blind Vault (custom asset, offset 3) | `CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7` | 10 PASS, 1 FAIL (`donation_attack`) | Non-native asset, unusual offset |
+| Positive Control Vault (`DEAD_SHARES = 100_000_000`, offset 0) | `CAHMH3VSMNCYDCRTCZBJOKJE65HT2LJBZQFQULMRH6E2OGGGPMSNG376` | 11 PASS, exit 0 | Positive control: `donation_attack` passes for one donation size |
 
 Any deviation from this table after a checker change is a regression (or an intended change that must also be recorded in `VAULT_CHECKS.md` and, for findings, `SECURITY.md`). These addresses are also the showcase vaults in `web/src/config/checks.ts`.
 

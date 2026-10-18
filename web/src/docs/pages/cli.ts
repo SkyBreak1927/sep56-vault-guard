@@ -14,7 +14,7 @@ export const cli: DocsPage = {
         code(
           'text',
           'terminal',
-          'sep56-vault-guard [--vault <CONTRACT_ADDRESS>] [--output text|json] [--status-file <PATH>]',
+          'sep56-vault-guard [--vault <CONTRACT_ADDRESS>] [--output text|json|markdown] [--status-file <PATH>]',
           'SIGNATURE',
         ),
         params(
@@ -24,13 +24,17 @@ export const cli: DocsPage = {
               'string',
               "Contract address of the vault to check (starts with `C`, 56 characters). Defaults to the project's reference vault `CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF`.",
             ),
-            optional('--output', 'text | json', 'Output format. Default `text`. `json` prints an array for programs.'),
+            optional(
+              '--output',
+              'text | json | markdown',
+              'Output format. Default `text`. `json` prints an array for programs. `markdown` prints a report you can save as a `.md` file (since v0.5.0).',
+            ),
             optional(
               '--status-file',
               'path',
               'Writes a JSON snapshot that is updated as each check starts and finishes. Reporting only; it never changes a result.',
             ),
-            optional('--version', 'flag', 'Prints the version, for example `sep56-vault-guard 0.4.0`.'),
+            optional('--version', 'flag', 'Prints the version, for example `sep56-vault-guard 0.5.0`.'),
             optional('--help', 'flag', 'Prints usage.'),
           ],
           'PARAMETERS',
@@ -43,6 +47,9 @@ export const cli: DocsPage = {
 
 # A specific vault, JSON output
 ./sep56-vault-guard --vault <CONTRACT_ADDRESS> --output json
+
+# A specific vault, Markdown report
+./sep56-vault-guard --vault <CONTRACT_ADDRESS> --output markdown > report.md
 
 # With a live status file
 ./sep56-vault-guard --vault <CONTRACT_ADDRESS> --status-file ./status.json`,

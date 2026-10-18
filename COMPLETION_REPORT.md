@@ -58,7 +58,7 @@ What this work is, and is not:
 ## Limitations
 
 - **Real ecosystem vaults.** See the open marker above. Until it is closed, every result in this report is from vaults deployed by the project.
-- **Specialist security review.** [PANDEBU: konfirmasi status]
+- **Specialist security review.** None was carried out. The security findings in this report come from the project's own runs on Testnet: `rounding_direction` caught the injected bug on Vault B, and `donation_attack` caught the inflation attack on the Reference Vault. This report does not claim a third-party review.
 - **Fixtures instead of real vaults.** Vault A, Vault B, Hardened Vault, Blind Vault and the Positive Control Vault were built for this project.
 - **Reverting functions not tested.** From reading the code, a vault function that exists but reverts ends as `INCONCLUSIVE` with `unclassified_error`, not as FAIL. This has not been run against such a vault.
 - **The Positive Control Vault is shallow.** `donation_attack` passes there because the dead-share constant (100,000,000) equals the check's donation size. Larger donations were not run.

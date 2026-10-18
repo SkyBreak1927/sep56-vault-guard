@@ -1,0 +1,72 @@
+[
+  {
+    "name": "total_assets",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "total_assets = 0"
+  },
+  {
+    "name": "deposit",
+    "category": "Positive Conformance",
+    "status": "INCONCLUSIVE",
+    "detail": "the call to max_deposit() failed for a reason the tool could not classify. No finding about the vault. Raw error: ❌ error: transaction simulation failed: HostError: Error(WasmVm, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, topics:[error, Error(WasmVm, InvalidAction)], data:[\"VM call trapped: UnreachableCodeReached\", max_deposit]\n   1: [Diagnostic Event] topics:[fn_call, CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, max_deposit], data:GCPIX7OU7CQERHI67K6LITRGNA5BVFYYUWABSG4RG3CGSLTJMIJG2554",
+    "reason_code": "unclassified_error"
+  },
+  {
+    "name": "mint",
+    "category": "Positive Conformance",
+    "status": "INCONCLUSIVE",
+    "detail": "the call to max_mint() failed for a reason the tool could not classify. No finding about the vault. Raw error: ❌ error: transaction simulation failed: HostError: Error(WasmVm, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, topics:[error, Error(WasmVm, InvalidAction)], data:[\"VM call trapped: UnreachableCodeReached\", max_mint]\n   1: [Diagnostic Event] topics:[fn_call, CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, max_mint], data:GCPIX7OU7CQERHI67K6LITRGNA5BVFYYUWABSG4RG3CGSLTJMIJG2554",
+    "reason_code": "unclassified_error"
+  },
+  {
+    "name": "withdraw",
+    "category": "Positive Conformance",
+    "status": "INCONCLUSIVE",
+    "detail": "the call to max_withdraw() failed for a reason the tool could not classify. No finding about the vault. Raw error: ❌ error: transaction simulation failed: HostError: Error(WasmVm, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, topics:[error, Error(WasmVm, InvalidAction)], data:[\"VM call trapped: UnreachableCodeReached\", max_withdraw]\n   1: [Diagnostic Event] topics:[fn_call, CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, max_withdraw], data:GCPIX7OU7CQERHI67K6LITRGNA5BVFYYUWABSG4RG3CGSLTJMIJG2554",
+    "reason_code": "unclassified_error"
+  },
+  {
+    "name": "redeem",
+    "category": "Positive Conformance",
+    "status": "INCONCLUSIVE",
+    "detail": "the call to max_redeem() failed for a reason the tool could not classify. No finding about the vault. Raw error: ❌ error: transaction simulation failed: HostError: Error(WasmVm, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, topics:[error, Error(WasmVm, InvalidAction)], data:[\"VM call trapped: UnreachableCodeReached\", max_redeem]\n   1: [Diagnostic Event] topics:[fn_call, CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4, max_redeem], data:GCPIX7OU7CQERHI67K6LITRGNA5BVFYYUWABSG4RG3CGSLTJMIJG2554",
+    "reason_code": "unclassified_error"
+  },
+  {
+    "name": "convert_to_shares",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "convert_to_shares(4000000) = 4000000, round-trip convert_to_assets(4000000) = 4000000 (<= 4000000, as required of floor/floor round-tripping), total_assets unchanged at 0"
+  },
+  {
+    "name": "convert_to_assets",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "convert_to_assets(4000000) = 4000000, round-trip convert_to_shares(4000000) = 4000000 (<= 4000000, as required of floor/floor round-tripping), total_assets unchanged at 0"
+  },
+  {
+    "name": "donation_attack",
+    "category": "Security/Adversarial",
+    "status": "FAIL",
+    "detail": "VULNERABLE to donation/inflation attack — fresh vault CCDA4RXZ5R6JQYSQ4CE3ESQJCQO4DVW7C5W7IUJQETRLFXMHOJQBOYKL (decimals_offset=0): attacker deposited 1 stroop(s) then donated 100000000 stroops directly (bypassing deposit()); victim then deposited 5000000 stroops and received 0 shares (0% of the 5000000 expected from an undisturbed deposit at this vault's decimals_offset); attacker P&L: net loss of 47500000 stroops (spent 100000001, redeemed 52500001)"
+  },
+  {
+    "name": "overflow_protection",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "NOTE: this does not test the vault's own overflow protection. deposit(assets=i128::MAX) on fresh vault CB3JWOIUBDINXYR47ZYIOQNDJUOQ7MZ7Q4V6RNXJKXWKVSDNRNAUVLP3 failed cleanly (rejected by the network, with no error text), and total_assets remained 0 — no silent-wrong-result observed. at decimals_offset=0, the vault's own share math does not overflow for i128::MAX (shares = assets exactly), so this failure is instead triggered by the classic Stellar Asset Contract's own int64 amount ceiling (\"spent amount is too large for an i64\") on the underlying asset transfer — a limit outside the vault's control, NOT a demonstration of the vault's own overflow protection."
+  },
+  {
+    "name": "rounding_direction",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "fresh vault CD2KH4IYR5KK64GCETOPVBWY2VZBZII64SHGMQCHTHX3RPOFTCGX4MZR at fractional ratio (seed 1000 + donation 500): Test A — deposit(100) minted 66 shares matching preview_deposit() (floor, favors vault); Test B — mint(100 shares) pulled 151 assets matching preview_mint() (ceil) and strictly greater than the idealized convert_to_assets() (150) — rounding direction confirmed to always favor the vault over the user"
+  },
+  {
+    "name": "access_control_probing",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "fresh vault CBFUQVNMENVOTYHYLCIFYBBFK45MEQZPZCHJK23S7GLEQGOH4PFU7PQE (decimals_offset=0): unauthorized withdraw (no approval) correctly rejected; after owner approved operator for 1000000 shares, operator withdrew 500000 shares (allowance 1000000 -> 500000, decremented exactly); operator's over-allowance withdraw attempt of 1500000 assets (requiring more shares than the remaining 500000-share allowance) correctly rejected with allowance left untouched at 500000"
+  }
+]

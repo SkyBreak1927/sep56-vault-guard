@@ -166,7 +166,7 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
 
 ## Demo/Validation Vaults
 
-Six additional testnet deployments exist alongside our own reference
+Seven additional testnet deployments exist alongside our own reference
 deployment — none represent reviews of third-party vaults. Vault A and Vault B exist
 purely to validate that the checks above actually generalize to vaults
 other than the reference deployment; Demo Vault exists as a public showcase
@@ -339,6 +339,13 @@ Here the dead-shares constant equals the donation size used by the check, which 
 **10 PASS, 1 FAIL** — identical pattern to the reference vault, confirming the checker's core logic generalizes correctly to a real custom asset and a `decimals_offset` other than `0` or `6`.
 
 \* **This PASS is where the blind test actually found something** — not in the vault, in check #9's own detail text. Before investigating, the check unconditionally printed: *"for a native XLM underlying asset, this failure is triggered by the classic Stellar Asset Contract's own int64 amount ceiling..."* — for a vault whose asset is neither native XLM nor a Stellar Asset Contract at all. Tracing the actual cause in `stellar-contract-utils`' `mul_div_with_rounding` (`i128_fixed_point.rs:106`, `res.to_i128().unwrap_or_else(|| panic_with_error!(...Overflow))`) confirmed: at `decimals_offset = 3`, `preview_deposit(i128::MAX)` computes `i128::MAX * 10^3`, which overflows `i128` and panics from the **vault's own checked arithmetic**, before any asset transfer is ever attempted — completely independent of what the underlying asset is. The verdict (PASS) was always correct; the explanation was not. See check #9 above and SECURITY.md §2 for the fix and its knock-on effect on Vault A's own (previously unexamined) result.
+
+
+### Reverting Max Vault — `max_*` always revert (`decimals_offset = 0`)
+
+- **Vault address**: `CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4` (name `Reverting Max Vault`, symbol `RMV`, same native XLM asset as the reference vault). Code: `contracts/reverting-max-vault`, a copy of `contracts/reference-vault` in which `max_deposit`, `max_mint`, `max_withdraw` and `max_redeem` always revert.
+- **Run**: CLI `sep56-vault-guard 0.5.0`, `--output json`, 2026-10-18, exit code `1`. Output: [docs/sample-reports/reverting-max-vault.json](docs/sample-reports/reverting-max-vault.json).
+- **Result**: 6 PASS, 4 INCONCLUSIVE (`deposit`, `mint`, `withdraw`, `redeem`, all with reason `unclassified_error`), 1 FAIL (`donation_attack`). Exit code is `1` because a FAIL wins over INCONCLUSIVE.
 
 ---
 

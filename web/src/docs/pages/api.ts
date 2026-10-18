@@ -58,7 +58,7 @@ export const api: DocsPage = {
             ['`200`', '`{ "status": "processing", "checks": [...], "queued"?: true, "position"?: N }`'],
             [
               '`200`',
-              '`{ "status": "complete", "result": [...], "checks": [...], "meta": { "cli_version": "0.4.0", "cli_commit": "…" } }`',
+              '`{ "status": "complete", "result": [...], "checks": [...], "meta": { "cli_version": "0.5.0", "cli_commit": "…" } }`',
             ],
             ['`502`', '`{ "status": "error", "error": "…", "checks": [...] }`'],
             ['`404`', '`{ "error": "…" }`: unknown job id, or the job has expired'],

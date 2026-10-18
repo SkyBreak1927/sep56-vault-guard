@@ -67,7 +67,7 @@ done`,
       title: 'Install',
       blocks: [
         text(
-          'Download the archive for your platform and its `.sha256` file from the GitHub releases page (latest: v0.4.0).',
+          'Download the archive for your platform and its `.sha256` file from the GitHub releases page (latest: v0.5.0).',
         ),
         table(
           ['Platform', 'File', 'Notes'],

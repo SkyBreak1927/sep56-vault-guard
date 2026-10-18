@@ -25,6 +25,12 @@ export const preflight: DocsPage = {
 }`,
           'ABBREVIATED EXAMPLE',
         ),
+        text(
+          'With `--output markdown`, the report has the usual title and header, the line `Result: Prerequisite missing, no checks were run`, then an `Error` section with the error, the code, a `Problem` paragraph and a `Fix` paragraph. The exit code is still 2.',
+        ),
+        verified(
+          'A report from a real Testnet run with CLI 0.5.0 (`vault_not_a_contract`, exit code 2) is `preflight-error.md` in `docs/sample-reports/` in the GitHub repository.',
+        ),
       ],
     },
     {

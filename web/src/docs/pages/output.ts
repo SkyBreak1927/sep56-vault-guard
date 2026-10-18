@@ -1,11 +1,11 @@
-import { code, optional, param, params, table, text, verified } from '../blocks'
+import { code, optional, param, params, table, text, unverified, verified } from '../blocks'
 import type { DocsPage } from '../types'
 
 export const output: DocsPage = {
   slug: 'output',
   tag: 'CLI',
   title: 'Output and exit codes',
-  lead: 'The four result statuses, the text and JSON formats, reason codes, exit codes and the status file.',
+  lead: 'The four result statuses, the text, JSON and Markdown formats, reason codes, exit codes and the status file.',
   sections: [
     {
       id: 'statuses',
@@ -66,6 +66,46 @@ export const output: DocsPage = {
         ),
         verified(
           "Field names and order are taken from the CLI's unit tests. The `detail` text is shortened here; a real run prints the measured values.",
+        ),
+      ],
+    },
+    {
+      id: 'markdown-output',
+      title: 'Markdown output',
+      blocks: [
+        text(
+          '`--output markdown` (since v0.5.0) prints a report you can save as a `.md` file. The report is built from the same results as the text and JSON formats.',
+        ),
+        table(
+          ['Part', 'Content'],
+          [
+            ['Title', '`# Aegis Vault — Conformance Verification Report`'],
+            [
+              'Header list',
+              'Vault, network, spec reference, checker version, start and end time, duration, and the result line.',
+            ],
+            [
+              'Summary',
+              'The result headline, then `Core function checks: X of N passed` and `Basic security checks: X of N passed`. Inconclusive and not-applicable counts are listed only when above zero.',
+            ],
+            [
+              'Tables',
+              'One table per group, `Conformance checks` and `Security checks`, with the columns `#`, `Check`, `Status` and `Detail`. Rows are numbered 01 to 11 in the fixed check order.',
+            ],
+            [
+              'Error section',
+              'Only when a prerequisite is missing (exit code 2): the error, the `code`, a `Problem` paragraph and a `Fix` paragraph, and the line `No checks were run.`',
+            ],
+          ],
+        ),
+        text(
+          'Real reports from Testnet runs with CLI 0.5.0 are in `docs/sample-reports/` in the GitHub repository: the Positive Control Vault (11 PASS), the Reference Vault (10 PASS, 1 FAIL) and a prerequisite error.',
+        ),
+        verified(
+          'The format is covered by 12 unit tests (`markdown::tests` in `cli/src/markdown.rs`), and the sample reports come from three Testnet runs of CLI 0.5.0.',
+        ),
+        unverified(
+          'Not verified: that the Markdown from the CLI is identical in content to the Markdown exported by the web app for the same run. Also not verified: how the report looks once rendered, and the Linux and macOS v0.5.0 archives, which have not been run.',
         ),
       ],
     },

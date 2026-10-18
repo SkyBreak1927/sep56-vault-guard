@@ -1,0 +1,129 @@
+name: smoke-binaries
+
+# Smoke test of the published v0.5.0 binaries on Linux and macOS, against
+# Testnet only. Runs on pushes to this branch only; no secrets are used.
+on:
+  push:
+    branches: [ci/smoke-binaries]
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: v0.5.0
+  REPO: SkyBreak1927/sep56-vault-guard
+  STELLAR_VERSION: 28.0.0
+  REFERENCE_VAULT: CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            asset: sep56-vault-guard-linux-x86_64.tar.gz
+            stellar_target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            asset: sep56-vault-guard-macos-universal.tar.gz
+            stellar_target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release asset and checksum
+        run: |
+          mkdir -p work && cd work
+          base="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
+          for f in "${{ matrix.asset }}" "${{ matrix.asset }}.sha256"; do
+            for attempt in 1 2 3; do
+              curl -fsSL --retry 0 -o "$f" "$base/$f" && break
+              [ "$attempt" = 3 ] && { echo "download failed: $f"; exit 1; }
+              sleep 5
+            done
+          done
+          ls -l
+
+      - name: Verify sha256
+        working-directory: work
+        run: |
+          cat "${{ matrix.asset }}.sha256"
+          if command -v sha256sum >/dev/null; then
+            sha256sum -c "${{ matrix.asset }}.sha256"
+          else
+            shasum -a 256 -c "${{ matrix.asset }}.sha256"
+          fi
+
+      - name: Extract and print version
+        working-directory: work
+        run: |
+          mkdir bin && tar -xzf "${{ matrix.asset }}" -C bin
+          ls -l bin
+          file bin/sep56-vault-guard || true
+          ./bin/sep56-vault-guard --version
+
+      - name: Install Stellar CLI ${{ env.STELLAR_VERSION }}
+        run: |
+          url="https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_VERSION}/stellar-cli-${STELLAR_VERSION}-${{ matrix.stellar_target }}.tar.gz"
+          mkdir -p "$HOME/stellar-bin"
+          for attempt in 1 2 3; do
+            curl -fsSL -o stellar.tar.gz "$url" && break
+            [ "$attempt" = 3 ] && { echo "download failed: $url"; exit 1; }
+            sleep 5
+          done
+          tar -xzf stellar.tar.gz -C "$HOME/stellar-bin"
+          echo "$HOME/stellar-bin" >> "$GITHUB_PATH"
+          "$HOME/stellar-bin/stellar" --version
+
+      - name: Create and fund the seven Testnet identities
+        run: |
+          for n in alice bob carol dave erin frank grace; do
+            for attempt in 1 2 3; do
+              stellar keys generate "$n" --network testnet --fund && break
+              [ "$attempt" = 3 ] && { echo "could not create/fund $n"; exit 1; }
+              stellar keys rm "$n" 2>/dev/null || true
+              sleep 10
+            done
+          done
+          stellar keys ls
+
+      - name: Run against the Positive Control Vault and the Reference Vault
+        run: |
+          pcv=$(sed -n 's/.*`\(CAHMH3[A-Z0-9]*\)`.*/\1/p' VAULT_CHECKS.md | head -1)
+          [ -n "$pcv" ] || { echo "Positive Control Vault address not found in VAULT_CHECKS.md"; exit 1; }
+          mkdir -p out
+          bin=./work/bin/sep56-vault-guard
+          set +e
+          $bin --vault "$pcv" --output markdown > out/positive-control-vault.md 2> out/positive-control-vault.err
+          echo $? > out/positive-control-vault.exit
+          $bin --vault "$REFERENCE_VAULT" --output markdown > out/reference-vault.md 2> out/reference-vault.err
+          echo $? > out/reference-vault.exit
+          set -e
+          {
+            echo "## ${{ matrix.os }} — $($bin --version)"
+            echo
+            echo "| Vault | Address | Exit code | Expected |"
+            echo "|---|---|---|---|"
+            echo "| Positive Control Vault | \`$pcv\` | $(cat out/positive-control-vault.exit) | 0 (11 PASS) |"
+            echo "| Reference Vault | \`$REFERENCE_VAULT\` | $(cat out/reference-vault.exit) | 1 (10 PASS, 1 FAIL: donation_attack) |"
+            echo
+            for f in positive-control-vault reference-vault; do
+              echo "### $f"
+              grep -E '^- (Result|Core function|Basic security)' out/$f.md || true
+              grep -E '\| FAIL \|' out/$f.md | cut -c1-120 || true
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY" out/summary.md
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.os }}
+          path: out/
+          if-no-files-found: warn
+
+      - name: Fail the job if an exit code differs from the expected one
+        run: |
+          [ "$(cat out/positive-control-vault.exit)" = 0 ] && [ "$(cat out/reference-vault.exit)" = 1 ]

@@ -69,12 +69,13 @@ What this work is, and is not:
 - **Linux and macOS binaries.** They were built by the release workflow and have not been run by the maintainer.
 - **Beyond the SOW.** The login account (Supabase) and the hosted runner on Render were added outside the SOW.
 
-## Recommended Next Steps
+## Possible Next Steps
 
 1. Apply for an SCF Build Award, as the SOW's next-step section anticipates.
-2. Close the two open markers above with evidence, or remove the claims.
-3. Remove any claim that cannot be backed with a run, a commit or a file in the repository.
-4. Do not present the Medium article as done until it is published.
+2. Close the real ecosystem vault validation once operator permission is granted and results are available, and add those results to VAULT_CHECKS.md and to this report.
+3. Run the Linux and macOS binaries on real machines against Testnet, and notarize the macOS binary.
+4. Run the `max_*` and `total_supply` handling against a vault whose functions revert, and add a deeper positive control (larger donation sizes, non-zero redeem values).
+5. Consider checking the `Deposit` and `Withdraw` events, and address the two known CLI limits (a check passing with a value of zero, and the `donation_attack` baseline ignoring an existing share price).
 
 ## Evidence Index
 

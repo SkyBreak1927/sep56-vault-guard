@@ -1,6 +1,6 @@
 # Sample reports
 
-These three files are the unedited output of `sep56-vault-guard --output markdown`, saved exactly as the CLI printed them. Nothing was added, removed or reworded by hand.
+The Markdown files here are the unedited output of `sep56-vault-guard --output markdown`. The one exception is `reverting-max-vault.json`, which is the unedited output of `--output json`. All are saved exactly as the CLI printed them. Nothing was added, removed or reworded by hand.
 
 - CLI version: `sep56-vault-guard 0.5.0`
 - Network: Stellar testnet only

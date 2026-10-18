@@ -12,6 +12,7 @@ These three files are the unedited output of `sep56-vault-guard --output markdow
 | [reference-vault.md](reference-vault.md) | `sep56-vault-guard --vault CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF --output markdown` | Reference Vault | 1 (10 PASS, 1 FAIL: `donation_attack`) |
 | [preflight-error.md](preflight-error.md) | `sep56-vault-guard --vault CBH2EDM4OZOPACOAYBTH7YPKOJHYMVEVJSJKKHF3B7RON2A7QQQY5ARR --output markdown` | A syntactically valid contract address with no contract deployed on testnet | 2 (preflight failed, no check ran; `vault_not_a_contract`) |
 | [preflight-error-malformed.md](preflight-error-malformed.md) | `sep56-vault-guard --vault GCPIX7OU7CQERHI67K6LITRGNA5BVFYYUWABSG4RG3CGSLTJMIJG2554 --output markdown` | A public account address (starts with `G`), not a contract address | 2 (preflight failed, no check ran; `vault_address_malformed`) |
+| [reverting-max-vault.json](reverting-max-vault.json) | `sep56-vault-guard --vault CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4 --output json` | Reverting Max Vault (`max_*` always revert), CLI 0.5.0, 2026-10-18 | 1 (6 PASS, 4 INCONCLUSIVE `unclassified_error`, 1 FAIL `donation_attack`) |
 
 ## Notes
 

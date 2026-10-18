@@ -29,10 +29,10 @@ What this work is, and is not:
 | Friendbot funding | Done, indirectly | Accounts are created and funded with `stellar keys generate <name> --network testnet --fund`, which uses Friendbot (README, Prerequisites) | The CLI does not call Friendbot itself. Seven local identities are needed: `alice bob carol dave erin frank grace` |
 | `deposit`, `mint`, `withdraw`, `redeem` | Done | Conformance checks 02–05, run on Testnet; see `docs/sample-reports/` | None known |
 | `total_assets`, `convert_to_shares`, `convert_to_assets` | Done | Checks 01, 06, 07 | Checks 06 and 07 test a necessary condition only (a floor/floor round trip never creates value), not the full conversion rule |
-| `max_deposit`, `max_mint`, `max_withdraw`, `max_redeem` | Done in code, partly unproven | Read inside checks 02–05 since v0.4.0 (`VAULT_CHECKS.md`) | The handling of a vault whose `max_*` or `total_supply` reverts is classified from reading the code and has not been run against such a vault |
-| `total_supply` (not in the SOW) | Added | Read inside checks 02–05 | Same gap as `max_*` |
+| `max_deposit`, `max_mint`, `max_withdraw`, `max_redeem` | Done | Read inside checks 02–05 since v0.4.0 (`VAULT_CHECKS.md`). Run against the Reverting Max Vault, a fixture that is a copy of `reference-vault` whose `max_*` always revert (PR #54, commit 6dc77e8): checks 2 to 5 ended `INCONCLUSIVE` with `unclassified_error`; full result in `docs/sample-reports/reverting-max-vault.json` | Only one kind of failure (a trap) on one fixture was tested; other kinds of bad replies were not run |
+| `total_supply` (not in the SOW) | Added | Read inside checks 02–05 | A `total_supply` that reverts was not tested separately |
 | Generalisation with `--vault` | Done | Target vault's Wasm hash, `decimals_offset` and asset are resolved at run time | The security checks need the constructor `(name, symbol, asset, decimals_offset)` and `query_asset`; otherwise they report `NOT_APPLICABLE` |
-| Release binaries | Partly done | Windows, Linux and macOS (universal) archives with `.sha256` files are attached to v0.5.0 | The maintainer has not run the Linux and macOS binaries. The macOS binary is not notarized |
+| Release binaries | Done, with caveats | Windows, Linux and macOS (universal) archives with `.sha256` files are attached to v0.5.0. The Linux and macOS archives were downloaded, their sha256 matched, and they ran on GitHub Actions runners (ubuntu-22.04 x86_64 and macos-14 arm64) with Stellar CLI 28.0.0: Positive Control Vault exit 0 with 11 PASS, Reference Vault exit 1 with 10 PASS and 1 FAIL. Run: https://github.com/SkyBreak1927/sep56-vault-guard/actions/runs/39135199544 (the workflow is on branch `ci/smoke-binaries` and is not merged) | They ran on GitHub runners, not on the maintainer's machine. The x86_64 half of the macOS universal binary was not run. macOS notarization was not tested |
 
 ### Deliverable 2 — Test suite
 
@@ -60,21 +60,22 @@ What this work is, and is not:
 - **Real ecosystem vaults.** See the open marker above. Until it is closed, every result in this report is from vaults deployed by the project.
 - **Specialist security review.** None was carried out. The security findings in this report come from the project's own runs on Testnet: `rounding_direction` caught the injected bug on Vault B, and `donation_attack` caught the inflation attack on the Reference Vault. This report does not claim a third-party review.
 - **Fixtures instead of real vaults.** Vault A, Vault B, Hardened Vault, Blind Vault and the Positive Control Vault were built for this project.
-- **Reverting functions not tested.** From reading the code, a vault function that exists but reverts ends as `INCONCLUSIVE` with `unclassified_error`, not as FAIL. This has not been run against such a vault.
+- **Reverting functions tested on one fixture only.** `max_*` was run against one fixture whose `max_*` always trap, and checks 2 to 5 ended `INCONCLUSIVE` with `unclassified_error` as expected from the code. Other kinds of bad replies were not run, and a `total_supply` that reverts was not tested.
 - **The Positive Control Vault is shallow.** `donation_attack` passes there because the dead-share constant (100,000,000) equals the check's donation size. Larger donations were not run.
 - **A check can PASS with a value of zero.** On the Positive Control Vault, `redeem` and `convert_to_assets` PASS with 0 because their assertions held. They carry almost no information at that share price.
 - **`donation_attack` ignores a share price already in the vault.** Its baseline is the deposit times `10^decimals_offset`, so on a vault that already holds shares the reported percentage (199% on the Positive Control Vault) does not measure how well off the victim is.
 - **Events are not checked.** A vault that emits wrong events, or none, can still PASS every check.
 - **CLI Markdown versus web export.** The structure matches `web/src/lib/report.ts` for the title, header list, summary and per-group tables. The CLI table has no "Settled at" column and adds an Error section; the web export has a timing note. Identical content for the same run was not tested.
-- **Linux and macOS binaries.** They were built by the release workflow and have not been run by the maintainer.
+- **Linux and macOS binaries.** They ran on GitHub Actions runners (ubuntu-22.04 and macos-14), not on the maintainer's machine. The x86_64 half of the macOS binary and macOS notarization were not tested.
+- **One unexplained INCONCLUSIVE.** In one smoke-test run on macOS, `convert_to_shares` ended `INCONCLUSIVE` because its call to `convert_to_assets` failed for a reason the tool could not classify. The call succeeded when repeated, and the job passed on a retry. The cause is not known.
 - **Beyond the SOW.** The login account (Supabase) and the hosted runner on Render were added outside the SOW.
 
 ## Possible Next Steps
 
 1. Apply for an SCF Build Award, as the SOW's next-step section anticipates.
 2. Close the real ecosystem vault validation once operator permission is granted and results are available, and add those results to VAULT_CHECKS.md and to this report.
-3. Run the Linux and macOS binaries on real machines against Testnet, and notarize the macOS binary.
-4. Run the `max_*` and `total_supply` handling against a vault whose functions revert, and add a deeper positive control (larger donation sizes, non-zero redeem values).
+3. Notarize the macOS binary, and run the x86_64 half of the universal binary.
+4. Add a deeper positive control (larger donation sizes, non-zero redeem values).
 5. Consider checking the `Deposit` and `Withdraw` events, and address the two known CLI limits (a check passing with a value of zero, and the `donation_attack` baseline ignoring an existing share price).
 
 ## Evidence Index
@@ -88,3 +89,5 @@ What this work is, and is not:
 | Security findings | [SECURITY.md](./SECURITY.md) |
 | Check descriptions and results | [VAULT_CHECKS.md](./VAULT_CHECKS.md) |
 | Sample reports from CLI v0.5.0 | [docs/sample-reports/](./docs/sample-reports/) |
+| Binary smoke test run (Linux and macOS) | https://github.com/SkyBreak1927/sep56-vault-guard/actions/runs/39135199544 |
+| Reverting Max Vault fixture and run | [PR #54](https://github.com/SkyBreak1927/sep56-vault-guard/pull/54) |

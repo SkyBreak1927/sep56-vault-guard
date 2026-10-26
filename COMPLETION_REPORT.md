@@ -11,7 +11,7 @@
 | Repository | https://github.com/SkyBreak1927/sep56-vault-guard |
 | Released Version | 0.5.0 (CLI `sep56-vault-guard`; release v0.5.0) |
 | Builder / Team Name | Aegis Vault |
-| Primary Contact (Name + Email) | Feby Mara Pandebu (febymarapandebu01@gmail.com) |
+| Primary Contact (Name) | Feby Mara Pandebu |
 | Ambassador Chapter | Stellar Chapter Ambassador Indonesia |
 | Ambassador Chapter Lead | Kenny Rivaldi |
 

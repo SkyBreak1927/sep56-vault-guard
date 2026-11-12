@@ -1,17 +1,61 @@
-# Aegis Vault — SEP-56 Conformance Checker
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+    <img alt="Aegis Vault" src="docs/assets/logo-light.svg" width="360">
+  </picture>
+</p>
 
-A CLI tool (with companion web UI) that checks 7 core SEP-56 functions and four
-basic security risks of a Soroban tokenized vault, on Stellar Testnet. The
-specification is [SEP-56](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md).
+<h3 align="center">Conformance and security checks for SEP-56 tokenized vaults on Soroban.</h3>
 
-Built for the Stellar Instawards program.
+<p align="center">
+  <a href="https://github.com/SkyBreak1927/sep56-vault-guard/releases"><img alt="Version" src="https://img.shields.io/github/v/tag/SkyBreak1927/sep56-vault-guard?label=version"></a>
+  <img alt="License: MIT" src="https://img.shields.io/github/license/SkyBreak1927/sep56-vault-guard">
+  <img alt="Network: Stellar Testnet" src="https://img.shields.io/badge/network-Stellar%20Testnet-blue">
+  <img alt="Spec: SEP-56" src="https://img.shields.io/badge/spec-SEP--56-orange">
+  <img alt="Built with Rust" src="https://img.shields.io/badge/built%20with-Rust-b7410e">
+</p>
+
+<p align="center">
+  <a href="https://aegisvault.site"><b>Try it live</b></a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/INTEGRATE.md">Integration guide</a> ·
+  <a href="VAULT_CHECKS.md">What each check asserts</a> ·
+  <a href="web/public/aegis-vault-walkthrough-demo.mp4">Watch the demo</a>
+</p>
+
+---
+
+A tokenized vault holds other people's funds. A vault that drifts from the
+[SEP-56](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0056.md)
+standard, or is open to an inflation (donation) attack, can lose them. Aegis Vault
+takes the contract address of a deployed vault, runs 11 checks against it on
+Stellar Testnet, and tells you which pass, which fail, and why. It is a CLI tool
+with a companion web UI.
+
+- **Paste an address, get a verdict.** 7 conformance checks and 4 security checks,
+  in the browser or from the CLI.
+- **Two ways in.** Already deployed a vault? Paste its address into the
+  [web checker](https://aegisvault.site). Still building? Run the CLI in your own
+  development environment while you work.
+- **Honest results.** Each check ends as `PASS`, `FAIL`, `INCONCLUSIVE` or
+  `NOT_APPLICABLE`. When the tool cannot decide, it says so instead of guessing.
+- **CI-friendly.** Exit codes, plus `text`, `json` and `markdown` output.
+
+> [!WARNING]
+> Our own reference vault currently **fails** the `donation_attack` check: a real
+> inflation-attack vulnerability was confirmed under `decimals_offset=0`. See
+> [SECURITY.md](./SECURITY.md) for details. Aegis Vault is functional and
+> adversarial testing. It is **not** a substitute for a formal third-party
+> security review.
 
 ## Features
 
-Aegis Vault runs two groups of checks against a deployed SEP-56 vault contract:
+Aegis Vault runs two groups of checks against a deployed SEP-56 vault contract.
 
 ### Positive Conformance
+
 Calls 7 core SEP-56 functions on the vault and checks their results:
+
 - `total_assets`
 - `deposit`
 - `mint`
@@ -21,11 +65,42 @@ Calls 7 core SEP-56 functions on the vault and checks their results:
 - `convert_to_assets`
 
 ### Security / Adversarial
+
 Probes four basic security risks:
-- `donation_attack` — inflation/donation attack simulation
-- `overflow_protection` — arithmetic overflow handling
-- `rounding_direction` — verifies rounding favors the vault, not the attacker
-- `access_control_probing` — unauthorized operator/allowance handling
+
+| Check | What it probes |
+|---|---|
+| `donation_attack` | Inflation / donation attack simulation |
+| `overflow_protection` | Arithmetic overflow handling |
+| `rounding_direction` | Verifies rounding favors the vault, not the attacker |
+| `access_control_probing` | Unauthorized operator / allowance handling |
+
+What each check asserts: [VAULT_CHECKS.md](./VAULT_CHECKS.md).
+
+## Example run
+
+Abridged from the unedited report in
+[docs/sample-reports/reference-vault.md](docs/sample-reports/reference-vault.md)
+(CLI 0.5.0, Stellar Testnet, 102 s). The Detail column is left out here; the full
+report has it.
+
+```
+Result: Remediation needed
+Core function checks: 7 of 7 passed
+Basic security checks: 3 of 4 passed
+
+01 total_assets            PASS
+02 deposit                 PASS
+03 mint                    PASS
+04 withdraw                PASS
+05 redeem                  PASS
+06 convert_to_shares       PASS
+07 convert_to_assets       PASS
+08 donation_attack         FAIL
+09 overflow_protection     PASS
+10 rounding_direction      PASS
+11 access_control_probing  PASS
+```
 
 ## Live checker
 
@@ -33,9 +108,27 @@ The web checker runs the same CLI on a hosted backend, against Stellar Testnet:
 
 **https://aegisvault.site**
 
-> ⚠️ Note: our reference vault currently **fails** the `donation_attack` check —
-> a real inflation-attack vulnerability was confirmed under `decimals_offset=0`.
-> See [SECURITY.md](./SECURITY.md) for details.
+## Quick start
+
+**In the browser.** Open [aegisvault.site](https://aegisvault.site), paste a vault
+contract address, and run the check.
+
+**With the CLI.**
+
+1. Install the [prerequisites](#prerequisites) and create the seven
+   [testnet identities](#testnet-identities).
+2. Get the binary: [download a release](#download-a-release-binary) or
+   [build from source](#build-from-source).
+3. Run it:
+
+   ```bash
+   ./sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text
+   ```
+
+A run usually takes about a minute, sometimes longer, because every check is a
+chain of network round trips to testnet. If the vault's underlying asset is a
+custom token rather than native XLM, read the
+[integration guide](docs/INTEGRATE.md) first.
 
 ## What a run does to the vault
 
@@ -78,8 +171,8 @@ network, is reported as `INCONCLUSIVE` instead.
   `stellar.cmd` or `stellar.bat` shim works in a terminal but is not found here;
   the checker detects that case and says so before running anything.
 - **A Rust toolchain new enough for edition 2024.** Built and tested with
-  1.98.1.
-- **Git.**
+  1.98.1. Only needed if you build from source.
+- **Git.** Only needed if you build from source.
 
 ### Testnet identities
 
@@ -120,7 +213,7 @@ cargo build --release -p sep56-vault-guard
 ```
 
 The `-p sep56-vault-guard` matters. Without it, Cargo builds every member of the
-workspace, which includes the five example vault contracts in `contracts/` — a
+workspace, which includes the example vault contracts in `contracts/` — a
 longer build that produces nothing the checker needs.
 
 The binary lands at `target/release/sep56-vault-guard` (`.exe` on Windows).
@@ -129,87 +222,18 @@ The binary lands at `target/release/sep56-vault-guard` (`.exe` on Windows).
 
 Prebuilt binaries are attached to each release: a `.zip` for Windows x86_64, a
 `.tar.gz` for Linux x86_64 and a `.tar.gz` for macOS (one universal binary for
-Apple silicon and Intel), each with a `.sha256` file beside it. A file appears
-on the releases page only after a `v*` tag is pushed; a manual run of the
-release workflow produces downloadable artifacts on the run page and no release.
+Apple silicon and Intel), each with a `.sha256` file beside it, on the
+[releases page](https://github.com/SkyBreak1927/sep56-vault-guard/releases). A
+file appears there only after a `v*` tag is pushed.
 
 Install the Stellar CLI and create the seven identities first (see
-[Prerequisites](#prerequisites)), then:
+[Prerequisites](#prerequisites)), check the archive against its `.sha256` file,
+extract it, and run it from a terminal. On Windows, run it from `cmd` and do not
+double-click the `.exe`.
 
-1. Download the archive for your platform and its `.sha256` file from the
-   [releases page](https://github.com/SkyBreak1927/sep56-vault-guard/releases).
-2. Check it matches. On Windows:
-   `certutil -hashfile sep56-vault-guard-windows-x86_64.zip SHA256`, and compare
-   against the contents of the `.sha256` file. On Linux:
-   `sha256sum -c sep56-vault-guard-linux-x86_64.tar.gz.sha256`. On macOS:
-   `shasum -a 256 -c sep56-vault-guard-macos-universal.tar.gz.sha256`.
-3. Extract the archive.
-4. Run it. On Windows, from `cmd`:
-   `.\sep56-vault-guard.exe --vault <CONTRACT_ADDRESS> --output text`
-   On Linux and macOS:
-   `./sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text`
-
-A run prints 11 result lines followed by one summary line. The process exits
-with `0` when no check failed and none was inconclusive, `1` when at least one
-check failed, `3` when none failed but at least one was inconclusive, and `2`
-when a prerequisite is missing and no check ran. See [Exit codes](#exit-codes)
-for the detail.
-
-### Windows
-
-Run the binary from `cmd` or another terminal, in the folder where you extracted
-it:
-
-```bat
-.\sep56-vault-guard.exe --vault <CONTRACT_ADDRESS> --output text
-```
-
-Do not start it by double-clicking the `.exe`: the window closes before the
-result can be read.
-
-Before you run it, compare the SHA-256 of the zip with the contents of its
-`.sha256` file:
-
-```bat
-certutil -hashfile sep56-vault-guard-windows-x86_64.zip SHA256
-```
-
-The release binary is built with the C runtime linked in statically.
-
-The binary is not code-signed. Downloaded with `gh release download`, no
-SmartScreen warning appeared on the test PC. Downloaded through a browser,
-Windows SmartScreen shows a warning ("Windows protected your PC"); after you
-have checked the hash, choose "More info", then "Run anyway".
-
-### Linux
-
-x86_64 only, and it needs glibc 2.35 or newer (the version in Ubuntu 22.04).
-The release workflow builds on Ubuntu 22.04 and fails if the binary asks for a
-newer glibc symbol. Check yours with `ldd --version`. On a distribution with an
-older glibc, build from source instead.
-
-### macOS
-
-One universal binary (x86_64 and arm64) in
-`sep56-vault-guard-macos-universal.tar.gz`, built with a deployment target of
-macOS 11.0. Extract it and run it from a terminal:
-
-```bash
-shasum -a 256 -c sep56-vault-guard-macos-universal.tar.gz.sha256
-tar -xzf sep56-vault-guard-macos-universal.tar.gz
-./sep56-vault-guard --vault <CONTRACT_ADDRESS> --output text
-```
-
-The checker needs the Stellar CLI v28 or newer on `PATH`; for how to install it
-on macOS, see the Stellar CLI documentation linked under
-[Prerequisites](#prerequisites).
-
-The binary carries an ad-hoc code signature. It is not signed with a Developer
-ID and it is not notarized, so macOS may show a warning the first time it is
-opened. No workaround for that warning has been tried here, so none is given.
-
-This build is only checked in CI. See [Platforms](#platforms) for what has and
-has not been tested.
+The step-by-step install, hash-check commands for each platform, the Windows
+SmartScreen and macOS Gatekeeper notes, the Linux glibc requirement, and the
+honest state of testing per platform are in **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Usage
 
@@ -233,8 +257,9 @@ time), a result summary, and one table per group. It has no "Settled at" column
 and no commit in the checker line, because the CLI records neither. The `text`
 and `json` formats and the exit codes are the same whichever format you pick.
 
-A run usually takes about a minute, sometimes longer — every check is a chain of
-network round trips to testnet.
+A run prints 11 result lines followed by one summary line. A run usually takes
+about a minute, sometimes longer — every check is a chain of network round trips
+to testnet.
 
 ## Exit codes
 
@@ -277,46 +302,26 @@ identity, and an address that is not a contract on testnet. Under
 Under `--output markdown` the same information is printed to standard output as
 a report with an `Error` section (code, problem, fix) and no check table.
 
-## Platforms
-
-Windows x86_64, Linux x86_64 and macOS (universal: x86_64 and arm64). The
-release workflow builds all three.
-
-Honest state of testing:
-
-- **Windows x86_64:** the v0.3.0 zip was downloaded with `gh release download`,
-  its SHA-256 matched the `.sha256` file, and it was run from `cmd` against the
-  Testnet reference vault: 10 PASS, 1 FAIL (`donation_attack`), exit code 1.
-- **Windows SmartScreen:** no warning when the zip was downloaded with
-  `gh release download`; a warning when it was downloaded through a browser (see
-  [Windows](#windows)).
-- **Linux x86_64:** built and glibc-checked in CI (highest symbol 2.34), but not
-  run by the maintainer.
-- **macOS universal:** built on the CI runner `macos-14`, where the binary was
-  checked to contain both architectures, to link only system libraries, to carry
-  a valid ad-hoc signature, and to pass a smoke test: `--help` exits 0, and
-  `--vault <address> --output json` without `stellar` on `PATH` exits 2 with the
-  preflight error object. Not yet tested: the x86_64 half has not been run; no
-  run against Testnet has been made on macOS; Gatekeeper behavior for a copy
-  downloaded through a browser has not been tried.
-
-## Project Structure
+## Project structure
 
 ```
 sep56-vault-guard/
-├── cli/                    # CLI engine (Rust)
-├── contracts/
-│   └── reference-vault/    # OpenZeppelin-pattern reference SEP-56 vault
-├── server/                 # Backend that runs the CLI for the web UI
-└── web/                    # Landing page + check runner (Next.js, deployed on Vercel)
+├── cli/        # CLI engine (Rust)
+├── contracts/  # Reference vault, plus the test vaults and test token used to verify the checker
+├── server/     # Backend that runs the CLI for the web UI
+├── web/        # Landing page + check runner (Next.js, deployed on Vercel)
+└── docs/       # Install and integration guides, sample reports
 ```
 
 ## Scope & Limitations
 
 This tool performs functional conformance and adversarial testing — it is **not**
 a substitute for a formal third-party security review. See
-[SECURITY.md](./SECURITY.md) for known findings and limitations, and
-[VAULT_CHECKS.md](./VAULT_CHECKS.md) for what each check asserts.
+[SECURITY.md](./SECURITY.md) for known findings and limitations,
+[VAULT_CHECKS.md](./VAULT_CHECKS.md) for what each check asserts, and
+[COMPLETION_REPORT.md](./COMPLETION_REPORT.md) for the project report.
+
+Built for the Stellar Instawards program.
 
 ## License
 

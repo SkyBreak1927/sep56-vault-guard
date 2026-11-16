@@ -14,8 +14,11 @@ export const output: DocsPage = {
         table(
           ['Status', 'Meaning'],
           [
-            ['`PASS`', "The check's assertions held."],
-            ['`FAIL`', 'At least one assertion did not hold. This is a finding about the vault.'],
+            ['`PASS`', "The check's assertions held in the scenario it ran. This does not say the vault is safe or correct overall."],
+            [
+              '`FAIL`',
+              'At least one assertion did not hold. For a conformance check this is a difference from what the check expects; for a security check it is a finding in the scenario that was run. Either way it is a result about that behavior, not proof about the whole vault.',
+            ],
             [
               '`INCONCLUSIVE`',
               "The tool could not reach a verdict, for example because a test account holds none of the vault's token. Not a finding about the vault.",
@@ -55,9 +58,9 @@ export const output: DocsPage = {
             optional(
               'reason',
               'object',
-              'On every row that is not `PASS`: `{ "code", "message" }`. `code` is one of the reason codes below; for `INCONCLUSIVE` and `NOT_APPLICABLE` it equals `reason_code`. `message` is one fixed sentence per code, without raw error text or account names.',
+              'On every row that is not `PASS`: `{ "code", "message" }`. `code` is one of the reason codes below; for `INCONCLUSIVE` and `NOT_APPLICABLE` it equals `reason_code`. `message` is one sentence per code, without raw error text or account names. Its wording can be improved over time, so a program should branch on `code`, not on `message`.',
             ),
-            param('mode', 'string', 'On every row. `testnet`: the 7 conformance checks change the target vault\'s state.'),
+            param('mode', 'string', 'On every row. `testnet`: the 7 conformance checks send real transactions to the target vault with Testnet funds and change its state; the 4 security checks use a temporary copy.'),
             param('spec', 'string', 'On every row. The SEP-56 text the checks were written against: `SEP-0056 v0.1.2 (Draft)`.'),
             param('runs_on', 'string', 'On every row. `target` for the 7 conformance checks, `temporary_copy` for the 4 security checks.'),
           ],
@@ -93,18 +96,18 @@ export const output: DocsPage = {
         table(
           ['Part', 'Content'],
           [
-            ['Title', '`# Aegis Vault — Conformance Verification Report`'],
+            ['Title', '`# Aegis Vault — SEP-56 Check Report`'],
             [
               'Header list',
-              'Vault, network, mode, spec reference, checker version, start and end time, duration, and the result line.',
+              'Vault, network, mode, spec reference, checker version, a scope line (the run checks 7 core SEP-56 functions and four basic security risks, events are not checked, and a result describes the scenarios that were run), start and end time, duration, and the result line.',
             ],
             [
               'Summary',
-              'The result headline, then `Core function checks: X of N passed` and `Basic security checks: X of N passed`. Inconclusive and not-applicable counts are listed only when above zero.',
+              'The result headline (`Review required` when a check failed), then `Core function checks: X of N passed` and `Basic security checks: X of N passed`. Inconclusive and not-applicable counts are listed only when above zero.',
             ],
             [
               'Tables',
-              'One table per group, `Conformance checks` and `Security checks`, with the columns `#`, `Check`, `Status`, `Mode`, `Spec`, `Runs on` and `Detail`. Every row carries its mode, the SEP-56 draft it was checked against, and whether it ran on the target vault or a temporary copy. Rows are numbered 01 to 11 in the fixed check order.',
+              'One table per group, `Core function checks` and `Basic security checks`, with the columns `#`, `Check`, `Status`, `Mode`, `Spec`, `Runs on` and `Detail`. Every row carries its mode, the SEP-56 draft it was checked against, and whether it ran on the target vault or a temporary copy. Rows are numbered 01 to 11 in the fixed check order.',
             ],
             [
               'Error section',
@@ -113,7 +116,7 @@ export const output: DocsPage = {
           ],
         ),
         text(
-          'Real reports from Testnet runs with CLI 0.5.0 are in `docs/sample-reports/` in the GitHub repository: the Positive Control Vault (11 PASS), the Reference Vault (10 PASS, 1 FAIL) and a prerequisite error. Those were made before the `Mode`, `Spec` and `Runs on` columns existed; a report with them is in `docs/sow2/samples/`.',
+          'Real reports from Testnet runs with CLI 0.5.0 are in `docs/sample-reports/` in the GitHub repository: the Positive Control Vault (11 PASS), the Reference Vault (10 PASS, 1 FAIL) and a prerequisite error. Those were made before the `Mode`, `Spec` and `Runs on` columns existed, and they use the older title and the headline `Remediation needed`; reports with the current wording are in `docs/sow2/samples/`, in the files ending in `-wording-pass`.',
         ),
         verified(
           'The format is covered by unit tests (`markdown::tests` in `cli/src/markdown.rs`), and the sample reports come from Testnet runs.',
@@ -133,8 +136,8 @@ export const output: DocsPage = {
         table(
           ['Code', 'Status', 'Meaning'],
           [
-            ['`behavior_mismatch`', 'FAIL', 'A conformance check: the function exists, but its result did not satisfy the assertion. `reason` only.'],
-            ['`security_finding`', 'FAIL', 'A security check: the scenario on the temporary copy was not handled as expected. `reason` only.'],
+            ['`behavior_mismatch`', 'FAIL', 'A conformance check: the function exists, but what it returned or changed did not match what the check expects. `reason` only.'],
+            ['`security_finding`', 'FAIL', 'A security check ran a scenario on a temporary copy of the vault and flagged the result. This applies to that scenario only, not to the vault as a whole. `reason` only.'],
             [
               '`interface_missing`',
               'FAIL',
@@ -146,11 +149,11 @@ export const output: DocsPage = {
               'A token transfer a check needed was rejected, and the paying test account holds less than the call needed. The detail gives both figures when the tool read the balance.',
             ],
             ['`network_error`', 'INCONCLUSIVE', 'A network problem stopped the check.'],
-            ['`unclassified_error`', 'INCONCLUSIVE', 'An error the tool could not classify. The raw error is in `raw_error` and in `detail`.'],
+            ['`unclassified_error`', 'INCONCLUSIVE', 'An error the tool could not classify. The error text is in `raw_error` and in `detail` when the CLI printed any; when it printed none, `raw_error` is absent.'],
             [
               '`constructor_mismatch`',
               'NOT_APPLICABLE',
-              "The vault's constructor does not accept `(name, symbol, asset, decimals_offset)`, so the security checks cannot deploy their copy.",
+              "The vault's constructor does not accept the arguments `(name, symbol, asset, decimals_offset)` under these names, so the security checks cannot deploy their copy.",
             ],
             [
               '`not_a_standard_vault`',
@@ -160,7 +163,7 @@ export const output: DocsPage = {
             [
               '`token_interface_mismatch`',
               'NOT_APPLICABLE',
-              '`access_control_probing` only: `approve` or `allowance` is not declared as `(address, address, i128, u32)` and `(address, address) -> i128` with `spender` second, or the contract spec could not be read.',
+              '`access_control_probing` only: `approve` or `allowance` cannot be called by the check. It needs `approve(address, address, i128, u32)` and `allowance(address, address) -> i128`, the second argument of each named `spender`, and a readable contract spec.',
             ],
           ],
         ),

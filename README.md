@@ -80,12 +80,14 @@ What each check asserts: [VAULT_CHECKS.md](./VAULT_CHECKS.md).
 ## Example run
 
 Abridged from the unedited report in
-[docs/sample-reports/reference-vault.md](docs/sample-reports/reference-vault.md)
-(CLI 0.5.0, Stellar Testnet, 102 s). The Detail column is left out here; the full
-report has it.
+[docs/sow2/samples/reference-vault-wording-pass.md](docs/sow2/samples/reference-vault-wording-pass.md)
+(Stellar Testnet, 49 s, 16 November 2026; the CLI prints version 0.5.0). The Detail
+column is left out here; the full report has it. The reports in
+[docs/sample-reports/](docs/sample-reports/) are CLI 0.5.0 history and use the
+older title and headline.
 
 ```
-Result: Remediation needed
+Result: Review required
 Core function checks: 7 of 7 passed
 Basic security checks: 3 of 4 passed
 

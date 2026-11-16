@@ -1,0 +1,105 @@
+[
+  {
+    "name": "total_assets",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "total_assets = 613501000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "target"
+  },
+  {
+    "name": "deposit",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "deposited 5000000 units of the underlying asset, minted 5000000 shares matching preview_deposit(), total_assets 613501000 -> 618501000; max_deposit=170141183460469231731687303715884105727, total_supply 613501000 -> 618501000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "target"
+  },
+  {
+    "name": "mint",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "minted 3000000 shares, pulled 3000000 assets matching preview_mint(), total_assets 618501000 -> 621501000; max_mint=170141183460469231731687303715884105727, total_supply 618501000 -> 621501000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "target"
+  },
+  {
+    "name": "withdraw",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "withdrew 2000000 units of the underlying asset, burned 2000000 shares matching preview_withdraw(), total_assets 621501000 -> 619501000; max_withdraw=471501000, total_supply 621501000 -> 619501000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "target"
+  },
+  {
+    "name": "redeem",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "redeemed 1000000 shares, received 1000000 assets matching preview_redeem(), total_assets 619501000 -> 618501000; max_redeem=469501000, total_supply 619501000 -> 618501000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "target"
+  },
+  {
+    "name": "convert_to_shares",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "convert_to_shares(4000000) = 4000000, round-trip convert_to_assets(4000000) = 4000000 (<= 4000000, as required of floor/floor round-tripping), total_assets unchanged at 618501000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "target"
+  },
+  {
+    "name": "convert_to_assets",
+    "category": "Positive Conformance",
+    "status": "PASS",
+    "detail": "convert_to_assets(4000000) = 4000000, round-trip convert_to_shares(4000000) = 4000000 (<= 4000000, as required of floor/floor round-tripping), total_assets unchanged at 618501000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "target"
+  },
+  {
+    "name": "donation_attack",
+    "category": "Security/Adversarial",
+    "status": "FAIL",
+    "detail": "Finding in the donation scenario — fresh vault CCGW5PRTN2UA4YKS7BPUINTHZL66NAQG3DY455WIRWZO4TOUQNGSILNC (decimals_offset=0): attacker deposited 1 stroop(s) then donated 100000000 stroops directly (bypassing deposit()); victim then deposited 5000000 stroops and received 0 shares (0% of the 5000000 expected from an undisturbed deposit at this vault's decimals_offset); attacker P&L: net loss of 47500000 stroops (spent 100000001, redeemed 52500001)",
+    "reason": {
+      "code": "security_finding",
+      "message": "This check ran a scenario on a temporary copy of the vault and flagged the result. This applies to that scenario only, not to the vault as a whole. See detail."
+    },
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "temporary_copy"
+  },
+  {
+    "name": "overflow_protection",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "NOTE: this does not test the vault's own overflow protection. deposit(assets=i128::MAX) on fresh vault CA6NLLEN4AVLAG7AVWMAPVOMY454YE3Q2JVMIETQQX5O5Z74XCEKJANK failed cleanly (rejected by the network, with no error text), and total_assets remained 0 — no wrong result observed. at decimals_offset=0, the vault's own share math does not overflow for i128::MAX (shares = assets exactly), so this failure is instead triggered by the classic Stellar Asset Contract's own int64 amount ceiling (\"spent amount is too large for an i64\") on the underlying asset transfer — a limit outside the vault's control, NOT a demonstration of the vault's own overflow protection.",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "temporary_copy"
+  },
+  {
+    "name": "rounding_direction",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "fresh vault CC6MN6YJQEZ6RTAJ3NSRO73RSTUQPJ64K44BGHSQTGURRMS6QVM45QHR at fractional ratio (seed 1000 + donation 500): Test A — deposit(100) minted 66 shares matching preview_deposit() (floor, favors vault); Test B — mint(100 shares) pulled 151 assets matching preview_mint() (ceil) and strictly greater than the idealized convert_to_assets() (150) — at this ratio, rounding favored the vault in both directions tested",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "temporary_copy"
+  },
+  {
+    "name": "access_control_probing",
+    "category": "Security/Adversarial",
+    "status": "PASS",
+    "detail": "fresh vault CBK3UUHQTRYUWPJ6LIWJLL35AFA46V5YMJ465JZCZTFVF64KMXS5AIRE (decimals_offset=0): unauthorized withdraw (no approval) correctly rejected; after owner approved operator for 1000000 shares, operator withdrew 500000 shares (allowance 1000000 -> 500000, decremented exactly); operator's over-allowance withdraw attempt of 1500000 assets (requiring more shares than the remaining 500000-share allowance) correctly rejected with allowance left untouched at 500000",
+    "mode": "testnet",
+    "spec": "SEP-0056 v0.1.2 (Draft)",
+    "runs_on": "temporary_copy"
+  }
+]

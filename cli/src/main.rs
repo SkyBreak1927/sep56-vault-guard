@@ -404,7 +404,7 @@ mod tests {
         let json = serde_json::to_string(&json_results(&[r])).unwrap();
         assert_eq!(
             json,
-            r#"[{"name":"deposit","category":"Positive Conformance","status":"INCONCLUSIVE","detail":"detail for deposit","reason_code":"unclassified_error","raw_error":"error: something","reason":{"code":"unclassified_error","message":"A call failed for a reason the tool could not classify. Not a finding about the vault. See raw_error."},"mode":"testnet","spec":"SEP-0056 v0.1.2 (Draft)","runs_on":"target"}]"#
+            r#"[{"name":"deposit","category":"Positive Conformance","status":"INCONCLUSIVE","detail":"detail for deposit","reason_code":"unclassified_error","raw_error":"error: something","reason":{"code":"unclassified_error","message":"A call failed for a reason the tool could not classify. Not a finding about the vault. See detail. raw_error holds the error text when the CLI printed any, and is absent when it printed none."},"mode":"testnet","spec":"SEP-0056 v0.1.2 (Draft)","runs_on":"target"}]"#
         );
     }
 

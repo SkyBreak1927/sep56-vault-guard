@@ -1,5 +1,7 @@
 # Sample reports
 
+**These are CLI 0.5.0 reports, kept as history.** They use the title `Conformance Verification Report` and the headline `Remediation needed`, which were reworded afterwards (`docs/sow2/design-wording.md`). Reports with the current wording are in `docs/sow2/samples/`, in the files ending in `-wording-pass`.
+
 The Markdown files here are the unedited output of `sep56-vault-guard --output markdown`. The one exception is `reverting-max-vault.json`, which is the unedited output of `--output json`. All are saved exactly as the CLI printed them. Nothing was added, removed or reworded by hand.
 
 - CLI version: `sep56-vault-guard 0.5.0`

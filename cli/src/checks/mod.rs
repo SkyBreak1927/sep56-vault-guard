@@ -205,7 +205,7 @@ fn verdict(subject: &Subject<'_>, diag: &Diagnosis) -> Option<Stop> {
 fn verdict_with(subject: &Subject<'_>, diag: &Diagnosis, shortfall: Option<Shortfall>) -> Option<Stop> {
     let phrase = match subject {
         Subject::Call { function, .. } => format!("the call to {function}()"),
-        Subject::Deploy => "the deploy of the comparison copy".to_string(),
+        Subject::Deploy => "the deploy of the temporary copy".to_string(),
         Subject::WasmHash => "the lookup of the target's Wasm hash".to_string(),
     };
 
@@ -213,11 +213,15 @@ fn verdict_with(subject: &Subject<'_>, diag: &Diagnosis, shortfall: Option<Short
         (ErrorClass::InsufficientTokenBalance, Subject::Call { account, .. }) => (
             "insufficient_token_balance",
             format!(
-                "the token transfer needed for this check was rejected, which appears to be \
-                 insufficient balance on the account paying for it (this check started the \
-                 call as test account '{account}'). Fund that account with the vault's \
+                "the token transfer needed for this check was rejected, {} (this check started \
+                 the call as test account '{account}'). Fund that account with the vault's \
                  underlying asset and run again. This is a precondition problem, not a \
                  finding about the vault.{}",
+                if shortfall.is_some() {
+                    "because the account paying for it holds less than the call needed"
+                } else {
+                    "which appears to be insufficient balance on the account paying for it"
+                },
                 shortfall.map_or(String::new(), |s| format!(
                     " The account holds {} of the underlying asset and needs {}.",
                     s.held, s.needed
@@ -227,7 +231,7 @@ fn verdict_with(subject: &Subject<'_>, diag: &Diagnosis, shortfall: Option<Short
         ),
         (ErrorClass::ConstructorMismatch, Subject::Deploy) => (
             "constructor_mismatch",
-            "this check deploys a comparison copy of the vault with the constructor arguments \
+            "this check deploys a temporary copy of the vault with the constructor arguments \
              --name, --symbol, --asset, --decimals_offset; the target vault's constructor does \
              not accept them, so the copy could not be deployed. No finding about the vault."
                 .to_string(),
@@ -245,7 +249,7 @@ fn verdict_with(subject: &Subject<'_>, diag: &Diagnosis, shortfall: Option<Short
         (ErrorClass::NotAStandardVault, Subject::WasmHash) => (
             "not_a_standard_vault",
             "the target does not expose the interface this check needs (a contract with Wasm \
-             code of its own, which a comparison copy is deployed from). No finding about the \
+             code of its own, which a temporary copy is deployed from). No finding about the \
              vault."
                 .to_string(),
             true,
@@ -587,7 +591,7 @@ pub async fn check_deposit(contract_id: &str, source_account: &str) -> CheckResu
     }
 
     CheckResult::pass(name, format!(
-            "deposited {DEPOSIT_AMOUNT} stroops, minted {shares_minted} shares matching \
+            "deposited {DEPOSIT_AMOUNT} units of the underlying asset, minted {shares_minted} shares matching \
              preview_deposit(), total_assets {before} -> {after}; max_deposit={max_limit}, total_supply {supply_before} -> {supply_after}"
         ))
 }
@@ -824,7 +828,7 @@ pub async fn check_withdraw(contract_id: &str, source_account: &str) -> CheckRes
     }
 
     CheckResult::pass(name, format!(
-            "withdrew {WITHDRAW_AMOUNT} stroops, burned {shares_burned} shares matching \
+            "withdrew {WITHDRAW_AMOUNT} units of the underlying asset, burned {shares_burned} shares matching \
              preview_withdraw(), total_assets {before} -> {after}; max_withdraw={max_limit}, total_supply {supply_before} -> {supply_after}"
         ))
 }
@@ -1337,9 +1341,9 @@ pub async fn check_donation_attack(
     );
 
     if victim_shares < min_acceptable_shares {
-        CheckResult::fail(name, format!("VULNERABLE to donation/inflation attack — {verdict_detail}"))
+        CheckResult::fail(name, format!("Finding in the donation scenario — {verdict_detail}"))
     } else {
-        CheckResult::pass(name, format!("resilient to donation/inflation attack — {verdict_detail}"))
+        CheckResult::pass(name, format!("In this scenario the vault held up — {verdict_detail}"))
     }
 }
 
@@ -1445,13 +1449,13 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
 
     match deposit_result {
         Ok(shares) => CheckResult::fail(name, format!(
-                "VULNERABLE: deposit(assets=i128::MAX) unexpectedly SUCCEEDED and minted \
+                "Finding: deposit(assets=i128::MAX) unexpectedly SUCCEEDED and minted \
                  {shares} shares on fresh vault {vault_id} (total_assets afterwards: \
                  {total_assets_after}) — an extreme input should be rejected cleanly, not \
-                 accepted with a possibly-wrong result"
+                 accepted with an unexpected result"
             )),
         Err(e) if total_assets_after != 0 => CheckResult::fail(name, format!(
-                "VULNERABLE: deposit(assets=i128::MAX) failed as expected ({e}), but \
+                "Finding: deposit(assets=i128::MAX) failed as expected ({e}), but \
                  total_assets on {vault_id} is {total_assets_after} instead of 0 — the failed \
                  transaction left behind corrupted/partial state"
             )),
@@ -1509,7 +1513,7 @@ pub async fn check_overflow_protection(target_vault: &str, deployer_account: &st
 
             CheckResult::pass(name, format!(
                     "{lead}deposit(assets=i128::MAX) on fresh vault {vault_id} failed cleanly \
-                     ({rejection}), and total_assets remained 0 — no silent-wrong-result \
+                     ({rejection}), and total_assets remained 0 — no wrong result \
                      observed. {layer_detail}."
                 ))
         }
@@ -1747,8 +1751,8 @@ pub async fn check_rounding_direction(target_vault: &str, deployer_account: &str
              {actual_deposit_shares} shares matching preview_deposit() (floor, favors vault); \
              Test B — mint({MINT_TEST_SHARES} shares) pulled {actual_mint_assets} assets \
              matching preview_mint() (ceil) and strictly greater than the idealized \
-             convert_to_assets() ({idealized_assets}) — rounding direction confirmed to always \
-             favor the vault over the user"
+             convert_to_assets() ({idealized_assets}) — at this ratio, rounding favored the vault \
+             in both directions tested"
         ))
 }
 
@@ -1857,7 +1861,7 @@ pub async fn check_access_control_probing(
         invoke_contract(&vault_id, "withdraw", &unauthorized_args, operator_account).await
     {
         return CheckResult::fail(name, format!(
-                "VULNERABLE: operator withdrew {shares} shares from owner on {vault_id} \
+                "Finding: operator withdrew {shares} shares from owner on {vault_id} \
                  WITHOUT any prior approve() — access control was not enforced"
             ));
     }
@@ -1953,7 +1957,7 @@ pub async fn check_access_control_probing(
     let expected_remaining = approved_allowance - shares_spent;
     if allowance_after_spend != expected_remaining {
         return CheckResult::fail(name, format!(
-                "VULNERABLE: after operator spent {shares_spent} shares of a \
+                "Finding: after operator spent {shares_spent} shares of a \
                  {approved_allowance}-share allowance on {vault_id}, remaining allowance is \
                  {allowance_after_spend}, expected {expected_remaining} — allowance was not \
                  decremented correctly (reset to 0, left unchanged, or otherwise wrong)"
@@ -1977,7 +1981,7 @@ pub async fn check_access_control_probing(
         invoke_contract(&vault_id, "withdraw", &exceeding_args, operator_account).await
     {
         return CheckResult::fail(name, format!(
-                "VULNERABLE: operator withdrew {shares} shares on {vault_id} exceeding the \
+                "Finding: operator withdrew {shares} shares on {vault_id} exceeding the \
                  remaining allowance of {allowance_after_spend} — allowance limit was not \
                  enforced"
             ));
@@ -2001,7 +2005,7 @@ pub async fn check_access_control_probing(
 
     if allowance_final != allowance_after_spend {
         return CheckResult::fail(name, format!(
-                "VULNERABLE: allowance on {vault_id} changed from {allowance_after_spend} to \
+                "Finding: allowance on {vault_id} changed from {allowance_after_spend} to \
                  {allowance_final} after a REJECTED over-allowance withdraw attempt — a failed \
                  transaction must not partially spend allowance"
             ));
@@ -2295,6 +2299,7 @@ For more information, try '--help'."####;
         assert!(r.detail.contains("Error(Contract, #100)"));
         // no balance figure is claimed
         assert!(!r.detail.contains("holds"));
+        assert!(r.detail.contains("which appears to be insufficient balance"));
     }
 
     // P3
@@ -2502,6 +2507,8 @@ For more information, try '--help'."####;
         let r = result_of(verdict_with(&call("deposit", false), &d, Some(s)).unwrap(), "unused");
         assert_eq!((r.status, r.reason_code), (CheckStatus::Inconclusive, Some("insufficient_token_balance")));
         assert!(r.detail.contains("The account holds 0 of the underlying asset and needs 10000000."));
+        assert!(r.detail.contains("because the account paying for it holds less than the call needed"));
+        assert!(!r.detail.contains("appears to be"));
         assert!(r.detail.contains("Raw error: "));
         assert_eq!(r.raw_error.as_deref(), Some(one_line));
     }

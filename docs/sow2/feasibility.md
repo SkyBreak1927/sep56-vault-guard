@@ -85,4 +85,95 @@ No simulated call produced a transaction hash. The CLI printed no
    which authorizations the call needs. This has not been checked. **BELUM**
 5. Simulating `deposit`/`mint` from an address that has no balance in the
    underlying asset but does exist on the network has not been tried.
-   **BELUM**
+   **BELUM** (see Part A below: on the reference vault that case cannot
+   exist, so the closest case was tested instead.)
+
+## Part A: funded account with no shares
+
+### Underlying asset is native XLM
+
+`query_asset` on the reference vault returns
+`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`, which is the
+same id that `stellar contract id asset --asset native --network testnet`
+prints. **TERBUKTI**
+
+So the underlying asset is native XLM. Every account that exists on the
+network holds XLM, because it needs a minimum balance to exist at all. On
+this vault, "account exists but has none of the underlying asset" cannot
+happen. The closest case is an account that has XLM but less than the amount
+deposited (row A3).
+
+### Account
+
+Testnet identity `grace`, public address
+`GDCT3GFQGRJJKNY44D5G7EJFDK6TQQCD7ZTBK3636MLKSA7UTEB6BCRI`. The account
+exists on Testnet with 9,740.6888017 XLM and holds `0` vault shares (read
+with `balance`). The key was not used: every call below passes the public
+address. **TERBUKTI**
+
+Command form (same as above, `<G>` = grace's public address):
+
+```bash
+stellar contract invoke --id CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF \
+  --source-account <G> --network testnet --send=no -- <function> <args>
+```
+
+| # | Call | Source account | Result | Notes | Status |
+|---|---|---|---|---|---|
+| A1 | `deposit --assets 100000 --receiver <G> --from <G> --operator <G>` | grace (funded, 0 shares) | Success, exit 0, returns `"100000"` | Simulated Transfer (100,000 XLM stroops) + Deposit events. No tx sent. | TERBUKTI |
+| A2 | `mint --shares 100000 --receiver <G> --from <G> --operator <G>` | grace | Success, exit 0, returns `"100000"` | Simulated Transfer + Deposit events. No tx sent. | TERBUKTI |
+| A3 | `deposit --assets 1000000000000000 --receiver <G> --from <G> --operator <G>` (more than the account holds) | grace | Fail, exit 1 | `transaction simulation failed: HostError: Error(Contract, #10)`. `cli/src/rpc.rs` already records this exact error as the native over-balance case (`B_NATIVE_OVER_BALANCE`). | Error: TERBUKTI; meaning of #10 taken from the existing repo fixture, not re-derived: BELUM |
+
+| Check (Horizon) | Before | After | Status |
+|---|---|---|---|
+| grace sequence number | 21128039345684713 | 21128039345684713 | TERBUKTI |
+| grace latest tx | `46ea9d5d…6dc2`, ledger 5278210 | same | TERBUKTI |
+| grace XLM | 9740.6888017 | 9740.6888017 | TERBUKTI |
+| grace vault shares | 0 | 0 | TERBUKTI |
+
+Findings:
+
+- A funded account with no shares can simulate `deposit` and `mint` from its
+  public address alone. **TERBUKTI**
+- When the amount is more than the account's XLM, the simulation fails with
+  the asset contract's error, so a simulation does check the real balance.
+  **TERBUKTI**
+- A vault whose underlying asset is a custom token (for example Blind Vault)
+  would allow a real "has none of the asset" case. Not tested. **BELUM**
+
+## Part B: Mainnet WASM on Testnet
+
+Mainnet was used **read-only**: two reads (`contract info hash`,
+`contract fetch`) against `https://mainnet.sorobanrpc.com`. No transaction
+was signed or sent to Mainnet.
+
+Contract: Soroswap Router on Mainnet,
+`CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH`. The address comes
+from third-party documentation. This test only shows that a contract with
+WASM exists at that address. It does not show that the address really
+belongs to Soroswap. **BELUM** for the ownership claim.
+
+| # | Step | Command (no secrets) | Result | Status |
+|---|---|---|---|---|
+| B1 | Contract exists on Mainnet and has WASM | `stellar contract info hash --contract-id CAG5LRYQ…JDDH --rpc-url https://mainnet.sorobanrpc.com --network-passphrase "Public Global Stellar Network ; September 2015"` | Exit 0, wasm hash `4c3db3ebd2d6a2ab23de1f622eaabb39501539b4611b68622ec4e47f76c4ba07` | TERBUKTI |
+| B2 | Fetch WASM to a local file | `stellar contract fetch --id CAG5LRYQ…JDDH --rpc-url https://mainnet.sorobanrpc.com --network-passphrase "…" --out-file <temp dir outside repo>/soroswap-router.wasm` | Exit 0, 34,253 bytes, sha256 `4c3db3eb…ba07`, equal to the on-chain hash | TERBUKTI |
+| B3 | Interface | `stellar contract info interface --wasm <file> --output rust` | Has `initialize`, `add_liquidity`, `remove_liquidity`, `swap_*`, `router_*`, `get_*` functions and no `__constructor`, so it can be deployed with no arguments | TERBUKTI |
+| B4 | Upload (install) to Testnet | `stellar contract upload --wasm <file> --source-account alice --network testnet` | Exit 0, CLI printed `Skipping install because wasm already installed` and the hash `4c3db3eb…ba07`. The same WASM was already on Testnet (uploaded earlier by someone else), so **this step sent no transaction**. | TERBUKTI |
+| B5 | Deploy one instance without initializing it | `stellar contract deploy --wasm-hash 4c3db3eb…ba07 --source-account alice --network testnet` | Success. Contract `CCCW7AWSXTC3OHC5Q2PGW64GGNY6OQLUXQKI3UFCAJ37466TVRYF6B7F`, tx `58d225fb336c50ddb9111c1dbce6d047e926dd3fd422962459d386ee184c38f3`, ledger 5756414. `initialize` was not called. | TERBUKTI |
+| B6 | Instance exists, same hash as Mainnet | `stellar contract info hash --contract-id CCCW7AWS…6B7F --network testnet` | `4c3db3eb…ba07`, identical to Mainnet | TERBUKTI |
+| B7 | Byte comparison | `stellar contract fetch --id CCCW7AWS…6B7F --network testnet --out-file <temp>` then `cmp` against the Mainnet file | Files identical | TERBUKTI |
+
+No function of the Testnet instance was invoked. Only `contract info hash`
+and `contract fetch` were run against it, which read ledger entries and do
+not call the contract.
+
+The `.wasm` files are kept in a temporary folder outside the repo and are not
+committed.
+
+Findings:
+
+- Mainnet contract code can be copied to Testnet with the same wasm hash,
+  without touching Mainnet state. **TERBUKTI**
+- The copy is uninitialized, so it has no factory and no pairs. Calling it
+  would not reproduce Mainnet behaviour until it is initialized and given
+  its own pairs. Not tried. **BELUM**

@@ -19,7 +19,7 @@
 
 use serde::Serialize;
 
-use crate::interface::{self, Assessment, Mismatch};
+use crate::interface::{self, Assessment, Mismatch, TokenArgs};
 use crate::rpc::{diagnose_info_hash, run_stellar, ErrorClass, RpcError};
 
 /// Lowest `stellar` major version the checks are known to work against.
@@ -97,6 +97,9 @@ impl PreflightError {
 /// printing but are not reasons to stop.
 pub struct Preflight {
     pub warnings: Vec<String>,
+    /// The `approve`/`allowance` parameter names read from the target's spec
+    /// during the interface probe, for `access_control_probing`.
+    pub token_args: TokenArgs,
 }
 
 /// How to install a `stellar` the checker can actually start.
@@ -126,26 +129,30 @@ pub async fn run(vault: &str, accounts: &[&str]) -> Result<Preflight, PreflightE
     check_identities(accounts).await?;
     check_vault_is_a_contract(vault).await?;
     let mut warnings = Vec::new();
-    if let Some(warning) = check_interface(vault).await? {
-        warnings.push(warning);
-    }
+    let (warning, token_args) = check_interface(vault).await?;
+    warnings.extend(warning);
     warnings.extend(check_balances(accounts).await);
-    Ok(Preflight { warnings })
+    Ok(Preflight { warnings, token_args })
 }
 
 /// (c2) The contract declares the SEP-56 functions the conformance checks call
 /// (see [`interface`]). A ledger read only: nothing is invoked. A spec that
-/// cannot be read is a warning, and the run goes ahead as before.
-async fn check_interface(vault: &str) -> Result<Option<String>, PreflightError> {
-    match interface::probe(vault).await {
-        Assessment::Complete => Ok(None),
+/// cannot be read is a warning, and the run goes ahead as before. The same
+/// read also yields the `approve`/`allowance` parameter names.
+async fn check_interface(vault: &str) -> Result<(Option<String>, TokenArgs), PreflightError> {
+    let probe = interface::probe(vault).await;
+    match probe.assessment {
+        Assessment::Complete => Ok((None, probe.token_args)),
         Assessment::Incomplete { missing, mismatched } => {
             Err(PreflightError::unsupported_interface(vault, missing, mismatched))
         }
-        Assessment::Unreadable(reason) => Ok(Some(format!(
-            "the interface of {vault} could not be read before the run ({reason}); the checks \
-             run without that check"
-        ))),
+        Assessment::Unreadable(reason) => Ok((
+            Some(format!(
+                "the interface of {vault} could not be read before the run ({reason}); the checks \
+                 run without that check"
+            )),
+            probe.token_args,
+        )),
     }
 }
 

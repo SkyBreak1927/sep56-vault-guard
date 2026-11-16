@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use crate::interface::{TokenArgNames, TokenArgs};
 use crate::rpc::{
     deploy_contract, diagnose_deploy, diagnose_info_hash, diagnose_invoke,
     fetch_current_ledger_sequence, fetch_wasm_hash, invoke_contract, Diagnosis, ErrorClass,
@@ -1662,6 +1663,7 @@ pub async fn check_access_control_probing(
     target_vault: &str,
     owner_account: &str,
     operator_account: &str,
+    token_args: &TokenArgs,
 ) -> CheckResult {
     let name = "access_control_probing".to_string();
     const SEED_DEPOSIT: i128 = 10_000_000;
@@ -1678,6 +1680,15 @@ pub async fn check_access_control_probing(
             Ok(triple) => triple,
             Err(detail) => return detail.finish(name, |m| m.to_string()),
         };
+
+    // The clone runs the target's Wasm, so approve/allowance take the names
+    // the target's spec declares (read once in preflight). Checked before
+    // anything is deployed, and after `resolve_target_vault`, so a vault this
+    // check does not cover for another reason keeps that reason.
+    let token_names = match token_args {
+        Ok(names) => names,
+        Err(why) => return token_interface_mismatch(name, why),
+    };
 
     let constructor_args = vec![
         "--name".to_string(),
@@ -1768,16 +1779,8 @@ pub async fn check_access_control_probing(
     };
     let live_until_ledger = current_ledger + LIVE_UNTIL_LEDGER_HORIZON;
 
-    let approve_args = vec![
-        "--owner".to_string(),
-        owner_account.to_string(),
-        "--spender".to_string(),
-        operator_account.to_string(),
-        "--amount".to_string(),
-        approved_allowance.to_string(),
-        "--live_until_ledger".to_string(),
-        live_until_ledger.to_string(),
-    ];
+    let approve_args =
+        approve_args(token_names, owner_account, operator_account, approved_allowance, live_until_ledger);
     if let Err(e) = invoke_checked(&vault_id, "approve", &approve_args, owner_account, false).await {
         return e.finish(name, |e| format!("owner approve() failed on {vault_id}: {e}"));
     }
@@ -1813,12 +1816,7 @@ pub async fn check_access_control_probing(
             }
         };
 
-    let allowance_args = vec![
-        "--owner".to_string(),
-        owner_account.to_string(),
-        "--spender".to_string(),
-        operator_account.to_string(),
-    ];
+    let allowance_args = allowance_args(token_names, owner_account, operator_account);
     let allowance_after_spend =
         match invoke_checked(&vault_id, "allowance", &allowance_args, owner_account, false).await {
             Ok(value) => match parse_non_negative_i128(&value) {
@@ -1900,6 +1898,44 @@ pub async fn check_access_control_probing(
              more shares than the remaining {allowance_after_spend}-share allowance) correctly \
              rejected with allowance left untouched at {allowance_final}"
         ))
+}
+
+/// `reason_code` when the target's `approve`/`allowance` cannot be called the
+/// way `access_control_probing` needs.
+const TOKEN_INTERFACE_MISMATCH: &str = "token_interface_mismatch";
+
+/// The NOT_APPLICABLE result when `approve`/`allowance` do not fit, or the
+/// spec they would be read from could not be read. `why` says which.
+fn token_interface_mismatch(name: String, why: &str) -> CheckResult {
+    CheckResult::not_applicable(
+        name,
+        TOKEN_INTERFACE_MISMATCH,
+        format!(
+            "this check calls approve(owner, spender, amount, expiry) and allowance(owner, \
+             spender) on its copy of the vault, using the parameter names the target declares \
+             (the Stellar CLI takes named arguments only). {why} No finding about the vault."
+        ),
+    )
+}
+
+/// `approve` arguments under the target's own names, by position: owner,
+/// spender, amount, expiry. With OpenZeppelin's names this is exactly the
+/// list the check has always passed.
+fn approve_args(
+    names: &TokenArgNames,
+    owner: &str,
+    spender: &str,
+    amount: i128,
+    expiry_ledger: u32,
+) -> Vec<String> {
+    let values = [owner.to_string(), spender.to_string(), amount.to_string(), expiry_ledger.to_string()];
+    names.approve.iter().zip(values).flat_map(|(n, v)| [format!("--{n}"), v]).collect()
+}
+
+/// `allowance` arguments under the target's own names: owner, spender.
+fn allowance_args(names: &TokenArgNames, owner: &str, spender: &str) -> Vec<String> {
+    let values = [owner.to_string(), spender.to_string()];
+    names.allowance.iter().zip(values).flat_map(|(n, v)| [format!("--{n}"), v]).collect()
 }
 
 /// Calls `total_assets()` and parses it as a non-negative `i128`. A failed
@@ -2260,6 +2296,53 @@ For more information, try '--help'."####;
         assert_eq!(CheckResult::pass("x".into(), "d".into()).raw_error, None);
         let silent = diag(ErrorClass::Unclassified, None, RetryNote::RetriedNoText);
         assert_eq!(result_of(verdict(&call("mint", false), &silent).unwrap(), "x").raw_error, None);
+    }
+
+    fn names(approve: [&str; 4], allowance: [&str; 2]) -> TokenArgNames {
+        TokenArgNames { approve: approve.map(str::to_string), allowance: allowance.map(str::to_string) }
+    }
+
+    #[test]
+    fn openzeppelin_names_give_exactly_the_old_argument_lists() {
+        let oz = names(["owner", "spender", "amount", "live_until_ledger"], ["owner", "spender"]);
+        let old_approve: Vec<String> = [
+            "--owner", "GOWNER", "--spender", "GOPERATOR", "--amount", "123", "--live_until_ledger", "456",
+        ]
+        .map(str::to_string)
+        .to_vec();
+        assert_eq!(approve_args(&oz, "GOWNER", "GOPERATOR", 123, 456), old_approve);
+        let old_allowance: Vec<String> =
+            ["--owner", "GOWNER", "--spender", "GOPERATOR"].map(str::to_string).to_vec();
+        assert_eq!(allowance_args(&oz, "GOWNER", "GOPERATOR"), old_allowance);
+    }
+
+    #[test]
+    fn sep41_names_are_passed_by_position() {
+        let sep41 = names(["from", "spender", "amount", "expiration_ledger"], ["from", "spender"]);
+        assert_eq!(
+            approve_args(&sep41, "GOWNER", "GOPERATOR", 7, 9),
+            ["--from", "GOWNER", "--spender", "GOPERATOR", "--amount", "7", "--expiration_ledger", "9"]
+                .map(str::to_string)
+                .to_vec()
+        );
+        assert_eq!(
+            allowance_args(&sep41, "GOWNER", "GOPERATOR"),
+            ["--from", "GOWNER", "--spender", "GOPERATOR"].map(str::to_string).to_vec()
+        );
+    }
+
+    #[test]
+    fn a_token_interface_mismatch_is_not_applicable_with_its_reason() {
+        let r = token_interface_mismatch(
+            "access_control_probing".to_string(),
+            "The target declares approve(spender: address, from: address, amount: i128, x: u32).",
+        );
+        assert_eq!(r.status, CheckStatus::NotApplicable);
+        assert_eq!(r.reason_code, Some("token_interface_mismatch"));
+        assert!(r.detail.contains("named arguments only"));
+        assert!(r.detail.contains("approve(spender: address, from: address"));
+        assert!(r.detail.ends_with("No finding about the vault."));
+        assert_eq!(r.raw_error, None);
     }
 
     #[test]

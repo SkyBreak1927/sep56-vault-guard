@@ -41,12 +41,15 @@ Server (`cd server`): `npm start`. For local dev with the web UI: `PORT=4000 ALL
 - `rpc.rs` — every chain interaction shells out to `stellar contract invoke/deploy`. Network is hardcoded to testnet; there is intentionally no mainnet flag.
 - `preflight.rs` — stellar version, identities, target-is-a-contract, the interface probe, balances → exit 2 on failure.
 - `interface.rs` — the interface probe. It reads the target's spec with `stellar contract info interface --output json`, a ledger read with no invoke. It then compares the 16 SEP-56 functions the conformance checks call by name, argument names and types, and return type. Missing or different → preflight `unsupported_interface`. An unreadable spec → a warning, and the run goes ahead as before. `query_asset`, `decimals` and the constructor, which only the security checks need, are not probed. Those checks still give NOT_APPLICABLE without them. Fixture specs live in `cli/testdata/interface/`.
+  - The same spec read also gives the parameter names of `approve` and `allowance` (`token_arg_names`). `access_control_probing` passes its values under those names, by position, because Stellar CLI v28 takes named arguments only.
+  - Rule (b-anchored): the types must be `address, address, i128, u32` and `address, address -> i128`, and the second argument must be named `spender`.
+  - Any other shape, or an unreadable spec, makes that check NOT_APPLICABLE with `token_interface_mismatch`.
 - `status.rs` — optional `--status-file` JSON snapshot rewritten as each check starts/finishes (`run_tracked`); purely reporting, never affects results.
 - `[profile.release] overflow-checks = true` is set at workspace level deliberately.
 
 The check ids, groups and order are a shared contract across `cli/src/status.rs`, `web/src/config/checks.ts`, and `VAULT_CHECKS.md`; keep them in sync.
 
-**Contracts (`contracts/`)** — Soroban `cdylib` crates (edition 2021, soroban-sdk + OpenZeppelin `stellar-tokens`) used as test fixtures: `reference-vault` (default `--vault` target; known donation-attack failure, see SECURITY.md), `rounding-bug-vault` (intentionally buggy), `hardened-vault` (dead-shares mitigation), `blind-vault` + `blind-asset` (blind generalization test). Not needed to build the checker.
+**Contracts (`contracts/`)** — Soroban `cdylib` crates (edition 2021, soroban-sdk + OpenZeppelin `stellar-tokens`) used as test fixtures: `reference-vault` (default `--vault` target; known donation-attack failure, see SECURITY.md), `rounding-bug-vault` (intentionally buggy), `hardened-vault` (dead-shares mitigation), `blind-vault` + `blind-asset` (blind generalization test; `blind-asset`'s mint admin is `alice`), `positive-control-vault`, `reverting-max-vault`, `sep41-names-vault` (positive control with SEP-41 `approve`/`allowance` parameter names). Not needed to build the checker.
 
 **Server (`server/index.js`)** — Express. `POST /api/check {vault}` enqueues a job (single runner, bounded queue, per-IP limits, rate limiter) and returns `jobId`/queue position; `GET /api/check/:jobId` returns progress read from the CLI's `--status-file`, then the CLI's `--output json` as `result`. Jobs live in memory. Deployed via `Dockerfile` (builds CLI, installs Stellar CLI 28.0.0, `docker-entrypoint.sh` generates/funds the 7 identities on start) and `render.yaml`.
 
@@ -67,6 +70,7 @@ There are no automated end-to-end tests. Checker changes are verified by running
 | Hardened Vault | `CCVC5VLAH2RNCPWLR76P3IP6PCLOGG4AIOXXIQ5RNNG3DCKJ3ULBJUVG` | 10 PASS, 1 FAIL (`donation_attack`) | Mitigation doesn't break conformance (non-1:1 ratio) |
 | Blind Vault (custom asset, offset 3) | `CCW5GTIFMGRPURESMVVFDFRQHX5ZBW3BTDKVPFNV2KFWY6Q7MVZLHGV7` | 10 PASS, 1 FAIL (`donation_attack`) | Non-native asset, unusual offset |
 | Positive Control Vault (`DEAD_SHARES = 100_000_000`, offset 0) | `CAHMH3VSMNCYDCRTCZBJOKJE65HT2LJBZQFQULMRH6E2OGGGPMSNG376` | 11 PASS, exit 0 | Positive control: `donation_attack` passes for one donation size |
+| SEP-41 Names Vault (positive control with SEP-41 `approve`/`allowance` names) | `CDTVHZ2EGTROAUVERX2YVN6GF7PTRWBMHHLKSWCQYQEYXIUTPXILUEIM` | 11 PASS, exit 0 (v0.5.0: `access_control_probing` INCONCLUSIVE, exit 3) | `access_control_probing` uses the names the target declares |
 
 Any deviation from this table after a checker change is a regression (or an intended change that must also be recorded in `VAULT_CHECKS.md` and, for findings, `SECURITY.md`). These addresses are also the showcase vaults in `web/src/config/checks.ts`.
 

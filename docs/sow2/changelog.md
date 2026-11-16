@@ -4,6 +4,72 @@ Tester requests and what was done about them. Each claim is marked
 **TERBUKTI** (run or read in this repository) or **BELUM**. Request numbers
 come from the validation tracker of the SOW 1 Final Report.
 
+## 2026-11-16 — `approve` / `allowance` called by the target's own parameter names (Deliverable 2)
+
+Branch `sow2/approve-allowance`. Design: `docs/sow2/design-approve-allowance.md`.
+Decisions:
+
+- b1: names from the preflight spec, mapped by position;
+- b-anchored;
+- no fit → NOT_APPLICABLE `token_interface_mismatch`;
+- fixture based on the positive control.
+
+| Tester request | What was done | Status |
+|---|---|---|
+| **Feng Vault**: `access_control_probing` calls `approve`/`allowance` with the names `owner` and `live_until_ledger`, while SEP-41 uses `from` and `expiration_ledger`. A vault with SEP-41 names is left INCONCLUSIVE. The suggestion was to call them positionally. | **Positional calls are not possible:** Stellar CLI v28 takes named arguments only. `approve --help` prints `Usage: approve [OPTIONS]`, and `allowance G… G…` fails with `unexpected argument 'G…'`. These were simulations with `--send=no` on our reference vault. **TERBUKTI.** So the parameter names are now read from the target's spec, during the same preflight read as the interface probe, and the check's values are passed under those names **by position**: `approve(owner, spender, amount, expiry)`, `allowance(owner, spender)`. The types must be `address, address, i128, u32` and `address, address -> i128`, and the second argument must be named `spender`. Anything else, or an unreadable spec, makes the check NOT_APPLICABLE with `reason_code: "token_interface_mismatch"` instead of INCONCLUSIVE `unclassified_error`. With OpenZeppelin's names, the arguments are byte-for-byte the same as before (unit test). | TERBUKTI |
+| New fixture: **SEP-41 Names Vault** `CDTVHZ2EGTROAUVERX2YVN6GF7PTRWBMHHLKSWCQYQEYXIUTPXILUEIM` (`contracts/sep41-names-vault`). A copy of the positive control whose `approve`/`allowance` use SEP-41 names. Deployed by `alice`. | **CLI 0.5.0:** 10 PASS, `access_control_probing` INCONCLUSIVE `unclassified_error` (raw error `unexpected argument '--owner' found`), exit 3. **This change:** 11 PASS, exit 0. The Feng Vault itself was not run. | TERBUKTI |
+
+Unit tests added (92 in total, all passing):
+
+- names read from the reference spec (`owner`, `live_until_ledger`) and from
+  the new fixture's spec (`from`, `expiration_ledger`);
+- any other names accepted when the types fit and `spender` is second;
+- a second argument not named `spender` → no names (→
+  `token_interface_mismatch`);
+- other types or a missing function → no names;
+- an unreadable spec → no names;
+- the argument lists built from OpenZeppelin names equal the old hard-coded
+  ones;
+- SEP-41 names are passed by position;
+- the NOT_APPLICABLE result's reason code and detail.
+
+### Regression: 8 Testnet fixtures, v0.5.0 vs this change
+
+Both binaries were run one after the other with `--output json` on Testnet on
+2026-11-16. "Before" is CLI v0.5.0 (`cli/` identical to tag `v0.5.0`).
+"After" is this branch, which also contains the unsupported-interface
+change. Name, `status` and `reason_code` are compared per check, plus the
+exit code. **TERBUKTI**
+
+| Fixture | v0.5.0 | This change | Same? |
+|---|---|---|---|
+| Reference `CAMDXP2Q…YTNF` | 10 PASS, 1 FAIL (`donation_attack`), exit 1 | same, exit 1 | Yes |
+| Demo `CAPH3KBZ…JBNQ` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes |
+| Vault A `CAWUBSRH…4VTA` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes |
+| Vault B `CAZBXMYP…P6HV` | 9 PASS, 2 FAIL (`donation_attack`, `rounding_direction`), exit 1 | same, exit 1 | Yes |
+| Hardened `CCVC5VLA…JUVG` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes |
+| Blind `CCW5GTIF…HGV7` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes |
+| Positive Control `CAHMH3VS…G376` | 11 PASS, exit 0 | same, exit 0 | Yes |
+| Reverting Max `CBMB3D7H…H5O4` | 6 PASS, 1 FAIL, 4 INCONCLUSIVE `unclassified_error`, exit 1 | same, exit 1 | Yes |
+
+All 8 OpenZeppelin-named fixtures call `approve`/`allowance` exactly as
+before, and `access_control_probing` passes on every one of them.
+
+**Blind-token balances.** Before this regression, `alice` (the Blind asset's
+mint admin) topped up the Blind token for:
+
+- `bob`: +10,000,000 (tx `0609d120…1a80`);
+- `erin`: +20,000,000 (tx `e0d3b608…325a`);
+- `grace`: +100,000,000 (tx `35a83398…0814`).
+
+| Balance | Before the top-up | After the top-up | After both Blind runs |
+|---|---|---|---|
+| `bob` | 0 | 10,000,000 | 0 |
+| `erin` | 0 | 20,000,000 | 0 |
+| `grace` | 110,119,099 | 210,119,099 | 110,166,739 |
+
+`bob` and `erin` are back at 0 and need a top-up before the next Blind run.
+
 ## 2026-11-16 — Unsupported interface detected at the start of a run (Deliverable 2)
 
 Branch `sow2/unsupported-interface`. Design: `docs/sow2/design-unsupported-interface.md`.

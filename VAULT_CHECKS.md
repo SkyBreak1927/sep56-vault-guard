@@ -15,6 +15,16 @@ The CLI (`cli/`) is a generic SEP-56 conformance checker, not a tool hardcoded t
 - The 4 **Security/Adversarial** checks never touch the target vault's own state. Each one first resolves the target vault's Wasm hash (`fetch_wasm_hash()`, via `stellar contract info hash`), underlying asset (`query_asset()`), and **actual `decimals_offset`** (derived as `vault.decimals() - underlying_asset.decimals()`, since the vault exposes no direct getter for it), then **deploys its own fresh, throwaway clone** built from that exact configuration, and runs the adversarial scenario against the clone. This makes the security checks safe to run against any real, in-use vault without risking its funds or state, while still testing the exact contract code, asset, and offset the target actually uses — see [Demo/Validation Vaults](#demovalidation-vaults) below for evidence this generalization actually works, not just for the default `decimals_offset = 0` case.
 - **Events are not checked.** The checker never reads or verifies the events a vault emits (the SEP-56 `Deposit` and `Withdraw` events included). A vault that emits wrong events, or none, can still PASS every check.
 - All checks are implemented in `cli/src/checks/mod.rs`; the subprocess wrapper around the `stellar` CLI lives in `cli/src/rpc.rs`.
+- **Labels on every result (since SOW 2).** Every row of the JSON and Markdown output carries:
+  - its mode: `testnet`, where the 7 conformance checks change the target's state;
+  - the SEP-56 draft it was checked against: `SEP-0056 v0.1.2 (Draft)`, as above;
+  - where it ran (`runs_on`): `target` for checks 1–7, `temporary_copy` for checks 8–11.
+
+  Every row that is not a PASS also carries a structured `reason {code, message}`:
+  - a FAIL is `behavior_mismatch` (conformance), `security_finding` (security) or `interface_missing`;
+  - an INCONCLUSIVE or NOT_APPLICABLE row repeats its `reason_code`.
+
+  See `cli/src/labels.rs`. These labels do not change any status or exit code.
 
 ---
 

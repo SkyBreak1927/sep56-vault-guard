@@ -44,6 +44,14 @@ Server (`cd server`): `npm start`. For local dev with the web UI: `PORT=4000 ALL
   - The same spec read also gives the parameter names of `approve` and `allowance` (`token_arg_names`). `access_control_probing` passes its values under those names, by position, because Stellar CLI v28 takes named arguments only.
   - Rule (b-anchored): the types must be `address, address, i128, u32` and `address, address -> i128`, and the second argument must be named `spender`.
   - Any other shape, or an unreadable spec, makes that check NOT_APPLICABLE with `token_interface_mismatch`.
+- `labels.rs` — the report labels.
+  - `mode` (`testnet`), `spec` (`SEP-0056 v0.1.2 (Draft)`) and `runs_on` (`target` / `temporary_copy`) go on every JSON row. `mode` and `spec` also go on the preflight object.
+  - `reason {code, message}` goes on every non-PASS row:
+    - FAIL rows get `behavior_mismatch` (conformance), `security_finding` (security) or `interface_missing` (from `Stop::CommandFail`), with no `reason_code`.
+    - INCONCLUSIVE and NOT_APPLICABLE rows get `reason.code` = `reason_code`.
+  - `message` is one fixed sentence per code.
+  - The Markdown tables carry `Mode`, `Spec` and `Runs on` columns, and the status file carries `reason`.
+  - Additive only: statuses, `reason_code`, `detail` and exit codes are unchanged, and there is no schema version.
 - `status.rs` — optional `--status-file` JSON snapshot rewritten as each check starts/finishes (`run_tracked`); purely reporting, never affects results.
 - `[profile.release] overflow-checks = true` is set at workspace level deliberately.
 

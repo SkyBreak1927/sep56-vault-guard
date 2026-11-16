@@ -1,6 +1,7 @@
 mod rpc;
 mod checks;
 mod interface;
+mod labels;
 mod markdown;
 mod preflight;
 mod status;
@@ -84,6 +85,15 @@ struct JsonCheckResult<'a> {
     /// there is a value.
     #[serde(skip_serializing_if = "Option::is_none")]
     raw_error: Option<&'a str>,
+    /// Structured reason, on every row that is not a PASS (see `labels`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<labels::Reason>,
+    /// On every row: the run mode (`testnet`).
+    mode: &'static str,
+    /// On every row: the SEP-56 text the checks were written against.
+    spec: &'static str,
+    /// On every row: `target` or `temporary_copy`.
+    runs_on: &'static str,
 }
 
 /// How many results ended in each status.
@@ -150,6 +160,10 @@ fn json_results(results: &[CheckResult]) -> Vec<JsonCheckResult<'_>> {
             detail: &r.detail,
             reason_code: r.reason_code,
             raw_error: r.raw_error.as_deref(),
+            reason: labels::reason_for(r),
+            mode: labels::MODE,
+            spec: labels::SPEC_REFERENCE,
+            runs_on: labels::runs_on(&r.name),
         })
         .collect()
 }
@@ -379,6 +393,7 @@ mod tests {
             reason_code,
             detail: format!("detail for {name}"),
             raw_error: None,
+            fail_reason: None,
         }
     }
 
@@ -389,8 +404,26 @@ mod tests {
         let json = serde_json::to_string(&json_results(&[r])).unwrap();
         assert_eq!(
             json,
-            r#"[{"name":"deposit","category":"Positive Conformance","status":"INCONCLUSIVE","detail":"detail for deposit","reason_code":"unclassified_error","raw_error":"error: something"}]"#
+            r#"[{"name":"deposit","category":"Positive Conformance","status":"INCONCLUSIVE","detail":"detail for deposit","reason_code":"unclassified_error","raw_error":"error: something","reason":{"code":"unclassified_error","message":"A call failed for a reason the tool could not classify. Not a finding about the vault. See raw_error."},"mode":"testnet","spec":"SEP-0056 v0.1.2 (Draft)","runs_on":"target"}]"#
         );
+    }
+
+    #[test]
+    fn json_fail_rows_get_a_reason_but_still_no_reason_code() {
+        let results = [
+            result("deposit", CheckStatus::Fail, None),
+            result("donation_attack", CheckStatus::Fail, None),
+        ];
+        let json: serde_json::Value = serde_json::to_value(json_results(&results)).unwrap();
+        assert_eq!(json[0]["reason"]["code"], "behavior_mismatch");
+        assert_eq!(json[0]["runs_on"], "target");
+        assert_eq!(json[1]["reason"]["code"], "security_finding");
+        assert_eq!(json[1]["runs_on"], "temporary_copy");
+        for row in json.as_array().unwrap() {
+            assert!(row.get("reason_code").is_none());
+            assert_eq!(row["mode"], "testnet");
+            assert_eq!(row["spec"], "SEP-0056 v0.1.2 (Draft)");
+        }
     }
 
     #[test]
@@ -407,9 +440,10 @@ mod tests {
         let json = serde_json::to_string(&json_results(&results)).unwrap();
         assert_eq!(
             json,
-            r#"[{"name":"deposit","category":"Positive Conformance","status":"PASS","detail":"detail for deposit"}]"#
+            r#"[{"name":"deposit","category":"Positive Conformance","status":"PASS","detail":"detail for deposit","mode":"testnet","spec":"SEP-0056 v0.1.2 (Draft)","runs_on":"target"}]"#
         );
         assert!(!json.contains("reason_code"));
+        assert!(!json.contains("\"reason\""), "a PASS has no reason");
     }
 
     #[test]
@@ -422,7 +456,7 @@ mod tests {
         let json = serde_json::to_string(&json_results(&results)).unwrap();
         assert_eq!(
             json,
-            r#"[{"name":"donation_attack","category":"Security/Adversarial","status":"INCONCLUSIVE","detail":"detail for donation_attack","reason_code":"insufficient_token_balance"}]"#
+            r#"[{"name":"donation_attack","category":"Security/Adversarial","status":"INCONCLUSIVE","detail":"detail for donation_attack","reason_code":"insufficient_token_balance","reason":{"code":"insufficient_token_balance","message":"A test account holds too little of the vault's underlying asset. Fund it and run again. Not a finding about the vault."},"mode":"testnet","spec":"SEP-0056 v0.1.2 (Draft)","runs_on":"temporary_copy"}]"#
         );
     }
 

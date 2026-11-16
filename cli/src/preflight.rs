@@ -12,8 +12,14 @@
 //! is not resolved. Probing through a shell instead would let preflight pass
 //! and leave all 11 checks failing anyway.
 
+// `PreflightError` grew two lists for `unsupported_interface`, which makes the
+// `Err` variant large. It is built at most once per run and ends the process,
+// so boxing it would only add noise.
+#![allow(clippy::result_large_err)]
+
 use serde::Serialize;
 
+use crate::interface::{self, Assessment, Mismatch};
 use crate::rpc::{diagnose_info_hash, run_stellar, ErrorClass, RpcError};
 
 /// Lowest `stellar` major version the checks are known to work against.
@@ -40,11 +46,50 @@ pub struct PreflightError {
     pub problem: String,
     /// What the operator should do about it.
     pub fix: String,
+    /// Only for `code: "unsupported_interface"`: the SEP-56 functions the
+    /// contract does not declare. Left out when empty, so every other
+    /// preflight error serializes exactly as before.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub missing_functions: Vec<String>,
+    /// Only for `code: "unsupported_interface"`: functions declared with other
+    /// argument names or types than the checks call. Left out when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mismatched_functions: Vec<Mismatch>,
 }
+
+/// `code` of the preflight error for a contract without the SEP-56 interface.
+pub const UNSUPPORTED_INTERFACE: &str = "unsupported_interface";
 
 impl PreflightError {
     fn new(code: &'static str, problem: String, fix: String) -> Self {
-        PreflightError { error: "preflight_failed", code, problem, fix }
+        PreflightError {
+            error: "preflight_failed",
+            code,
+            problem,
+            fix,
+            missing_functions: Vec::new(),
+            mismatched_functions: Vec::new(),
+        }
+    }
+
+    fn unsupported_interface(vault: &str, missing: Vec<String>, mismatched: Vec<Mismatch>) -> Self {
+        PreflightError {
+            problem: interface::unsupported_problem(vault, &missing, &mismatched),
+            missing_functions: missing,
+            mismatched_functions: mismatched,
+            ..PreflightError::new(UNSUPPORTED_INTERFACE, String::new(), interface::unsupported_fix())
+        }
+    }
+
+    /// Lead-in for the text and Markdown output: "Unsupported interface" for a
+    /// contract without the SEP-56 interface, "Prerequisite missing" otherwise
+    /// (as before).
+    pub fn headline(&self) -> &'static str {
+        if self.code == UNSUPPORTED_INTERFACE {
+            "Unsupported interface"
+        } else {
+            "Prerequisite missing"
+        }
     }
 }
 
@@ -80,7 +125,28 @@ pub async fn run(vault: &str, accounts: &[&str]) -> Result<Preflight, PreflightE
     check_stellar_available().await?;
     check_identities(accounts).await?;
     check_vault_is_a_contract(vault).await?;
-    Ok(Preflight { warnings: check_balances(accounts).await })
+    let mut warnings = Vec::new();
+    if let Some(warning) = check_interface(vault).await? {
+        warnings.push(warning);
+    }
+    warnings.extend(check_balances(accounts).await);
+    Ok(Preflight { warnings })
+}
+
+/// (c2) The contract declares the SEP-56 functions the conformance checks call
+/// (see [`interface`]). A ledger read only: nothing is invoked. A spec that
+/// cannot be read is a warning, and the run goes ahead as before.
+async fn check_interface(vault: &str) -> Result<Option<String>, PreflightError> {
+    match interface::probe(vault).await {
+        Assessment::Complete => Ok(None),
+        Assessment::Incomplete { missing, mismatched } => {
+            Err(PreflightError::unsupported_interface(vault, missing, mismatched))
+        }
+        Assessment::Unreadable(reason) => Ok(Some(format!(
+            "the interface of {vault} could not be read before the run ({reason}); the checks \
+             run without that check"
+        ))),
+    }
 }
 
 /// (a) `stellar` can be started, and is at least `MIN_STELLAR_MAJOR`.
@@ -291,10 +357,41 @@ async fn native_balance(address: &str) -> Result<Option<f64>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_major, vault_not_a_contract_problem};
+    use super::{parse_major, vault_not_a_contract_problem, PreflightError, UNSUPPORTED_INTERFACE};
+    use crate::interface::Mismatch;
     use crate::rpc::ErrorClass;
 
     const V: &str = "CAAA";
+
+    #[test]
+    fn other_preflight_errors_keep_their_json_shape_and_headline() {
+        let e = PreflightError::new("identities_missing", "p".to_string(), "f".to_string());
+        assert_eq!(
+            serde_json::to_string(&e).unwrap(),
+            r#"{"error":"preflight_failed","code":"identities_missing","problem":"p","fix":"f"}"#
+        );
+        assert_eq!(e.headline(), "Prerequisite missing");
+    }
+
+    #[test]
+    fn an_unsupported_interface_lists_its_functions_in_the_json() {
+        let e = PreflightError::unsupported_interface(
+            V,
+            vec!["mint".to_string()],
+            vec![Mismatch {
+                name: "deposit".to_string(),
+                expected: "deposit(assets: i128) -> i128".to_string(),
+                found: "deposit(amount: i128) -> i128".to_string(),
+            }],
+        );
+        assert_eq!(e.code, UNSUPPORTED_INTERFACE);
+        assert_eq!(e.headline(), "Unsupported interface");
+        let json: serde_json::Value = serde_json::to_value(&e).unwrap();
+        assert_eq!(json["error"], "preflight_failed");
+        assert_eq!(json["missing_functions"], serde_json::json!(["mint"]));
+        assert_eq!(json["mismatched_functions"][0]["found"], "deposit(amount: i128) -> i128");
+        assert!(json["problem"].as_str().unwrap().contains("Missing (1 of the 16"));
+    }
 
     #[test]
     fn a_stellar_asset_contract_is_named_as_such() {

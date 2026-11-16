@@ -52,18 +52,28 @@ pub struct CheckResult {
     /// `None` for `Pass` and `Fail`, and for every result produced today.
     pub reason_code: Option<&'static str>,
     pub detail: String,
+    /// The `stellar` error text behind this result, when the tool captured
+    /// one. `detail` is unchanged and may still quote it; this is the same text
+    /// on its own, for a consumer that wants it apart.
+    pub raw_error: Option<String>,
 }
 
 impl CheckResult {
     /// A `Pass` result. The check bodies build every result through this and
     /// [`CheckResult::fail`], so adding a field never means touching each one.
     pub fn pass(name: String, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::Pass, reason_code: None, detail }
+        CheckResult { name, status: CheckStatus::Pass, reason_code: None, detail, raw_error: None }
     }
 
     /// A `Fail` result.
     pub fn fail(name: String, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::Fail, reason_code: None, detail }
+        CheckResult { name, status: CheckStatus::Fail, reason_code: None, detail, raw_error: None }
+    }
+
+    /// The same result with `raw_error` set.
+    fn with_raw(mut self, raw: Option<String>) -> Self {
+        self.raw_error = raw;
+        self
     }
 }
 
@@ -72,30 +82,33 @@ impl CheckResult {
     /// vault. `reason_code` says why, in a form a program can read.
     #[allow(dead_code)]
     pub fn inconclusive(name: String, reason_code: &'static str, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::Inconclusive, reason_code: Some(reason_code), detail }
+        CheckResult { name, status: CheckStatus::Inconclusive, reason_code: Some(reason_code), detail, raw_error: None }
     }
 
     /// A `NotApplicable` result: the check does not fit this vault's design.
     #[allow(dead_code)]
     pub fn not_applicable(name: String, reason_code: &'static str, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::NotApplicable, reason_code: Some(reason_code), detail }
+        CheckResult { name, status: CheckStatus::NotApplicable, reason_code: Some(reason_code), detail, raw_error: None }
     }
 }
 
 /// Why a step of a check stopped it. `Fail` keeps the check's existing FAIL
-/// text; the other two carry the new status, its reason code and its detail.
+/// text; `CommandFail` is a FAIL caused by a failed `stellar` command, with the
+/// same text as before plus the raw error on its own; the other two carry the
+/// new status, its reason code and its detail.
 #[allow(dead_code)]
 pub(crate) enum Stop {
     Fail(String),
-    Inconclusive { reason: &'static str, detail: String },
-    NotApplicable { reason: &'static str, detail: String },
+    CommandFail { message: String, raw: Option<String> },
+    Inconclusive { reason: &'static str, detail: String, raw: Option<String> },
+    NotApplicable { reason: &'static str, detail: String, raw: Option<String> },
 }
 
 impl std::fmt::Display for Stop {
     /// The message of a `Fail`, or the detail of the other two.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Stop::Fail(text) => f.write_str(text),
+            Stop::Fail(text) | Stop::CommandFail { message: text, .. } => f.write_str(text),
             Stop::Inconclusive { detail, .. } | Stop::NotApplicable { detail, .. } => f.write_str(detail),
         }
     }
@@ -108,8 +121,13 @@ impl Stop {
     pub(crate) fn finish(self, name: String, wrap: impl FnOnce(&str) -> String) -> CheckResult {
         match self {
             Stop::Fail(message) => CheckResult::fail(name, wrap(&message)),
-            Stop::Inconclusive { reason, detail } => CheckResult::inconclusive(name, reason, detail),
-            Stop::NotApplicable { reason, detail } => CheckResult::not_applicable(name, reason, detail),
+            Stop::CommandFail { message, raw } => CheckResult::fail(name, wrap(&message)).with_raw(raw),
+            Stop::Inconclusive { reason, detail, raw } => {
+                CheckResult::inconclusive(name, reason, detail).with_raw(raw)
+            }
+            Stop::NotApplicable { reason, detail, raw } => {
+                CheckResult::not_applicable(name, reason, detail).with_raw(raw)
+            }
         }
     }
 
@@ -118,8 +136,15 @@ impl Stop {
     fn wrap_fail(self, wrap: impl FnOnce(&str) -> String) -> Stop {
         match self {
             Stop::Fail(message) => Stop::Fail(wrap(&message)),
+            Stop::CommandFail { message, raw } => Stop::CommandFail { message: wrap(&message), raw },
             other => other,
         }
+    }
+
+    /// The FAIL for a failed command that no rule remaps: the error's own text
+    /// as before, and whatever raw text the diagnosis captured.
+    fn command_fail(error: &crate::rpc::RpcError, diag: &Diagnosis) -> Stop {
+        Stop::CommandFail { message: error.to_string(), raw: diag.raw.as_deref().map(truncate_raw) }
     }
 }
 
@@ -222,11 +247,12 @@ fn verdict(subject: &Subject<'_>, diag: &Diagnosis) -> Option<Stop> {
         (None, _) => " No error text was available.".to_string(),
     };
     let detail = format!("{lead}{tail}");
+    let raw = diag.raw.as_deref().map(truncate_raw);
 
     Some(if not_applicable {
-        Stop::NotApplicable { reason, detail }
+        Stop::NotApplicable { reason, detail, raw }
     } else {
-        Stop::Inconclusive { reason, detail }
+        Stop::Inconclusive { reason, detail, raw }
     })
 }
 
@@ -246,7 +272,7 @@ pub(crate) async fn invoke_checked(
         Err(e) => {
             let diag = diagnose_invoke(contract_id, function_name, args, account, &e).await;
             let subject = Subject::Call { function: function_name, account, na_if_missing };
-            Err(verdict(&subject, &diag).unwrap_or_else(|| Stop::Fail(e.to_string())))
+            Err(verdict(&subject, &diag).unwrap_or_else(|| Stop::command_fail(&e, &diag)))
         }
     }
 }
@@ -264,7 +290,7 @@ pub(crate) async fn deploy_checked(
         Err(e) => {
             let diag = diagnose_deploy(&e).await;
             Err(verdict(&Subject::Deploy, &diag)
-                .unwrap_or_else(|| Stop::Fail(e.to_string())))
+                .unwrap_or_else(|| Stop::command_fail(&e, &diag)))
         }
     }
 }
@@ -277,7 +303,7 @@ async fn wasm_hash_checked(target_vault: &str) -> Result<String, Stop> {
         Err(e) => {
             let diag = diagnose_info_hash(target_vault, &e).await;
             Err(verdict(&Subject::WasmHash, &diag)
-                .unwrap_or_else(|| Stop::Fail(e.to_string())))
+                .unwrap_or_else(|| Stop::command_fail(&e, &diag)))
         }
     }
 }
@@ -306,6 +332,7 @@ async fn ledger_checked() -> Result<u32, Stop> {
             Err(Stop::Inconclusive {
                 reason,
                 detail: format!("{lead} Raw error: {}", truncate_raw(&message)),
+                raw: Some(truncate_raw(&message)),
             })
         }
     }
@@ -1998,6 +2025,7 @@ async fn resolve_target_vault(
                  asset's decimals() ({asset_decimals}), so the decimals offset this check needs \
                  cannot be derived. No finding about the vault."
             ),
+            raw: None,
         }
     })?;
 
@@ -2206,6 +2234,44 @@ For more information, try '--help'."####;
         assert_eq!(CheckResult::pass("x".into(), "d".into()).reason_code, None);
         assert_eq!(CheckResult::inconclusive("x".into(), "network_error", "d".into()).reason_code, Some("network_error"));
         assert_eq!(CheckResult::not_applicable("x".into(), "constructor_mismatch", "d".into()).reason_code, Some("constructor_mismatch"));
+    }
+
+    #[test]
+    fn raw_error_is_set_apart_and_detail_is_unchanged() {
+        // INCONCLUSIVE / NOT_APPLICABLE: detail still quotes the raw text, and
+        // raw_error holds it on its own.
+        let d = diag(ErrorClass::Unclassified, Some("error: something new"), RetryNote::RetriedFoundText);
+        let r = result_of(verdict(&call("mint", false), &d).unwrap(), "unused");
+        assert!(r.detail.contains("Raw error: error: something new"));
+        assert_eq!(r.raw_error.as_deref(), Some("error: something new"));
+
+        // A FAIL from a failed command keeps exactly its old text.
+        let stop = Stop::CommandFail {
+            message: "stellar command failed".to_string(),
+            raw: Some("error: unrecognized subcommand 'total_assets'".to_string()),
+        };
+        let r = result_of(stop, "could not read total_assets");
+        assert_eq!(r.status, CheckStatus::Fail);
+        assert_eq!(r.detail, "could not read total_assets: stellar command failed");
+        assert_eq!(r.raw_error.as_deref(), Some("error: unrecognized subcommand 'total_assets'"));
+
+        // A plain FAIL, a PASS, and a result without captured text have none.
+        assert_eq!(result_of(Stop::Fail("shares differ".to_string()), "x").raw_error, None);
+        assert_eq!(CheckResult::pass("x".into(), "d".into()).raw_error, None);
+        let silent = diag(ErrorClass::Unclassified, None, RetryNote::RetriedNoText);
+        assert_eq!(result_of(verdict(&call("mint", false), &silent).unwrap(), "x").raw_error, None);
+    }
+
+    #[test]
+    fn wrapping_a_command_fail_keeps_its_raw_error() {
+        let stop = Stop::CommandFail { message: "m".to_string(), raw: Some("r".to_string()) };
+        match stop.wrap_fail(|m| format!("outer: {m}")) {
+            Stop::CommandFail { message, raw } => {
+                assert_eq!(message, "outer: m");
+                assert_eq!(raw.as_deref(), Some("r"));
+            }
+            _ => panic!("not a CommandFail"),
+        }
     }
 
     #[test]

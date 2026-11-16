@@ -265,8 +265,13 @@ The `Expected after` column below describes option P.
 
 | Target | Before (CLI at `3f8c7d2`) | Expected after | Writes? |
 |---|---|---|---|
-| Celengan `CCM6TNVNYYFUYXDON5HAGWMBL6IWMWIOZJFUNEWDUAJAGSJE326RWD2O` | 0 pass, 7 fail, 4 NA, exit 1 (L16–L17) | exit 2, `code: unsupported_interface`, 18 missing + `__constructor` mismatched | None in either version (see note) |
-| StellarBin `CCDVBRMT3BI65JV2C7AQJOSIGT76MNNTXSVYDKGXKPBSOKVWQRGKU7VI` | 1 pass, 6 fail, 4 NA, exit 1 (L18–L19) | exit 2, `deposit`/`withdraw` mismatched, 16 missing | None in either version |
+| Celengan `CCM6TNVNYYFUYXDON5HAGWMBL6IWMWIOZJFUNEWDUAJAGSJE326RWD2O` | 0 pass, 7 fail, 4 NA, exit 1 (L16–L17) | exit 2, `code: unsupported_interface`, 16 of 16 core functions missing | None in either version (see note) |
+| StellarBin `CCDVBRMT3BI65JV2C7AQJOSIGT76MNNTXSVYDKGXKPBSOKVWQRGKU7VI` | 1 pass, 6 fail, 4 NA, exit 1 (L18–L19) | exit 2, 13 core functions missing, `deposit`/`withdraw` mismatched | None in either version |
+
+(The prototype table in 2a also counted `query_asset`, `decimals` and the
+constructor. The implementation probes only the 16 core functions, as the
+"Function sets" table says. The implemented results are in
+`docs/sow2/samples/` and `docs/sow2/changelog.md`.)
 | 7 fixtures in `CLAUDE.md` + Reverting Max Vault | As recorded in `VAULT_CHECKS.md` | **Identical** statuses, reason codes and exit codes | As today (own fixtures) |
 | Preflight cases (`stellar` missing / < v28, missing identity, not a contract) | exit 2 with their codes | Unchanged; the probe runs after them | — |
 

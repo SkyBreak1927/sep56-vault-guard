@@ -10,7 +10,7 @@
 
 use crate::category_for;
 use crate::checks::{CheckResult, CheckStatus};
-use crate::preflight::PreflightError;
+use crate::preflight::{PreflightError, UNSUPPORTED_INTERFACE};
 
 /// The SEP-56 text the checks were written against; keep in step with
 /// VAULT_CHECKS.md and `SPEC_REFERENCE` in `web/src/lib/report.ts`.
@@ -179,7 +179,7 @@ pub fn run_report(info: &RunInfo<'_>, results: &[CheckResult]) -> String {
 /// information as the `{error, code, problem, fix}` object of `--output json`.
 pub fn preflight_report(vault: &str, cli_version: &str, failure: &PreflightError) -> String {
     let mut lines = header(vault, cli_version);
-    lines.push("- Result: Prerequisite missing, no checks were run".to_string());
+    lines.push(format!("- Result: {}, no checks were run", failure.headline()));
     lines.push(String::new());
     lines.push("## Error".to_string());
     lines.push(String::new());
@@ -190,6 +190,31 @@ pub fn preflight_report(vault: &str, cli_version: &str, failure: &PreflightError
     lines.push(String::new());
     lines.push(escape(&failure.problem));
     lines.push(String::new());
+    if failure.code == UNSUPPORTED_INTERFACE {
+        if !failure.missing_functions.is_empty() {
+            lines.push("### Missing functions".to_string());
+            lines.push(String::new());
+            for name in &failure.missing_functions {
+                lines.push(format!("- {}", code_span(name)));
+            }
+            lines.push(String::new());
+        }
+        if !failure.mismatched_functions.is_empty() {
+            lines.push("### Declared with different arguments or types".to_string());
+            lines.push(String::new());
+            lines.push("| Function | Expected | Found |".to_string());
+            lines.push("|---|---|---|".to_string());
+            for m in &failure.mismatched_functions {
+                lines.push(format!(
+                    "| {} | {} | {} |",
+                    code_span(&m.name),
+                    code_span(&m.expected),
+                    code_span(&m.found)
+                ));
+            }
+            lines.push(String::new());
+        }
+    }
     lines.push("### Fix".to_string());
     lines.push(String::new());
     lines.push(escape(&failure.fix));
@@ -218,7 +243,7 @@ mod tests {
     const VAULT: &str = "CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF";
 
     fn result(name: &str, status: CheckStatus, detail: &str) -> CheckResult {
-        CheckResult { name: name.to_string(), status, reason_code: None, detail: detail.to_string() }
+        CheckResult { name: name.to_string(), status, reason_code: None, detail: detail.to_string(), raw_error: None }
     }
 
     /// The 11 checks in their fixed order, all with the same status.
@@ -366,6 +391,8 @@ mod tests {
             code: "vault_not_a_contract",
             problem: "The address `CABC` is not a contract_on_testnet.".to_string(),
             fix: "Check the address.\nThen run again.".to_string(),
+            missing_functions: Vec::new(),
+            mismatched_functions: Vec::new(),
         };
         let report = preflight_report(VAULT, "0.4.0", &failure);
         assert!(report.starts_with("# Aegis Vault — Conformance Verification Report\n\n"));
@@ -385,6 +412,36 @@ mod tests {
         }
         assert!(!report.contains("| # |"), "no check table when no check ran");
         assert!(!report.contains("Started:"));
+        assert!(!report.contains("### Missing functions"));
+    }
+
+    #[test]
+    fn an_unsupported_interface_report_lists_the_functions() {
+        let failure = PreflightError {
+            error: "preflight_failed",
+            code: UNSUPPORTED_INTERFACE,
+            problem: "CABC does not have the SEP-56 vault interface this tool checks.".to_string(),
+            fix: "Declare the functions.".to_string(),
+            missing_functions: vec!["max_redeem".to_string()],
+            mismatched_functions: vec![crate::interface::Mismatch {
+                name: "deposit".to_string(),
+                expected: "deposit(assets: i128) -> i128".to_string(),
+                found: "deposit(amount: i128) -> i128".to_string(),
+            }],
+        };
+        let report = preflight_report(VAULT, "0.5.0", &failure);
+        for line in [
+            "- Result: Unsupported interface, no checks were run",
+            "- Code: `unsupported_interface`",
+            "### Missing functions",
+            "- `max_redeem`",
+            "### Declared with different arguments or types",
+            "| `deposit` | `deposit(assets: i128) -> i128` | `deposit(amount: i128) -> i128` |",
+            "No checks were run.",
+        ] {
+            assert!(report.lines().any(|l| l == line), "missing line: {line}");
+        }
+        assert!(!report.contains("Remediation needed"));
     }
 
     #[test]

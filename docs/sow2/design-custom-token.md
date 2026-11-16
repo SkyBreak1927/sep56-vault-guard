@@ -273,3 +273,26 @@ Proposal (not built):
 Order of work, if accepted: D6 branch, then the fix and unit tests, then the
 script, then the regression (9 fixtures funded, plus unfunded Blind before and
 after), then the docs.
+
+## 6. Keputusan Pandebu 16 Nov
+
+D1–D11 disetujui sesuai rekomendasi di bagian 5, dengan tambahan berikut.
+
+| # | Keputusan | Tambahan |
+|---|---|---|
+| D1 | Fixture | Hanya Blind. |
+| D2 | Metode | C1, baca saldo. |
+| D3 | Cakupan | Hanya panggilan yang memindahkan token. |
+| D4 | Detail | Teks `detail` **hanya** boleh berubah pada baris yang direklasifikasi ke `insufficient_token_balance`. Semua detail lain harus identik. |
+| D5 | Aturan native `#10` | Dipertahankan sebagai cadangan, dan ditandai **BELUM terbukti** di dokumen. |
+| D6 | Lokasi perbaikan | Branch `sow2/custom-token-classification`. |
+| D7 | Skrip regresi | `scripts/regress-testnet.sh`. Hanya jalan di Testnet (abort bila bukan), hanya memakai nama identity (tanpa secret key atau seed di repo), idempoten, ada batas per mint, dan mencetak saldo sebelum dan sesudah. |
+| D8 | Isi ulang | Otomatis, hanya token Blind, dari `alice`, dengan syarat D7. |
+| D9 | `overflow_protection` | Batas "PASS kosong pada token kustom offset 0" dan batas `donation_attack` pada Blind ditulis apa adanya di `docs/sow2/custom-token-results.md`, siap dipakai di coverage matrix. Kata yang tidak dipakai: audit, sertifikasi, menjamin, kesesuaian penuh, 100% aman. |
+| D10 | Docs web | Hanya teks di `web/src/docs/pages/`, tanpa komponen web lain. |
+| D11 | Catatan hasil | `docs/sow2/custom-token-results.md`. |
+
+Urutan: Langkah A (dokumen ini, PR ke `dev-sow2`), lalu Langkah B
+(implementasi di `sow2/custom-token-classification`: ukur kebutuhan `dave`,
+skenario Blind tanpa saldo sebelum perbaikan, C1 dan unit test, skrip,
+skenario ulang, regresi 9 fixture, dokumen hasil, teks docs web, changelog).

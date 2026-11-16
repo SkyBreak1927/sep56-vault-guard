@@ -160,13 +160,20 @@ These probe the security properties SEP-56 explicitly calls out in its `## Secur
   > "This standard does not enforce any specific authorization patterns for vault operations. Implementations are expected to add appropriate access controls based on their requirements, typically by: Using `operator.require_auth()` to verify the caller's authorization [...]"
 
   Also `## Security Concerns`: *"Authorization and Permissions (Access Control) - no access control enforced by default, authorization for the operator must be handled implementation-wise."* The allowance mechanism itself is inherited from the vault's `TokenInterface`/SEP-41 dependency (`## Dependencies`: *"The vault itself must also comply with SEP-41 and further extend it."*).
+- **Parameter names for `approve` / `allowance` (since SOW 2)**:
+  - The check calls these two functions under the parameter names the target's own spec declares. The spec is read once in preflight.
+  - The values are passed by position: `approve(owner, spender, amount, expiry)` and `allowance(owner, spender)`.
+  - This covers both OpenZeppelin's names (`owner`, `live_until_ledger`) and SEP-41's (`from`, `expiration_ledger`).
+  - Positional arguments are not an option: Stellar CLI v28 takes named arguments only.
+  - The types must be `address, address, i128, u32` for `approve`, and `address, address -> i128` for `allowance`, with the second argument named `spender`. Otherwise the check is `NOT_APPLICABLE` with reason `token_interface_mismatch`. The same applies when the spec cannot be read.
+  - See the [SEP-41 Names Vault](#sep-41-names-vault--sep-41-parameter-names-on-approve--allowance-decimals_offset--0) below.
 - **Category**: Security/Adversarial
 
 ---
 
 ## Demo/Validation Vaults
 
-Seven additional testnet deployments exist alongside our own reference
+Additional testnet deployments exist alongside our own reference
 deployment — none represent reviews of third-party vaults. Vault A and Vault B exist
 purely to validate that the checks above actually generalize to vaults
 other than the reference deployment; Demo Vault exists as a public showcase
@@ -346,6 +353,16 @@ Here the dead-shares constant equals the donation size used by the check, which 
 - **Vault address**: `CBMB3D7H22CARRIQX3CXEABXBY7QXSYCG4JJ5LL5DD3T3DHE46GNH5O4` (name `Reverting Max Vault`, symbol `RMV`, same native XLM asset as the reference vault). Code: `contracts/reverting-max-vault`, a copy of `contracts/reference-vault` in which `max_deposit`, `max_mint`, `max_withdraw` and `max_redeem` always revert.
 - **Run**: CLI `sep56-vault-guard 0.5.0`, `--output json`, 2026-10-18, exit code `1`. Output: [docs/sample-reports/reverting-max-vault.json](docs/sample-reports/reverting-max-vault.json).
 - **Result**: 6 PASS, 4 INCONCLUSIVE (`deposit`, `mint`, `withdraw`, `redeem`, all with reason `unclassified_error`), 1 FAIL (`donation_attack`). Exit code is `1` because a FAIL wins over INCONCLUSIVE.
+
+### SEP-41 Names Vault — SEP-41 parameter names on `approve` / `allowance` (`decimals_offset = 0`)
+
+- **Vault address**: `CDTVHZ2EGTROAUVERX2YVN6GF7PTRWBMHHLKSWCQYQEYXIUTPXILUEIM` (name `SEP-41 Names Vault`, symbol `S41V`, same native XLM asset as the reference vault). Deployed on 2026-11-16 by the project's test identity `alice`. Wasm hash `b8a034e4b1c2fc09916fa40c64af895de1c215e814a6efa98501a010b1230788`.
+- **Code**: `contracts/sep41-names-vault`, a copy of `contracts/positive-control-vault` (same `DEAD_SHARES = 100_000_000`). The only change is that `approve` and `allowance` are declared with SEP-41 names, `approve(from, spender, amount, expiration_ledger)` and `allowance(from, spender)`, delegating to OpenZeppelin's `Base`. Behaviour is the positive control's; only the names differ.
+- **Purpose**: shows that `access_control_probing` calls these functions by the names the target declares. Because it is built on the positive control, a run where every check works ends 11 of 11 PASS with exit code `0`.
+- **Verified on-chain after deployment, before any deposit**: `total_supply() = 100000000`, `balance(<vault address>) = 100000000`, `total_assets() = 0`, `query_asset()` = the native XLM Stellar Asset Contract.
+- **Runs** (`--output json`, 2026-11-16):
+  - CLI 0.5.0 (before the SOW 2 change): 10 PASS, 1 INCONCLUSIVE, exit code `3`. `access_control_probing` was `unclassified_error`; its raw error was `error: unexpected argument '--owner' found`, because v0.5.0 passed OpenZeppelin's names.
+  - With the SOW 2 change: 11 PASS, exit code `0`.
 
 ---
 

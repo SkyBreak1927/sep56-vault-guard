@@ -194,13 +194,14 @@ async fn main() {
         ACCESS_OWNER_ACCOUNT,
         ACCESS_OPERATOR_ACCOUNT,
     ];
-    match preflight::run(vault, &accounts).await {
+    let token_args = match preflight::run(vault, &accounts).await {
         // Warnings go to stderr in both formats, so stdout stays exactly the
         // payload a consumer parses.
         Ok(preflight) => {
             for warning in &preflight.warnings {
                 eprintln!("[WARN] {warning}");
             }
+            preflight.token_args
         }
         Err(failure) => {
             match cli.output {
@@ -223,7 +224,7 @@ async fn main() {
             }
             std::process::exit(EXIT_PREFLIGHT_FAILED);
         }
-    }
+    };
 
     let started_ms = now_ms();
     let status_reporter = StatusReporter::new(cli.status_file.clone(), vault).await;
@@ -303,7 +304,8 @@ async fn main() {
                 checks::check_access_control_probing(
                     vault,
                     ACCESS_OWNER_ACCOUNT,
-                    ACCESS_OPERATOR_ACCOUNT
+                    ACCESS_OPERATOR_ACCOUNT,
+                    &token_args,
                 ),
             ),
         )

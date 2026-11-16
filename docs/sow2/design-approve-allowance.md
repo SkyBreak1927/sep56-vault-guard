@@ -219,7 +219,21 @@ Record the new fixture in `CLAUDE.md` (test-scenario table),
 `VAULT_CHECKS.md` (Demo/Validation Vaults) and `web/src/config/checks.ts`
 (showcase list), only if that list should show it.
 
-## 5. Decisions for the user
+## Decisions taken (2026-11-16)
+
+1. **Option:** (b1), names from the preflight spec, mapped by position.
+2. **Strictness:** b-anchored.
+3. **No fit, or spec unreadable:** NOT_APPLICABLE with `token_interface_mismatch`.
+4. **Fixture base:** a copy of the **positive control**, so the exit code
+   shows the change: 3 before, 0 after.
+5. **Deployment and records:**
+   - Deployed with `alice`.
+   - Recorded in `CLAUDE.md` and `VAULT_CHECKS.md`.
+   - `web/src/config/checks.ts` is left unchanged.
+
+Implemented results are in `docs/sow2/changelog.md`.
+
+## 5. Decisions for the user (as proposed)
 
 1. **Option:** (b1) names from the preflight spec (recommended), (b2) the
    check reads the spec itself, or (c1) retry with SEP-41 names.

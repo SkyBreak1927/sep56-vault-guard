@@ -104,20 +104,22 @@ fn signature(name: &str, inputs: &[(String, String)], outputs: &[String]) -> Str
     sig
 }
 
-/// Compares a spec (the stdout of `stellar contract info interface --output
-/// json`) with [`SEP56_FUNCTIONS`]. Pure, so it is unit-tested on saved specs.
-pub fn assess(spec_json: &str) -> Assessment {
+/// One function as the spec declares it.
+struct Declared {
+    name: String,
+    /// `(argument name, type)` in order.
+    inputs: Vec<(String, String)>,
+    outputs: Vec<String>,
+}
+
+/// The functions a spec declares, or why the spec could not be read.
+fn declared_functions(spec_json: &str) -> Result<Vec<Declared>, String> {
     let entries: Vec<Value> = match serde_json::from_str(spec_json) {
         Ok(Value::Array(entries)) => entries,
-        Ok(_) => return Assessment::Unreadable("the contract spec is not a list".to_string()),
-        Err(e) => return Assessment::Unreadable(format!("the contract spec is not valid JSON: {e}")),
+        Ok(_) => return Err("the contract spec is not a list".to_string()),
+        Err(e) => return Err(format!("the contract spec is not valid JSON: {e}")),
     };
 
-    struct Declared {
-        name: String,
-        inputs: Vec<(String, String)>,
-        outputs: Vec<String>,
-    }
     let mut declared: Vec<Declared> = Vec::new();
     for entry in &entries {
         let Some(f) = entry.get("function_v0") else { continue };
@@ -144,8 +146,18 @@ pub fn assess(spec_json: &str) -> Assessment {
     }
 
     if declared.is_empty() {
-        return Assessment::Unreadable("the contract spec lists no functions".to_string());
+        return Err("the contract spec lists no functions".to_string());
     }
+    Ok(declared)
+}
+
+/// Compares a spec (the stdout of `stellar contract info interface --output
+/// json`) with [`SEP56_FUNCTIONS`]. Pure, so it is unit-tested on saved specs.
+pub fn assess(spec_json: &str) -> Assessment {
+    let declared = match declared_functions(spec_json) {
+        Ok(declared) => declared,
+        Err(reason) => return Assessment::Unreadable(reason),
+    };
 
     let mut missing = Vec::new();
     let mut mismatched = Vec::new();
@@ -174,11 +186,87 @@ pub fn assess(spec_json: &str) -> Assessment {
     }
 }
 
+/// The parameter names the target declares for the two SEP-41 token functions
+/// `access_control_probing` calls, in declaration order:
+///
+/// - `approve`: owner, spender, amount, expiry (OpenZeppelin `owner …
+///   live_until_ledger`, SEP-41 `from … expiration_ledger`);
+/// - `allowance`: owner, spender.
+///
+/// The Stellar CLI only takes named arguments (`--<name> <value>`), so the
+/// check passes its values under these names, by position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TokenArgNames {
+    pub approve: [String; 4],
+    pub allowance: [String; 2],
+}
+
+/// The names to call `approve`/`allowance` with, or, as `Err`, a sentence
+/// saying why they cannot be called.
+pub type TokenArgs = Result<TokenArgNames, String>;
+
+const APPROVE_TYPES: [&str; 4] = ["address", "address", "i128", "u32"];
+const ALLOWANCE_TYPES: [&str; 2] = ["address", "address"];
+
+/// Reads one of the two functions' names: the types must be `types`, in
+/// order, and the second argument must be named `spender` (both naming
+/// schemes share that name; it guards against the same types in another
+/// order). Any other names are accepted.
+fn names_of<const N: usize>(
+    declared: &[Declared],
+    function: &str,
+    types: [&str; N],
+    output: Option<&str>,
+) -> Result<[String; N], String> {
+    let expected = format!(
+        "{function}({}){}",
+        types
+            .iter()
+            .enumerate()
+            .map(|(i, t)| if i == 1 { format!("spender: {t}") } else { t.to_string() })
+            .collect::<Vec<_>>()
+            .join(", "),
+        output.map(|o| format!(" -> {o}")).unwrap_or_default()
+    );
+    let Some(d) = declared.iter().find(|d| d.name == function) else {
+        return Err(format!("The target does not declare {function}; the check needs {expected}."));
+    };
+    let types_match = d.inputs.len() == N
+        && d.inputs.iter().zip(types.iter()).all(|((_, t), want)| t == want)
+        && output.is_none_or(|o| d.outputs == [o.to_string()]);
+    let spender_second = d.inputs.get(1).is_some_and(|(n, _)| n == "spender");
+    if !(types_match && spender_second) {
+        return Err(format!(
+            "The target declares {}, which does not fit {expected}.",
+            signature(function, &d.inputs, &d.outputs)
+        ));
+    }
+    let names: Vec<String> = d.inputs.iter().map(|(n, _)| n.clone()).collect();
+    Ok(names.try_into().expect("length checked above"))
+}
+
+/// Reads the `approve`/`allowance` parameter names from a spec. Pure.
+pub fn token_arg_names(spec_json: &str) -> TokenArgs {
+    let declared = declared_functions(spec_json)
+        .map_err(|reason| format!("The target's contract spec could not be read ({reason})."))?;
+    Ok(TokenArgNames {
+        approve: names_of(&declared, "approve", APPROVE_TYPES, None)?,
+        allowance: names_of(&declared, "allowance", ALLOWANCE_TYPES, Some("i128"))?,
+    })
+}
+
+/// What one read of the target's spec yields.
+pub struct Probe {
+    pub assessment: Assessment,
+    pub token_args: TokenArgs,
+}
+
 /// Longest stretch of a failed probe's error kept in the warning.
 const PROBE_ERROR_LIMIT: usize = 300;
 
-/// Reads the target's spec from testnet and assesses it. Read-only.
-pub async fn probe(vault: &str) -> Assessment {
+/// Reads the target's spec from testnet once and derives both the interface
+/// assessment and the `approve`/`allowance` names from it. Read-only.
+pub async fn probe(vault: &str) -> Probe {
     let args: Vec<String> = [
         "contract", "info", "interface", "--contract-id", vault, "--network", "testnet", "--output",
         "json", "--quiet",
@@ -187,11 +275,15 @@ pub async fn probe(vault: &str) -> Assessment {
     .map(|s| s.to_string())
     .collect();
     match run_stellar(&args).await {
-        Ok(stdout) => assess(&stdout),
+        Ok(stdout) => Probe { assessment: assess(&stdout), token_args: token_arg_names(&stdout) },
         Err(e) => {
             let text = e.to_string();
             let cut: String = text.chars().take(PROBE_ERROR_LIMIT).collect();
-            Assessment::Unreadable(format!("`stellar contract info interface` failed: {cut}"))
+            let reason = format!("`stellar contract info interface` failed: {cut}");
+            Probe {
+                token_args: Err(format!("The target's contract spec could not be read ({reason}).")),
+                assessment: Assessment::Unreadable(reason),
+            }
         }
     }
 }
@@ -237,6 +329,105 @@ mod tests {
     const REFERENCE: &str = include_str!("../testdata/interface/reference.json");
     const CELENGAN: &str = include_str!("../testdata/interface/celengan.json");
     const STELLARBIN: &str = include_str!("../testdata/interface/stellarbin.json");
+    const SEP41_NAMES: &str = include_str!("../testdata/interface/sep41-names.json");
+
+    fn strings<const N: usize>(names: [&str; N]) -> [String; N] {
+        names.map(str::to_string)
+    }
+
+    /// A spec with only `approve` and `allowance`, declared as given.
+    fn token_spec(approve: &[(&str, &str)], allowance: &[(&str, &str)], allowance_out: &str) -> String {
+        let inputs = |args: &[(&str, &str)]| -> Vec<Value> {
+            args.iter().map(|(n, t)| serde_json::json!({"name": n, "type": t})).collect()
+        };
+        serde_json::json!([
+            {"function_v0": {"name": "approve", "inputs": inputs(approve), "outputs": []}},
+            {"function_v0": {"name": "allowance", "inputs": inputs(allowance), "outputs": [allowance_out]}},
+        ])
+        .to_string()
+    }
+
+    #[test]
+    fn openzeppelin_names_are_read_from_the_reference_vault() {
+        assert_eq!(
+            token_arg_names(REFERENCE),
+            Ok(TokenArgNames {
+                approve: strings(["owner", "spender", "amount", "live_until_ledger"]),
+                allowance: strings(["owner", "spender"]),
+            })
+        );
+    }
+
+    #[test]
+    fn sep41_names_are_read_from_the_sep41_names_fixture() {
+        assert_eq!(
+            token_arg_names(SEP41_NAMES),
+            Ok(TokenArgNames {
+                approve: strings(["from", "spender", "amount", "expiration_ledger"]),
+                allowance: strings(["from", "spender"]),
+            })
+        );
+        // The fixture still has the whole SEP-56 interface.
+        assert_eq!(assess(SEP41_NAMES), Assessment::Complete);
+    }
+
+    #[test]
+    fn other_names_are_accepted_when_types_and_spender_fit() {
+        let spec = token_spec(
+            &[("holder", "address"), ("spender", "address"), ("value", "i128"), ("until", "u32")],
+            &[("holder", "address"), ("spender", "address")],
+            "i128",
+        );
+        let names = token_arg_names(&spec).unwrap();
+        assert_eq!(names.approve, strings(["holder", "spender", "value", "until"]));
+    }
+
+    #[test]
+    fn a_second_parameter_not_named_spender_does_not_fit() {
+        // Same types, but the first two swapped: spender is not second.
+        let spec = token_spec(
+            &[("spender", "address"), ("from", "address"), ("amount", "i128"), ("expiration_ledger", "u32")],
+            &[("from", "address"), ("spender", "address")],
+            "i128",
+        );
+        let err = token_arg_names(&spec).unwrap_err();
+        assert!(err.contains("approve(spender: address, from: address"), "{err}");
+        assert!(err.contains("does not fit approve(address, spender: address, i128, u32)"), "{err}");
+
+        let spec = token_spec(
+            &[("from", "address"), ("spender", "address"), ("amount", "i128"), ("expiration_ledger", "u32")],
+            &[("from", "address"), ("to", "address")],
+            "i128",
+        );
+        let err = token_arg_names(&spec).unwrap_err();
+        assert!(err.contains("allowance(from: address, to: address) -> i128"), "{err}");
+    }
+
+    #[test]
+    fn other_types_or_a_missing_function_do_not_fit() {
+        let wrong_type = token_spec(
+            &[("from", "address"), ("spender", "address"), ("amount", "i128"), ("expiration_ledger", "u64")],
+            &[("from", "address"), ("spender", "address")],
+            "i128",
+        );
+        assert!(token_arg_names(&wrong_type).is_err());
+        let wrong_return = token_spec(
+            &[("from", "address"), ("spender", "address"), ("amount", "i128"), ("expiration_ledger", "u32")],
+            &[("from", "address"), ("spender", "address")],
+            "u64",
+        );
+        assert!(token_arg_names(&wrong_return).is_err());
+        let err = token_arg_names(&spec_with(|_| {})).unwrap_err();
+        assert!(err.starts_with("The target does not declare approve"), "{err}");
+    }
+
+    #[test]
+    fn an_unreadable_spec_gives_no_names() {
+        for spec in ["not json", "{}", "[]"] {
+            let err = token_arg_names(spec).unwrap_err();
+            assert!(err.starts_with("The target's contract spec could not be read"), "{err}");
+        }
+    }
 
     /// A spec declaring exactly [`SEP56_FUNCTIONS`], with `edit` applied to
     /// the function list first.

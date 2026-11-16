@@ -1,0 +1,37 @@
+{
+  "description": "Old to new texts of the wording pass (docs/sow2/design-wording.md). Used by scripts/regress-compare.mjs --text-map: only these changes are allowed to differ between a before run and an after run.",
+  "reason_message": {
+    "behavior_mismatch": {
+      "old": "The function exists, but its result did not satisfy this check's assertion. See detail.",
+      "new": "The function exists, but what it returned or changed did not match what this check expects. See detail."
+    },
+    "security_finding": {
+      "old": "The scenario this check runs on a temporary copy of the vault was not handled as expected. See detail.",
+      "new": "This check ran a scenario on a temporary copy of the vault and flagged the result. This applies to that scenario only, not to the vault as a whole. See detail."
+    },
+    "unclassified_error": {
+      "old": "A call failed for a reason the tool could not classify. Not a finding about the vault. See raw_error.",
+      "new": "A call failed for a reason the tool could not classify. Not a finding about the vault. See detail. raw_error holds the error text when the CLI printed any, and is absent when it printed none."
+    },
+    "constructor_mismatch": {
+      "old": "The vault's constructor does not take (name, symbol, asset, decimals_offset), so the temporary copy could not be deployed. Not a finding about the vault.",
+      "new": "The vault's constructor does not accept the arguments (name, symbol, asset, decimals_offset) under these names, so the temporary copy could not be deployed. Not a finding about the vault."
+    },
+    "token_interface_mismatch": {
+      "old": "approve or allowance is not declared in a form this check can call (address, address, i128, u32 with spender second). Not a finding about the vault.",
+      "new": "approve or allowance cannot be called by this check. It needs approve(address, address, i128, u32) and allowance(address, address), the second argument of each named spender, and a readable contract spec. Not a finding about the vault."
+    }
+  },
+  "detail": [
+    { "old": "VULNERABLE to donation/inflation attack — ", "new": "Finding in the donation scenario — " },
+    { "old": "resilient to donation/inflation attack — ", "new": "In this scenario the vault held up — " },
+    { "old": "VULNERABLE: ", "new": "Finding: " },
+    { "old": "accepted with a possibly-wrong result", "new": "accepted with an unexpected result" },
+    { "old": "no silent-wrong-result observed", "new": "no wrong result observed" },
+    { "old": "rounding direction confirmed to always favor the vault over the user", "new": "at this ratio, rounding favored the vault in both directions tested" },
+    { "re": "deposited (\\d+) stroops, minted", "new": "deposited $1 units of the underlying asset, minted" },
+    { "re": "withdrew (\\d+) stroops, burned", "new": "withdrew $1 units of the underlying asset, burned" },
+    { "old": "which appears to be insufficient balance on the account paying for it", "new": "because the account paying for it holds less than the call needed", "when": "The account holds " },
+    { "old": "comparison copy", "new": "temporary copy" }
+  ]
+}

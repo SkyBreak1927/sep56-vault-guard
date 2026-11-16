@@ -65,11 +65,12 @@ pub struct Reason {
 pub fn reason_message(code: &str) -> &'static str {
     match code {
         BEHAVIOR_MISMATCH => {
-            "The function exists, but its result did not satisfy this check's assertion. See detail."
+            "The function exists, but what it returned or changed did not match what this check \
+             expects. See detail."
         }
         SECURITY_FINDING => {
-            "The scenario this check runs on a temporary copy of the vault was not handled as \
-             expected. See detail."
+            "This check ran a scenario on a temporary copy of the vault and flagged the result. \
+             This applies to that scenario only, not to the vault as a whole. See detail."
         }
         INTERFACE_MISSING => "The vault does not declare a SEP-56 function this check calls.",
         "insufficient_token_balance" => {
@@ -79,19 +80,22 @@ pub fn reason_message(code: &str) -> &'static str {
         "network_error" => "The RPC or network could not be reached. Run again later. Not a finding about the vault.",
         "unclassified_error" => {
             "A call failed for a reason the tool could not classify. Not a finding about the \
-             vault. See raw_error."
+             vault. See detail. raw_error holds the error text when the CLI printed any, and is \
+             absent when it printed none."
         }
         "constructor_mismatch" => {
-            "The vault's constructor does not take (name, symbol, asset, decimals_offset), so the \
-             temporary copy could not be deployed. Not a finding about the vault."
+            "The vault's constructor does not accept the arguments (name, symbol, asset, \
+             decimals_offset) under these names, so the temporary copy could not be deployed. Not \
+             a finding about the vault."
         }
         "not_a_standard_vault" => {
             "The vault does not expose what this check needs (query_asset, decimals, or Wasm code \
              of its own). Not a finding about the vault."
         }
         "token_interface_mismatch" => {
-            "approve or allowance is not declared in a form this check can call (address, \
-             address, i128, u32 with spender second). Not a finding about the vault."
+            "approve or allowance cannot be called by this check. It needs approve(address, \
+             address, i128, u32) and allowance(address, address), the second argument of each \
+             named spender, and a readable contract spec. Not a finding about the vault."
         }
         _ => "See detail.",
     }
@@ -190,6 +194,39 @@ mod tests {
         unique.sort();
         unique.dedup();
         assert_eq!(unique.len(), codes.len(), "messages must differ per code");
+    }
+
+    #[test]
+    fn the_security_finding_message_is_about_the_scenario_and_gives_no_verdict() {
+        let m = reason_message(SECURITY_FINDING);
+        assert!(m.contains("temporary copy") && m.contains("that scenario only"));
+        assert!(!m.to_lowercase().contains("vulnerable"));
+    }
+
+    #[test]
+    fn the_unclassified_message_says_raw_error_can_be_absent() {
+        let m = reason_message("unclassified_error");
+        assert!(m.contains("See detail") && m.contains("absent when it printed none"));
+    }
+
+    #[test]
+    fn the_token_interface_message_names_the_role_of_the_second_argument() {
+        let m = reason_message("token_interface_mismatch");
+        assert!(m.contains("second argument of each named spender"));
+    }
+
+    #[test]
+    fn no_message_uses_a_word_the_project_does_not_use() {
+        for code in [
+            "behavior_mismatch", "security_finding", "interface_missing", "insufficient_token_balance",
+            "network_error", "unclassified_error", "constructor_mismatch", "not_a_standard_vault",
+            "token_interface_mismatch",
+        ] {
+            let m = reason_message(code).to_lowercase();
+            for word in ["audit", "certif", "guarantee", "full conformance", "100% sa", "sertifikasi", "menjamin"] {
+                assert!(!m.contains(word), "{code}: {word}");
+            }
+        }
     }
 
     #[test]

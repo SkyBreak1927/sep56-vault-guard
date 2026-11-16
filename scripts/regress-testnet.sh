@@ -3,10 +3,11 @@
 # Blind test token.
 #
 #   scripts/regress-testnet.sh --before <old-binary> --after <new-binary> \
-#       [--only reference,blind] [--no-topup] [--out <dir>]
+#       [--only reference,blind] [--no-topup] [--out <dir>] [--text-map <file>]
 #
 # Each fixture is run with the "before" binary and then the "after" binary
 # (`--output json`), and the two runs are compared by scripts/regress-compare.mjs.
+# With --text-map only the old -> new texts listed in that file may differ.
 # The "after" run is also checked against the expected counts and exit code.
 #
 # Safety:
@@ -53,7 +54,7 @@ BLIND_NEEDS=(
 
 die() { echo "ABORT: $*" >&2; exit 2; }
 
-BEFORE=""; AFTER=""; ONLY=""; TOPUP=1
+BEFORE=""; AFTER=""; ONLY=""; TOPUP=1; TEXTMAP=""
 OUT="$(cd "$(dirname "$0")/.." && pwd)/target/regress"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -61,6 +62,7 @@ while [ $# -gt 0 ]; do
     --after) AFTER="${2:-}"; shift 2 ;;
     --only) ONLY="${2:-}"; shift 2 ;;
     --no-topup) TOPUP=0; shift ;;
+    --text-map) TEXTMAP="${2:-}"; shift 2 ;;
     --out) OUT="${2:-}"; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -140,7 +142,7 @@ for fixture in "${FIXTURES[@]}"; do
   [ "$name" = "blind" ] && print_balances "Blind balances after the before-run"
   "$AFTER" --vault "$vault" --output json >"$OUT/$name.after.json" 2>"$OUT/$name.after.err"; ax=$?
   [ "$name" = "blind" ] && print_balances "Blind balances after the after-run "
-  cmp_out=$(node "$(dirname "$0")/regress-compare.mjs" "$OUT/$name.before.json" "$OUT/$name.after.json" "$bx" "$ax"); same=$?
+  cmp_out=$(node "$(dirname "$0")/regress-compare.mjs" "$OUT/$name.before.json" "$OUT/$name.after.json" "$bx" "$ax" ${TEXTMAP:+"$TEXTMAP"}); same=$?
   read -r p f i <<<"$(summary "$OUT/$name.after.json")"
   expected_ok="yes"
   if [ "$p" != "$ep" ] || [ "$f" != "$ef" ] || [ "$i" != "$ei" ] || [ "$ax" != "$ex" ]; then expected_ok="NO"; fi

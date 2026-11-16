@@ -4,6 +4,40 @@ Tester requests and what was done about them. Each claim is marked
 **TERBUKTI** (run or read in this repository) or **BELUM**. Request numbers
 come from the validation tracker of the SOW 1 Final Report.
 
+## 2026-11-16 — Wording pass on the report texts (Deliverable 2)
+
+Branch `sow2/wording-pass`. Design: `docs/sow2/design-wording.md`. CLI, the
+web docs page `output.ts`, tests, samples and the README example only. The
+web export and page strings are a separate branch (`sow2/wording-web`).
+Decisions: `Review required` as the headline for a FAIL; a `Scope:` line; no
+verdict words in `detail`; one name for the copy ("temporary copy").
+
+| Tester request | What was done | Status |
+|---|---|---|
+| **StellarBin #1**: "Remediation needed" does not fit | The headline for a run with a FAIL is now `Review required`. The report title is `Aegis Vault — SEP-56 Check Report` (it was `Conformance Verification Report`), and the two tables carry the group names of the summary (`Core function checks`, `Basic security checks`). | TERBUKTI (9 fixtures and 3 Markdown runs) |
+| **Lumbung #2**: state clearly that only the security checks run on a temporary copy | The `Mode:` line now says the 7 conformance checks send real transactions to the target vault with Testnet funds and change its state, and the 4 security checks run on a temporary copy while the target is only read. A new `Scope:` line says what the run covers (7 core SEP-56 functions and four basic security risks, events not checked) and that a result describes the scenarios that were run. | TERBUKTI |
+| Wording of PASS, FAIL and the reasons (handoff item) | `detail`: `VULNERABLE` became `Finding`, `resilient to … attack` became `In this scenario the vault held up`, "always favor" became a statement about the ratio tested, and `stroops` became `units of the underlying asset` in the deposit and withdraw rows. `reason.message` reworded for `behavior_mismatch`, `security_finding`, `unclassified_error`, `constructor_mismatch`, `token_interface_mismatch`. `output.ts` follows, with a note that `reason.message` may be reworded and programs should use `reason.code`. | TERBUKTI |
+
+No field, status, `reason_code`, `reason.code`, key, row order or exit code
+changed. The sentence the web parses in the donation row, the P&L sentence and
+the `NOTE:` prefix are unchanged.
+
+Tests: 113 in total, all passing (4 new in `labels.rs`; the tests pinning the
+old Markdown texts and one JSON message were updated). `clippy` reports the one
+warning that already existed. Web: lint, 96 tests, build pass.
+
+**Regression, 9 Testnet fixtures**, `scripts/regress-testnet.sh --text-map
+scripts/text-maps/wording-pass.json`, the `dev-sow2` build against this branch:
+all rows identical in name, status, `reason_code`, `reason.code`, keys and exit
+code; `reason.message` and `detail` differ only as the map lists (5 to 8
+changes per fixture). Blind top-up was done by the script. Markdown runs on
+Reference, Positive Control and Reverting Max differ only in the title, the
+`Mode:`, `Scope:` and `Result:` lines, the table headings and the mapped
+`detail` text. **TERBUKTI**
+
+New samples: `docs/sow2/samples/*-wording-pass.*`. `docs/sample-reports/` is
+kept as CLI 0.5.0 history and labelled.
+
 ## 2026-11-16 — Constructor requirements of the security checks documented (Deliverable 2)
 
 Branch `sow2/constructor-docs`. Design: `docs/sow2/design-constructor-params.md`.

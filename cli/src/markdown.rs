@@ -14,8 +14,15 @@ use crate::labels::{self, MODE, SPEC_REFERENCE};
 use crate::preflight::{PreflightError, UNSUPPORTED_INTERFACE};
 
 /// The header line explaining the mode. Testnet is the only mode today.
-const MODE_LINE: &str = "- Mode: testnet (the 7 conformance checks change the target vault's \
-    state; the 4 security checks run on a temporary copy)";
+const MODE_LINE: &str = "- Mode: Testnet. The 7 conformance checks send real transactions to the \
+    target vault with Testnet funds and change its state. The 4 security checks run on a \
+    temporary copy; the target is only read.";
+
+/// What the checks cover, and what a result does and does not say. Only a run
+/// that reached the checks has it; a preflight report has no results.
+const SCOPE_LINE: &str = "- Scope: checks 7 core SEP-56 functions and four basic security risks, \
+    on Testnet. Events are not checked. A result describes the scenarios that were run; it is \
+    not a statement that the vault is safe or correct.";
 
 /// `runs_on` as the report's readers see it.
 fn runs_on_text(check_name: &str) -> &'static str {
@@ -26,7 +33,7 @@ fn runs_on_text(check_name: &str) -> &'static str {
     }
 }
 
-const TITLE: &str = "# Aegis Vault — Conformance Verification Report";
+const TITLE: &str = "# Aegis Vault — SEP-56 Check Report";
 
 /// What the report says about the run itself.
 pub struct RunInfo<'a> {
@@ -114,7 +121,7 @@ fn count(results: &[&CheckResult]) -> Counts {
 /// Headline for the run as a whole (`summaryTitle` in the web report).
 fn summary_title(counts: &Counts, total: usize) -> &'static str {
     if counts.fail > 0 {
-        "Remediation needed"
+        "Review required"
     } else if counts.inconclusive > 0 {
         "Some checks could not finish"
     } else if total - counts.not_applicable == 0 {
@@ -148,6 +155,7 @@ pub fn run_report(info: &RunInfo<'_>, results: &[CheckResult]) -> String {
     let counts = count(&all);
 
     let mut lines = header(info.vault, info.cli_version);
+    lines.push(SCOPE_LINE.to_string());
     lines.push(format!("- Started: {}", iso_utc(info.started_ms)));
     lines.push(format!("- Completed: {}", iso_utc(info.completed_ms)));
     let elapsed_ms = info.completed_ms.saturating_sub(info.started_ms);
@@ -163,7 +171,7 @@ pub fn run_report(info: &RunInfo<'_>, results: &[CheckResult]) -> String {
     }
     lines.push(String::new());
 
-    for (title, members) in [("Conformance checks", &conformance), ("Security checks", &security)] {
+    for (title, members) in [("Core function checks", &conformance), ("Basic security checks", &security)] {
         lines.push(format!("## {title}"));
         lines.push(String::new());
         lines.push("| # | Check | Status | Mode | Spec | Runs on | Detail |".to_string());
@@ -308,11 +316,12 @@ mod tests {
     #[test]
     fn header_and_result_for_a_clean_run() {
         let report = run_report(&info(), &all_with(CheckStatus::Pass));
-        assert!(report.starts_with("# Aegis Vault — Conformance Verification Report\n\n"));
+        assert!(report.starts_with("# Aegis Vault — SEP-56 Check Report\n\n"));
         for line in [
             "- Vault: `CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF`",
             "- Network: testnet",
-            "- Mode: testnet (the 7 conformance checks change the target vault's state; the 4 security checks run on a temporary copy)",
+            "- Mode: Testnet. The 7 conformance checks send real transactions to the target vault with Testnet funds and change its state. The 4 security checks run on a temporary copy; the target is only read.",
+            "- Scope: checks 7 core SEP-56 functions and four basic security risks, on Testnet. Events are not checked. A result describes the scenarios that were run; it is not a statement that the vault is safe or correct.",
             "- Spec: SEP-0056 v0.1.2 (Draft)",
             "- Checker: sep56-vault-guard 0.4.0",
             "- Started: 2025-10-09T08:53:20.000Z",
@@ -331,8 +340,8 @@ mod tests {
     #[test]
     fn tables_hold_every_check_in_order_under_its_group() {
         let report = run_report(&info(), &all_with(CheckStatus::Pass));
-        let conformance = report.find("## Conformance checks").unwrap();
-        let security = report.find("## Security checks").unwrap();
+        let conformance = report.find("## Core function checks").unwrap();
+        let security = report.find("## Basic security checks").unwrap();
         assert!(conformance < security);
         assert!(report.contains(
             "| # | Check | Status | Mode | Spec | Runs on | Detail |\n|---|---|---|---|---|---|---|\n| 01 | `total_assets` | PASS | testnet | SEP-0056 v0.1.2 (Draft) | target vault | d |"
@@ -351,7 +360,7 @@ mod tests {
         let mut results = all_with(CheckStatus::Pass);
         results[7] = result("donation_attack", CheckStatus::Fail, "VULNERABLE");
         let report = run_report(&info(), &results);
-        assert!(report.contains("- Result: Remediation needed"));
+        assert!(report.contains("- Result: Review required"));
         assert!(report.contains("- Basic security checks: 3 of 4 passed"));
         assert!(report.contains("| 08 | `donation_attack` | FAIL | testnet | SEP-0056 v0.1.2 (Draft) | temporary copy | VULNERABLE |"));
     }
@@ -413,7 +422,7 @@ mod tests {
             spec: "SEP-0056 v0.1.2 (Draft)",
         };
         let report = preflight_report(VAULT, "0.4.0", &failure);
-        assert!(report.starts_with("# Aegis Vault — Conformance Verification Report\n\n"));
+        assert!(report.starts_with("# Aegis Vault — SEP-56 Check Report\n\n"));
         for line in [
             "- Vault: `CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF`",
             "- Result: Prerequisite missing, no checks were run",
@@ -461,7 +470,8 @@ mod tests {
         ] {
             assert!(report.lines().any(|l| l == line), "missing line: {line}");
         }
-        assert!(!report.contains("Remediation needed"));
+        assert!(!report.contains("Review required"));
+        assert!(!report.contains("- Scope:"), "a preflight report has no results to scope");
     }
 
     #[test]

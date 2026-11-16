@@ -242,3 +242,51 @@ grep and none was found in the CLI or the web tests.
 Order of work, if accepted: D11 first branch (labels, markdown, detail texts,
 tests, the text map and comparer), then the 9-fixture regression, then the web
 branch, then samples and the README example.
+
+## 6. Keputusan Pandebu 16 Nov
+
+D1–D11 disetujui sesuai rekomendasi di bagian 5, dengan tambahan berikut.
+
+| # | Keputusan | Tambahan |
+|---|---|---|
+| D1, D11 | Ruang lingkup dan branch | Dua branch terpisah. **Sekarang** hanya `sow2/wording-pass`: CLI, `output.ts`, tes, sampel, dan README. String web (`report.ts`, `VerificationReport.tsx`, tesnya) dikerjakan nanti di `sow2/wording-web`, setelah disetujui; untuk web hanya penggantian teks, tanpa perubahan tata letak, gaya, struktur, atau logika parsing. |
+| D2 | Headline FAIL | `Review required`. |
+| D3 | Judul | `Aegis Vault — SEP-56 Check Report`. |
+| D4 | Baris `Scope:` | Ditambahkan, hanya pada laporan run yang mencapai pemeriksaan. |
+| D5 | `detail` | Berubah sesuai 2.3. Kalimat donasi yang di-parse web, kalimat P&L, dan awalan `NOTE:` tidak berubah. |
+| D6 | Batas klaim di docs PASS dan FAIL | Seperti ditulis (W29, W30). |
+| D7 | Nama grup | Satu pasang nama (`Core function checks`, `Basic security checks`) di ringkasan dan tabel. |
+| D8 | Sampel | Sampel lama dipertahankan sebagai riwayat CLI 0.5.0 dan diberi label; set baru ditambahkan; blok contoh README diregenerasi. |
+| D9 | `reason.message` | Dicatat di `output.ts` bahwa teksnya bisa berubah dan program sebaiknya memakai `reason.code`. |
+| D10 | Kode `not_a_standard_vault` | Tidak berubah. |
+
+Perubahan pada rancangan 2.2:
+
+- **`security_finding`** dipendekkan menjadi: "This check ran a scenario on a
+  temporary copy of the vault and flagged the result. This applies to that
+  scenario only, not to the vault as a whole. See detail."
+- **`unclassified_error`** tidak lagi menyuruh "See raw_error" begitu saja. Teksnya
+  mengakui bahwa `raw_error` bisa kosong bila CLI tidak mengeluarkan teks error
+  (temuan F1 di `design-constructor-params.md`): "… See detail. raw_error holds
+  the error text when the CLI printed any, and is absent when it printed none."
+- **`token_interface_mismatch`** menyebut peran argumen: argumen kedua dari
+  `approve` dan `allowance` harus bernama `spender`, dan spec kontrak harus
+  terbaca.
+
+Pemeriksaan sebelum perubahan (TERBUKTI, dibaca dengan grep):
+
+- `server/` tidak mencocokkan satu pun teks lama (`server/index.js` hanya
+  meneruskan JSON).
+- Di `web/src`, kode yang mencocokkan teks hanya tiga ekspresi reguler di
+  `web/src/lib/findings.ts` (`DONATION_RE`, `PNL_RE`, `NOTE_RE`), yang sudah
+  dicatat di bagian 3.2. Teks lain hanyalah tampilan, dikerjakan di
+  `sow2/wording-web`: `report.ts` (judul, headline, nama grup),
+  `VerificationReport.tsx`, dan **satu teks yang belum ada di inventaris**:
+  `web/src/config/checks.ts:33`, deskripsi `rounding_direction` "Confirms
+  rounding always favors the vault …". Itu bukan pencocokan kode, jadi tidak
+  menghentikan pekerjaan ini; masuk daftar untuk `sow2/wording-web`.
+- **"Events are not checked" benar (TERBUKTI).** Tidak ada pemeriksaan yang
+  membaca event yang dipancarkan vault: CLI hanya memanggil fungsi dan membaca
+  nilai kembaliannya; teks "Diagnostic Event" hanya dibaca dari teks error
+  untuk klasifikasi kegagalan (`rpc.rs`), bukan untuk memeriksa event
+  `Deposit`/`Withdraw`. Kalimat itu dipertahankan di baris `Scope:`.

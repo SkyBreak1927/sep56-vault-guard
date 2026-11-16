@@ -55,9 +55,68 @@ stellar contract invoke --id <TOKEN_ADDRESS> --source-account alice --network te
 ```
 
 The checker derives the vault's `decimals_offset` as the vault's `decimals()`
-minus the token's `decimals()`. A vault that does not expose `query_asset`, or
-whose constructor does not take `(name, symbol, asset, decimals_offset)`, gets
-`NOT_APPLICABLE` on the four security checks (see the README).
+minus the token's `decimals()`. A vault that does not expose `query_asset` gets
+`NOT_APPLICABLE` on the four security checks. The constructor rules follow.
+
+### Constructor requirements for the security checks
+
+Each security check deploys its own temporary copy of the vault from the
+target's Wasm, passing four **named** arguments to its constructor. So the
+target's constructor has to declare all four, with these exact names. The order
+does not matter.
+
+| Argument | Type | Value the checks send | Where it comes from |
+|---|---|---|---|
+| `name` | `string` | A fixed text per check (for example `Rounding Test Vault`) | Built into the checker. Not read from the target. |
+| `symbol` | `string` | A fixed text per check (for example `RNDCHK`) | Built into the checker. |
+| `asset` | `address` | The target's underlying asset | `query_asset()` on the target. |
+| `decimals_offset` | `u32` | The vault's `decimals()` minus the asset's `decimals()` | Derived (section 3 above). |
+
+None of them can be changed from the command line.
+
+**See your vault's constructor.** This is a read of the contract's spec. Replace
+`<VAULT_ADDRESS>`:
+
+```bash
+stellar contract info interface --contract-id <VAULT_ADDRESS> --network testnet --output rust
+```
+
+Look for the `fn __constructor(` block. On the repository's Blind vault it reads
+`name: String`, `symbol: String`, `asset: Address`, `decimals_offset: u32`.
+
+**Try the same deploy by hand.** This is what each security check does. Get the
+Wasm hash first, then deploy a copy with a custom token and a non-zero offset.
+`dave` is one of the test identities; any funded identity works. Do not add
+`--quiet` here (see below):
+
+```bash
+stellar contract info hash --contract-id <VAULT_ADDRESS> --network testnet
+
+stellar contract deploy --wasm-hash <VAULT_WASM_HASH> --source-account dave \
+  --network testnet -- --name "Constructor Docs Probe" --symbol CDPRB \
+  --asset <TOKEN_ADDRESS> --decimals_offset 3
+```
+
+The deploy prints the new contract address. It creates a real (empty) contract
+on Testnet. Run on the Blind vault's Wasm with the Blind token and offset 3, it
+succeeded. Giving the arguments in another order also succeeded.
+
+**When the constructor does not fit:**
+
+| Constructor | What `stellar` prints | What the checker reports |
+|---|---|---|
+| Another argument name (for example `underlying` instead of `asset`) | `error: unexpected argument '--underlying' found` and a `Usage: __constructor …` line | `NOT_APPLICABLE` with `constructor_mismatch` on the four security checks. The CLI text was run; the checker result on a real vault has not been seen. |
+| Fewer arguments than the four (for example no `decimals_offset`) | `unexpected argument '--decimals_offset' found` | The same. |
+| An argument the checks do not send is required (for example `admin`) | With `--quiet`: nothing, exit code 1. Without it: `Missing required argument 'admin' of type address` | Expected from reading the code: `INCONCLUSIVE` with `unclassified_error` and the detail `No error text was available.` **Not seen on a real vault.** |
+
+Two details about that table. The `Usage:` line `stellar` prints lists only the
+arguments before the one it rejected, so it is not the full constructor; use the
+spec read above for that. And the checker runs `stellar` with `--quiet`, so the
+last row shows no text there.
+
+A vault with another constructor is not covered by the four security checks
+today. The seven conformance checks still run. The result is a limit of the
+tool, not a finding about the vault.
 
 ## 4. Minimum balances
 
@@ -153,19 +212,20 @@ Use `--output json` for a machine-readable array. A run takes roughly one minute
 What the statuses mean for funding:
 
 - **`INCONCLUSIVE` with `insufficient_token_balance`** means a token transfer a
-  check needed was rejected, which appears to be a short balance. The detail
-  names the test account that started the call, for example
-  `test account 'alice'`. Send that account more of the token and run again. It
-  is not a finding about the vault.
+  check needed was rejected, and the tool read the paying account's balance and
+  found it below what the call needed. The detail names the test account that
+  started the call, for example `test account 'alice'`, and gives both figures:
+  `The account holds 0 of the underlying asset and needs 5000000.` Send that
+  account more of the token and run again. It is not a finding about the vault.
 - **Exit code `3`** means no check failed but at least one was `INCONCLUSIVE`, so
   the vault was not fully checked. Exit code `1` means at least one check failed,
   and a failure always wins. All four codes are in the README's
   [Exit codes](../README.md#exit-codes).
 - The summary line grows only when needed, for example
   `Summary: 11 checks, 7 passed, 0 failed, 4 inconclusive`.
-- If `donation_attack` ends as `INCONCLUSIVE` with the reason code
-  `unclassified_error`, check **grace's** balance first. In that case the status
-  is right but the reason label is not yet accurate (see section 8).
+- If a check ends as `INCONCLUSIVE` with the reason code `unclassified_error`
+  and the account its detail names holds enough of the token, the failure is
+  not a short balance. Read the raw error in the detail.
 
 On the measured vault, with the amounts from section 4, the run gave 10 `PASS`
 and 1 `FAIL`, exit code 1. The one failure was `donation_attack`, a genuine
@@ -197,13 +257,15 @@ Testnet tokens have no monetary value, so spending them costs nothing real.
   `--vault`, using Testnet funds. Only the four security checks use a temporary
   copy of the vault; they deploy it, attack it, and only read the target.
 - **Testnet only.** There is no option to point the checker at another network.
-- **A vault with a different constructor** gets `NOT_APPLICABLE` on all four
-  security checks, because the temporary copy cannot be deployed.
-- **The reason code for a short `grace` balance is not yet accurate.**
-  `donation_attack` calls the token's `transfer` directly, and that error is not
-  recognised as a balance problem. The status is still `INCONCLUSIVE`, but the
-  reason code can read `unclassified_error` instead of
-  `insufficient_token_balance`. The raw error text is in the detail.
+- **A vault with a different constructor** cannot be covered by the four
+  security checks, because the temporary copy cannot be deployed. Other argument
+  names give `NOT_APPLICABLE`; a constructor that requires an argument the
+  checks do not send is expected to give `INCONCLUSIVE` (not yet seen on a real
+  vault). See "Constructor requirements for the security checks" in section 3.
+- **A short balance is recognised by reading the account's balance.** After a
+  rejected `deposit`, `mint` or token `transfer`, the tool reads the paying
+  account's balance. If that read fails, the result stays `unclassified_error`.
+  This was run with the repository's test token (stellar-tokens 0.7.2) only.
 - **Measured on one vault.** The minimums in section 4 come from a single vault
   (`decimals_offset = 3`, the repository's test token). Alice's and dave's
   amounts change with the vault's share price.

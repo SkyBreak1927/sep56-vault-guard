@@ -157,6 +157,9 @@ as `FAIL`:
 - a vault without `query_asset` (or whose underlying asset has no `decimals()`)
   gives `not_a_standard_vault`.
 
+The argument types, where each value comes from, and what a mismatch looks like
+are in [Constructor requirements for the security checks](docs/INTEGRATE.md#constructor-requirements-for-the-security-checks).
+
 `NOT_APPLICABLE` is not a finding about the vault, and it does not change the
 exit code (see [Exit codes](#exit-codes)). The 7 conformance checks still run. A
 copy that cannot be deployed for any other reason, such as an unreachable

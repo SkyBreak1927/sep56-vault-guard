@@ -25,7 +25,8 @@ export const limitations: DocsPage = {
       title: 'Vault design requirements',
       blocks: [
         list(
-          'The four security checks need a constructor of `(name, symbol, asset, decimals_offset)` and a `query_asset` function. Other vaults get `NOT_APPLICABLE` on those four.',
+          'The four security checks need a constructor of `(name, symbol, asset, decimals_offset)` and a `query_asset` function. Other argument names give `NOT_APPLICABLE` on those four. Details: `docs/INTEGRATE.md` in the repository, section \'Constructor requirements for the security checks\'.',
+          'A constructor that requires an argument the checks do not send is expected to end as `INCONCLUSIVE`, not `NOT_APPLICABLE`. This has not been seen on a real vault.',
           "At `decimals_offset = 0`, `overflow_protection` does not test the vault's own overflow protection.",
         ),
       ],

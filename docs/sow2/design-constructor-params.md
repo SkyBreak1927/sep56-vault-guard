@@ -178,3 +178,51 @@ its mapping stay labelled **BELUM** until a vault shows them.
 
 Order of work, if accepted: D1/D2 text in a branch of its own, then F6 in the
 same change, then a decision on code items (F1, F2, F4).
+
+## 6. Keputusan Pandebu 16 Nov
+
+D1–D8 disetujui sesuai rekomendasi di bagian 5, dengan tambahan berikut.
+
+| # | Keputusan | Tambahan |
+|---|---|---|
+| D1 | Tempat utama | Bagian baru di `docs/INTEGRATE.md`, sebagai subbagian dari bagian 3 (nomor bagian lain tidak bergeser, jadi rujukan silang tetap benar). |
+| D2 | Tautan | Di `web/` hanya teks di `web/src/docs/pages/security.ts` dan `limitations.ts`, tanpa komponen web lain. Di README cukup satu kalimat dengan tautan. Teks docs web tidak mendukung tautan, jadi halaman web menyebut berkas dan nama bagian. |
+| D3 | Kasus C dan D | Ditulis sebagai BELUM untuk hasil pemeriksaan (tidak pernah terlihat pada vault nyata). |
+| D4 | `--help` dan `reason.message` | Tidak diubah. |
+| D5 | F1–F5 | Hanya tercatat di sini sebagai backlog. Usulan paket: **F1 + F2** satu tugas kode, **F4** sendiri. Tidak diperbaiki sekarang. |
+| D6 | Teks usang | `docs/INTEGRATE.md` (baris 167 dan 202, sekarang di bagian "What the statuses mean for funding" dan bagian 8) diperbaiki sesuai perilaku sejak PR #62 (`insufficient_token_balance`). |
+| D7 | Kata | Kata yang tidak dipakai mengikuti aturan kata Project. |
+| D8 | Contoh | Contoh berhasil memakai Blind dengan offset 3. Di dokumen untuk pengguna (INTEGRATE.md, README, web) alamat salinan sekali pakai **tidak** dicantumkan; alamatnya hanya di dokumen ini. Tidak ada secret atau seed: hanya nama identity dan placeholder. |
+
+Catatan untuk backlog:
+
+- **F1 sekelas dengan akar `unclassified_error` di PR #62.** Di kedua kasus
+  `--quiet` membuang pesan error, dan CLI tidak memberi teks yang bisa
+  diklasifikasi. Bedanya: invoke diulang tanpa `--quiet` (`diagnose_invoke`),
+  sedangkan deploy tidak pernah diulang, sehingga kasus C tetap tanpa teks.
+- **F4, F5 dan constructor yang berbeda relevan untuk desain D1 (salinan WASM
+  Mainnet di Testnet)**, `feasibility.md` Part B. Salinan yang di-deploy dari
+  WASM Mainnet datang dengan constructor milik pemiliknya, jadi mismatch nama,
+  argumen wajib yang kurang (kasus C), dan vault tanpa `decimals_offset` akan
+  muncul di sana, bukan di fixture kita. Ketahuan lebih awal (F4) dan pesan
+  yang menyebut constructor target (F2) lebih berguna di jalur itu.
+
+Perintah contoh di dokumen pengguna, semuanya dijalankan di Testnet pada
+16 Nov 2026 (Stellar CLI 28.0.0):
+
+- `stellar contract info interface --contract-id <vault> --network testnet --output rust`
+  (blok `fn __constructor`, pada vault Blind dan reference).
+- `stellar contract info hash --contract-id <vault> --network testnet`
+  (vault Blind).
+- `stellar contract deploy --wasm-hash <hash> --source-account dave --network testnet -- --name … --symbol … --asset <token Blind> --decimals_offset 3`
+  tanpa `--quiet`. Hasil: ter-deploy; alamat salinan ketiga ini
+  `CAOZUYQL2ODYSE5KKUM2CYOSR5T4BCU56L5R2VWXXLY4TMNA5AST2QGK`. Dua salinan lain
+  dari bagian 3.2: `CAMLQHRC6NR5YF7OSU4KGZMJP6C2BRDY43ZSTCZ7OICEXTM5O6LSSHYQ`
+  (dengan `--quiet`) dan `CCOXXVMDK5SUZ7K7ZFTSKU7OWJED2QCNV2LQIBEEO3JYDG6GOWVEKRNI`
+  (urutan terbalik).
+- Kasus nama beda (`--underlying`) tanpa `--quiet`: keluar dengan kode 2 dan
+  `error: unexpected argument '--underlying' found`.
+- Kasus argumen wajib kurang: teks `Missing required argument …` terlihat
+  tanpa `--quiet` (kasus C).
+
+Hasil pemeriksaan untuk kasus C dan D tetap **BELUM**.

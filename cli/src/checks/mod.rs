@@ -57,18 +57,22 @@ pub struct CheckResult {
     /// one. `detail` is unchanged and may still quote it; this is the same text
     /// on its own, for a consumer that wants it apart.
     pub raw_error: Option<String>,
+    /// For a FAIL only: set to `interface_missing` when the FAIL came from a
+    /// SEP-56 function the vault does not declare (`Stop::CommandFail`).
+    /// Read by `labels::reason_for`; never changes the status or the detail.
+    pub fail_reason: Option<&'static str>,
 }
 
 impl CheckResult {
     /// A `Pass` result. The check bodies build every result through this and
     /// [`CheckResult::fail`], so adding a field never means touching each one.
     pub fn pass(name: String, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::Pass, reason_code: None, detail, raw_error: None }
+        CheckResult { name, status: CheckStatus::Pass, reason_code: None, detail, raw_error: None, fail_reason: None }
     }
 
     /// A `Fail` result.
     pub fn fail(name: String, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::Fail, reason_code: None, detail, raw_error: None }
+        CheckResult { name, status: CheckStatus::Fail, reason_code: None, detail, raw_error: None, fail_reason: None }
     }
 
     /// The same result with `raw_error` set.
@@ -83,13 +87,13 @@ impl CheckResult {
     /// vault. `reason_code` says why, in a form a program can read.
     #[allow(dead_code)]
     pub fn inconclusive(name: String, reason_code: &'static str, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::Inconclusive, reason_code: Some(reason_code), detail, raw_error: None }
+        CheckResult { name, status: CheckStatus::Inconclusive, reason_code: Some(reason_code), detail, raw_error: None, fail_reason: None }
     }
 
     /// A `NotApplicable` result: the check does not fit this vault's design.
     #[allow(dead_code)]
     pub fn not_applicable(name: String, reason_code: &'static str, detail: String) -> Self {
-        CheckResult { name, status: CheckStatus::NotApplicable, reason_code: Some(reason_code), detail, raw_error: None }
+        CheckResult { name, status: CheckStatus::NotApplicable, reason_code: Some(reason_code), detail, raw_error: None, fail_reason: None }
     }
 }
 
@@ -122,7 +126,11 @@ impl Stop {
     pub(crate) fn finish(self, name: String, wrap: impl FnOnce(&str) -> String) -> CheckResult {
         match self {
             Stop::Fail(message) => CheckResult::fail(name, wrap(&message)),
-            Stop::CommandFail { message, raw } => CheckResult::fail(name, wrap(&message)).with_raw(raw),
+            Stop::CommandFail { message, raw } => {
+                let mut result = CheckResult::fail(name, wrap(&message)).with_raw(raw);
+                result.fail_reason = Some(crate::labels::INTERFACE_MISSING);
+                result
+            }
             Stop::Inconclusive { reason, detail, raw } => {
                 CheckResult::inconclusive(name, reason, detail).with_raw(raw)
             }
@@ -2343,6 +2351,15 @@ For more information, try '--help'."####;
         assert!(r.detail.contains("approve(spender: address, from: address"));
         assert!(r.detail.ends_with("No finding about the vault."));
         assert_eq!(r.raw_error, None);
+    }
+
+    #[test]
+    fn a_command_fail_records_interface_missing_and_a_plain_fail_does_not() {
+        let stop = Stop::CommandFail { message: "m".to_string(), raw: None };
+        let r = result_of(stop, "x");
+        assert_eq!((r.status, r.fail_reason), (CheckStatus::Fail, Some("interface_missing")));
+        assert_eq!(r.reason_code, None, "a FAIL still has no reason_code");
+        assert_eq!(result_of(Stop::Fail("shares differ".to_string()), "x").fail_reason, None);
     }
 
     #[test]

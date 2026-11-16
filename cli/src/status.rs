@@ -16,6 +16,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 
 use crate::checks::{CheckResult, CheckStatus};
+use crate::labels::{self, Reason};
 
 #[derive(Clone, Serialize)]
 pub struct CheckStatusEntry {
@@ -32,6 +33,11 @@ pub struct CheckStatusEntry {
     /// with only pass and fail results is unchanged.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason_code: Option<&'static str>,
+    /// Structured reason for a finished check that is not a PASS (see
+    /// `labels`). Left out otherwise, so pending, running and pass entries keep
+    /// their shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<Reason>,
 }
 
 #[derive(Serialize)]
@@ -82,6 +88,7 @@ impl StatusReporter {
                 status: "pending".to_string(),
                 detail: None,
                 reason_code: None,
+                reason: None,
             })
             .collect();
 
@@ -109,12 +116,14 @@ impl StatusReporter {
         id: &str,
         status: CheckStatus,
         reason_code: Option<&'static str>,
+        reason: Option<Reason>,
         detail: &str,
     ) {
         let mut entries = self.entries.lock().await;
         if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
             entry.status = status.as_status_file_str().to_string();
             entry.reason_code = reason_code;
+            entry.reason = reason;
             entry.detail = Some(detail.to_string());
         }
         self.flush_locked(&entries).await;
@@ -159,7 +168,9 @@ pub async fn run_tracked(
 ) -> CheckResult {
     reporter.mark_running(id).await;
     let result = fut.await;
-    reporter.mark_done(id, result.status, result.reason_code, &result.detail).await;
+    reporter
+        .mark_done(id, result.status, result.reason_code, labels::reason_for(&result), &result.detail)
+        .await;
     result
 }
 
@@ -182,7 +193,41 @@ mod tests {
             status: "pass".to_string(),
             detail: Some("ok".to_string()),
             reason_code,
+            reason: None,
         }
+    }
+
+    #[test]
+    fn entry_with_a_reason_writes_it_after_reason_code() {
+        let mut e = entry(Some("network_error"));
+        e.status = "inconclusive".to_string();
+        e.reason = Some(Reason { code: "network_error", message: "m" });
+        assert_eq!(
+            serde_json::to_string(&e).unwrap(),
+            r#"{"id":"deposit","group":"conformance","status":"inconclusive","detail":"ok","reason_code":"network_error","reason":{"code":"network_error","message":"m"}}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn run_tracked_records_the_reason_of_a_finished_check() {
+        let path = std::env::temp_dir()
+            .join(format!("aegis-status-reason-test-{}.json", std::process::id()));
+        let reporter = StatusReporter::new(Some(path.clone()), "CVAULT").await;
+        run_tracked(&reporter, "donation_attack", async {
+            CheckResult::fail("donation_attack".to_string(), "VULNERABLE".to_string())
+        })
+        .await;
+        run_tracked(&reporter, "deposit", async {
+            CheckResult::pass("deposit".to_string(), "ok".to_string())
+        })
+        .await;
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let find = |id: &str| parsed["checks"].as_array().unwrap().iter().find(|c| c["id"] == id).unwrap().clone();
+        assert_eq!(find("donation_attack")["reason"]["code"], "security_finding");
+        assert!(find("deposit").get("reason").is_none());
+        assert!(find("mint").get("reason").is_none(), "pending entries have no reason");
     }
 
     #[test]
@@ -207,13 +252,13 @@ mod tests {
         let reporter = StatusReporter::new(Some(path.clone()), "CVAULT").await;
 
         reporter.mark_running("total_assets").await;
-        reporter.mark_done("deposit", CheckStatus::Pass, None, "d1").await;
-        reporter.mark_done("mint", CheckStatus::Fail, None, "d2").await;
+        reporter.mark_done("deposit", CheckStatus::Pass, None, None, "d1").await;
+        reporter.mark_done("mint", CheckStatus::Fail, None, Some(Reason { code: "behavior_mismatch", message: "m" }), "d2").await;
         reporter
-            .mark_done("withdraw", CheckStatus::Inconclusive, Some("insufficient_token_balance"), "d3")
+            .mark_done("withdraw", CheckStatus::Inconclusive, Some("insufficient_token_balance"), None, "d3")
             .await;
         reporter
-            .mark_done("redeem", CheckStatus::NotApplicable, Some("constructor_mismatch"), "d4")
+            .mark_done("redeem", CheckStatus::NotApplicable, Some("constructor_mismatch"), None, "d4")
             .await;
 
         let parsed: serde_json::Value =

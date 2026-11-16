@@ -55,6 +55,10 @@ pub struct PreflightError {
     /// argument names or types than the checks call. Left out when empty.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mismatched_functions: Vec<Mismatch>,
+    /// The run mode (`testnet`), as on every check row.
+    pub mode: &'static str,
+    /// The SEP-56 text the checks were written against, as on every check row.
+    pub spec: &'static str,
 }
 
 /// `code` of the preflight error for a contract without the SEP-56 interface.
@@ -69,6 +73,8 @@ impl PreflightError {
             fix,
             missing_functions: Vec::new(),
             mismatched_functions: Vec::new(),
+            mode: crate::labels::MODE,
+            spec: crate::labels::SPEC_REFERENCE,
         }
     }
 
@@ -375,7 +381,7 @@ mod tests {
         let e = PreflightError::new("identities_missing", "p".to_string(), "f".to_string());
         assert_eq!(
             serde_json::to_string(&e).unwrap(),
-            r#"{"error":"preflight_failed","code":"identities_missing","problem":"p","fix":"f"}"#
+            r#"{"error":"preflight_failed","code":"identities_missing","problem":"p","fix":"f","mode":"testnet","spec":"SEP-0056 v0.1.2 (Draft)"}"#
         );
         assert_eq!(e.headline(), "Prerequisite missing");
     }

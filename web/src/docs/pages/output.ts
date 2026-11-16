@@ -51,6 +51,15 @@ export const output: DocsPage = {
             param('status', 'string', '`PASS`, `FAIL`, `INCONCLUSIVE` or `NOT_APPLICABLE`.'),
             param('detail', 'string', 'Human-readable explanation with the measured values.'),
             optional('reason_code', 'string', 'Present only for `INCONCLUSIVE` and `NOT_APPLICABLE`.'),
+            optional('raw_error', 'string', 'The `stellar` error text the tool captured for this result, when there is any. `detail` may still quote it.'),
+            optional(
+              'reason',
+              'object',
+              'On every row that is not `PASS`: `{ "code", "message" }`. `code` is one of the reason codes below; for `INCONCLUSIVE` and `NOT_APPLICABLE` it equals `reason_code`. `message` is one fixed sentence per code, without raw error text or account names.',
+            ),
+            param('mode', 'string', 'On every row. `testnet`: the 7 conformance checks change the target vault\'s state.'),
+            param('spec', 'string', 'On every row. The SEP-56 text the checks were written against: `SEP-0056 v0.1.2 (Draft)`.'),
+            param('runs_on', 'string', 'On every row. `target` for the 7 conformance checks, `temporary_copy` for the 4 security checks.'),
           ],
           'FIELDS',
         ),
@@ -58,14 +67,19 @@ export const output: DocsPage = {
           'json',
           'json',
           `[
-  { "name": "deposit", "category": "Positive Conformance", "status": "PASS", "detail": "…" },
-  { "name": "donation_attack", "category": "Security/Adversarial", "status": "INCONCLUSIVE",
-    "detail": "…", "reason_code": "insufficient_token_balance" }
+  { "name": "deposit", "category": "Positive Conformance", "status": "PASS", "detail": "…",
+    "mode": "testnet", "spec": "SEP-0056 v0.1.2 (Draft)", "runs_on": "target" },
+  { "name": "donation_attack", "category": "Security/Adversarial", "status": "FAIL", "detail": "…",
+    "reason": { "code": "security_finding", "message": "…" },
+    "mode": "testnet", "spec": "SEP-0056 v0.1.2 (Draft)", "runs_on": "temporary_copy" }
 ]`,
           'ABBREVIATED EXAMPLE',
         ),
         verified(
-          "Field names and order are taken from the CLI's unit tests. The `detail` text is shortened here; a real run prints the measured values.",
+          "Field names and order are taken from the CLI's unit tests. The `detail` and `message` texts are shortened here; a real run prints the measured values.",
+        ),
+        text(
+          'When a prerequisite is missing (exit code 2), the output is one object instead: `{ "error", "code", "problem", "fix", "mode", "spec" }`. For `code: "unsupported_interface"` it also lists `missing_functions` and `mismatched_functions`.',
         ),
       ],
     },
@@ -82,7 +96,7 @@ export const output: DocsPage = {
             ['Title', '`# Aegis Vault — Conformance Verification Report`'],
             [
               'Header list',
-              'Vault, network, spec reference, checker version, start and end time, duration, and the result line.',
+              'Vault, network, mode, spec reference, checker version, start and end time, duration, and the result line.',
             ],
             [
               'Summary',
@@ -90,7 +104,7 @@ export const output: DocsPage = {
             ],
             [
               'Tables',
-              'One table per group, `Conformance checks` and `Security checks`, with the columns `#`, `Check`, `Status` and `Detail`. Rows are numbered 01 to 11 in the fixed check order.',
+              'One table per group, `Conformance checks` and `Security checks`, with the columns `#`, `Check`, `Status`, `Mode`, `Spec`, `Runs on` and `Detail`. Every row carries its mode, the SEP-56 draft it was checked against, and whether it ran on the target vault or a temporary copy. Rows are numbered 01 to 11 in the fixed check order.',
             ],
             [
               'Error section',
@@ -99,10 +113,10 @@ export const output: DocsPage = {
           ],
         ),
         text(
-          'Real reports from Testnet runs with CLI 0.5.0 are in `docs/sample-reports/` in the GitHub repository: the Positive Control Vault (11 PASS), the Reference Vault (10 PASS, 1 FAIL) and a prerequisite error.',
+          'Real reports from Testnet runs with CLI 0.5.0 are in `docs/sample-reports/` in the GitHub repository: the Positive Control Vault (11 PASS), the Reference Vault (10 PASS, 1 FAIL) and a prerequisite error. Those were made before the `Mode`, `Spec` and `Runs on` columns existed; a report with them is in `docs/sow2/samples/`.',
         ),
         verified(
-          'The format is covered by 12 unit tests (`markdown::tests` in `cli/src/markdown.rs`), and the sample reports come from three Testnet runs of CLI 0.5.0.',
+          'The format is covered by unit tests (`markdown::tests` in `cli/src/markdown.rs`), and the sample reports come from Testnet runs.',
         ),
         unverified(
           'Not verified: that the Markdown from the CLI is identical in content to the Markdown exported by the web app for the same run. Also not verified: how the report looks once rendered, and the Linux and macOS v0.5.0 archives, which have not been run.',
@@ -113,16 +127,26 @@ export const output: DocsPage = {
       id: 'reason-codes',
       title: 'Reason codes',
       blocks: [
+        text(
+          '`reason.code` takes one of these values. `reason_code` carries the same value, but only on `INCONCLUSIVE` and `NOT_APPLICABLE` rows.',
+        ),
         table(
           ['Code', 'Status', 'Meaning'],
           [
+            ['`behavior_mismatch`', 'FAIL', 'A conformance check: the function exists, but its result did not satisfy the assertion. `reason` only.'],
+            ['`security_finding`', 'FAIL', 'A security check: the scenario on the temporary copy was not handled as expected. `reason` only.'],
+            [
+              '`interface_missing`',
+              'FAIL',
+              'The vault does not declare a SEP-56 function the check calls. Normally caught before the run as `unsupported_interface` (exit code 2). `reason` only.',
+            ],
             [
               '`insufficient_token_balance`',
               'INCONCLUSIVE',
               'A token transfer a check needed was rejected, most likely a short balance on a test account.',
             ],
             ['`network_error`', 'INCONCLUSIVE', 'A network problem stopped the check.'],
-            ['`unclassified_error`', 'INCONCLUSIVE', 'An error the tool could not classify. The raw error is in `detail`.'],
+            ['`unclassified_error`', 'INCONCLUSIVE', 'An error the tool could not classify. The raw error is in `raw_error` and in `detail`.'],
             [
               '`constructor_mismatch`',
               'NOT_APPLICABLE',
@@ -132,6 +156,11 @@ export const output: DocsPage = {
               '`not_a_standard_vault`',
               'NOT_APPLICABLE',
               'The vault has no `query_asset`, or its underlying asset has no `decimals()`.',
+            ],
+            [
+              '`token_interface_mismatch`',
+              'NOT_APPLICABLE',
+              '`access_control_probing` only: `approve` or `allowance` is not declared as `(address, address, i128, u32)` and `(address, address) -> i128` with `spender` second, or the contract spec could not be read.',
             ],
           ],
         ),
@@ -146,7 +175,7 @@ export const output: DocsPage = {
           [
             ['`0`', 'No check failed and none was inconclusive. Not-applicable checks do not count either way.'],
             ['`1`', 'At least one check failed. A failure always wins over an inconclusive result.'],
-            ['`2`', 'A prerequisite is missing. No check ran. See Preflight errors.'],
+            ['`2`', 'A prerequisite is missing, or the vault does not have the SEP-56 interface the checks call (`unsupported_interface`). No check ran. See Preflight errors.'],
             ['`3`', 'No check failed, but at least one was inconclusive. The vault was not fully checked.'],
           ],
         ),
@@ -185,6 +214,7 @@ export const output: DocsPage = {
           ),
           param('checks[].detail', 'string | null', 'Set when the check finishes.'),
           optional('checks[].reason_code', 'string', 'Present only when there is one.'),
+          optional('checks[].reason', 'object', 'Set when a check finishes with a status other than `pass`: `{ "code", "message" }`, as in the JSON output.'),
         ]),
         verified('Field names are taken from `cli/src/status.rs`. The values in the example are placeholders, not output of a real run.'),
       ],

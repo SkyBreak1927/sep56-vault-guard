@@ -4,6 +4,99 @@ Tester requests and what was done about them. Each claim is marked
 **TERBUKTI** (run or read in this repository) or **BELUM**. Request numbers
 come from the validation tracker of the SOW 1 Final Report.
 
+## 2026-11-16 — Structured reason, mode, SEP-56 label and `runs_on` on every row (Deliverable 2)
+
+Branch `sow2/report-schema`. Design: `docs/sow2/design-report-schema.md`.
+Decisions:
+
+- A1: a `reason {code, message}` object; `reason_code` and `detail`
+  unchanged.
+- M1: one fixed sentence per code.
+- FAIL codes `behavior_mismatch` / `security_finding` / `interface_missing`.
+- B1: `mode` and `spec` per row.
+- MD1: `Mode` and `Spec` columns per Markdown row, plus a header line.
+- V1: no schema version.
+- The status file carries `reason`.
+- The web docs text (`web/src/docs/pages/output.ts`) is updated.
+- The token-balance classification is left to the custom-token task.
+- `runs_on` per row.
+
+| Tester request | What was done | Status |
+|---|---|---|
+| **StellarBin #3**: a structured reason field (for example interface missing vs behavior mismatch), with the raw error text, which includes the CLI usage line and test account names, kept in a separate field | Every non-PASS row in `--output json` and in the status file now has `reason: {code, message}`. **FAIL codes:** `behavior_mismatch` (a conformance check: the function exists but its result broke the assertion), `security_finding` (a security check), and `interface_missing` (a SEP-56 function the vault does not declare; normally caught before the run as `unsupported_interface`, see #57). **INCONCLUSIVE and NOT_APPLICABLE rows:** `reason.code` equals the existing `reason_code`. `message` is one fixed sentence per code and holds no raw `stellar` text or account names. The raw text is in `raw_error` (added in #57) and still in `detail`. FAIL rows still have no `reason_code`, as documented. | TERBUKTI |
+| **Lumbung #4**: label each result row with the SEP-56 draft version | Every JSON row has `mode: "testnet"` and `spec: "SEP-0056 v0.1.2 (Draft)"`, and so does the preflight object. Every Markdown table row has `Mode` and `Spec` columns, and the header has a `Mode:` line. | TERBUKTI |
+| **Lumbung #2**: state clearly that the security checks run on a temporary copy | Every JSON row has `runs_on`: `target` (checks 1–7) or `temporary_copy` (checks 8–11). Every Markdown row has a `Runs on` column (`target vault` / `temporary copy`), and the header's `Mode:` line says the same. | TERBUKTI |
+
+Unit tests: 104 in total, all passing. New tests cover:
+
+- each `reason.code` from its source: conformance FAIL, security FAIL,
+  `CommandFail`, and each INCONCLUSIVE / NOT_APPLICABLE code;
+- a PASS row has no `reason`;
+- every code has its own message, without raw text;
+- `runs_on` per check;
+- `mode` / `spec` on JSON rows and on the preflight object;
+- the status file `reason`, written through `run_tracked`;
+- the Markdown header line and columns.
+
+Web docs: `web/src/docs/pages/output.ts` (text only) documents the new fields
+and codes. `npm run lint` shows no errors, `npm test` passes 96 tests, and
+`npm run build` succeeds. Looking at the rendered page in a browser was not
+done (**BELUM**): the `web` entry in `.claude/launch.json` points to
+`web/serve.ps1`, which does not exist.
+
+Sample reports with every new field: `docs/sow2/samples/reference-vault-report-schema.json`
+and `.md`.
+
+### Regression: 9 Testnet fixtures, `dev-sow2` build vs this change
+
+The two builds were run one after the other with `--output json` on Testnet
+on 2026-11-16:
+
+- "Before" is the `dev-sow2` build (`2dc02d3`).
+- "After" is this branch.
+
+Checked per row:
+
+1. `name`, `status` and `reason_code` are identical, and so is the exit code.
+2. No key was removed, and the only added keys are `reason`, `mode`, `spec`
+   and `runs_on`.
+3. Every row has `mode`, `spec` and `runs_on`.
+4. `reason` is present exactly on the non-PASS rows.
+5. `reason.code` = `reason_code` wherever `reason_code` exists.
+6. `detail` reads the same once numbers and addresses are masked, so its
+   wording did not change.
+
+**TERBUKTI**
+
+| Fixture | `dev-sow2` | This change | Same? | `reason` codes seen |
+|---|---|---|---|---|
+| Reference `CAMDXP2Q…YTNF` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes | FAIL `security_finding` |
+| Demo `CAPH3KBZ…JBNQ` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes | FAIL `security_finding` |
+| Vault A `CAWUBSRH…4VTA` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes | FAIL `security_finding` |
+| Vault B `CAZBXMYP…P6HV` | 9 PASS, 2 FAIL, exit 1 | same, exit 1 | Yes | FAIL `security_finding` (×2) |
+| Hardened `CCVC5VLA…JUVG` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes | FAIL `security_finding` |
+| Blind `CCW5GTIF…HGV7` | 10 PASS, 1 FAIL, exit 1 | same, exit 1 | Yes | FAIL `security_finding` |
+| Positive Control `CAHMH3VS…G376` | 11 PASS, exit 0 | same, exit 0 | Yes | none |
+| Reverting Max `CBMB3D7H…H5O4` | 6 PASS, 1 FAIL, 4 INCONCLUSIVE, exit 1 | same, exit 1 | Yes | FAIL `security_finding`; INCONCLUSIVE `unclassified_error` (×4) |
+| SEP-41 Names `CDTVHZ2E…UEIM` | 11 PASS, exit 0 | same, exit 0 | Yes | none |
+
+No fixture produces `behavior_mismatch` or `interface_missing` today. Those
+two codes are covered by unit tests only.
+
+**Blind-token balances.** Before this regression, `alice` minted:
+
+- `bob`: +10,000,000 (tx `f360cd53…d6e4`);
+- `erin`: +20,000,000 (tx `48903de1…b086`);
+- `grace`: +100,000,000 (tx `ac2bdbb4…83ed`).
+
+| Balance | Before the top-up | After the top-up | After both Blind runs |
+|---|---|---|---|
+| `bob` | 0 | 10,000,000 | 0 |
+| `erin` | 0 | 20,000,000 | 0 |
+| `grace` | 110,166,739 | 210,166,739 | 110,214,379 |
+
+`bob` and `erin` are at 0 again.
+
 ## 2026-11-16 — `approve` / `allowance` called by the target's own parameter names (Deliverable 2)
 
 Branch `sow2/approve-allowance`. Design: `docs/sow2/design-approve-allowance.md`.

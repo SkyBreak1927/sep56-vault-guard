@@ -10,11 +10,21 @@
 
 use crate::category_for;
 use crate::checks::{CheckResult, CheckStatus};
+use crate::labels::{self, MODE, SPEC_REFERENCE};
 use crate::preflight::{PreflightError, UNSUPPORTED_INTERFACE};
 
-/// The SEP-56 text the checks were written against; keep in step with
-/// VAULT_CHECKS.md and `SPEC_REFERENCE` in `web/src/lib/report.ts`.
-const SPEC_REFERENCE: &str = "SEP-0056 v0.1.2 (Draft)";
+/// The header line explaining the mode. Testnet is the only mode today.
+const MODE_LINE: &str = "- Mode: testnet (the 7 conformance checks change the target vault's \
+    state; the 4 security checks run on a temporary copy)";
+
+/// `runs_on` as the report's readers see it.
+fn runs_on_text(check_name: &str) -> &'static str {
+    if labels::runs_on(check_name) == labels::RUNS_ON_TEMPORARY_COPY {
+        "temporary copy"
+    } else {
+        "target vault"
+    }
+}
 
 const TITLE: &str = "# Aegis Vault — Conformance Verification Report";
 
@@ -156,15 +166,17 @@ pub fn run_report(info: &RunInfo<'_>, results: &[CheckResult]) -> String {
     for (title, members) in [("Conformance checks", &conformance), ("Security checks", &security)] {
         lines.push(format!("## {title}"));
         lines.push(String::new());
-        lines.push("| # | Check | Status | Detail |".to_string());
-        lines.push("|---|---|---|---|".to_string());
+        lines.push("| # | Check | Status | Mode | Spec | Runs on | Detail |".to_string());
+        lines.push("|---|---|---|---|---|---|---|".to_string());
         for result in members {
             // Numbered in the fixed check order, as in the web report.
             let number = results.iter().position(|r| std::ptr::eq(r, *result)).map_or(0, |i| i + 1);
             lines.push(format!(
-                "| {number:02} | {} | {} | {} |",
+                "| {number:02} | {} | {} | {MODE} | {} | {} | {} |",
                 code_span(&result.name),
                 result.status.as_report_str(),
+                escape(SPEC_REFERENCE),
+                runs_on_text(&result.name),
                 escape(&result.detail)
             ));
         }
@@ -231,6 +243,7 @@ fn header(vault: &str, cli_version: &str) -> Vec<String> {
         String::new(),
         format!("- Vault: {}", code_span(vault)),
         "- Network: testnet".to_string(),
+        MODE_LINE.to_string(),
         format!("- Spec: {SPEC_REFERENCE}"),
         format!("- Checker: sep56-vault-guard {}", escape(cli_version)),
     ]
@@ -243,7 +256,7 @@ mod tests {
     const VAULT: &str = "CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF";
 
     fn result(name: &str, status: CheckStatus, detail: &str) -> CheckResult {
-        CheckResult { name: name.to_string(), status, reason_code: None, detail: detail.to_string(), raw_error: None }
+        CheckResult { name: name.to_string(), status, reason_code: None, detail: detail.to_string(), raw_error: None, fail_reason: None }
     }
 
     /// The 11 checks in their fixed order, all with the same status.
@@ -299,6 +312,7 @@ mod tests {
         for line in [
             "- Vault: `CAMDXP2QABDOUMU6F6WPQ5HVKVXCD4MOWPLBZF4KHIBXAD7NT3AGYTNF`",
             "- Network: testnet",
+            "- Mode: testnet (the 7 conformance checks change the target vault's state; the 4 security checks run on a temporary copy)",
             "- Spec: SEP-0056 v0.1.2 (Draft)",
             "- Checker: sep56-vault-guard 0.4.0",
             "- Started: 2025-10-09T08:53:20.000Z",
@@ -320,10 +334,12 @@ mod tests {
         let conformance = report.find("## Conformance checks").unwrap();
         let security = report.find("## Security checks").unwrap();
         assert!(conformance < security);
-        assert!(report.contains("| # | Check | Status | Detail |\n|---|---|---|---|\n| 01 | `total_assets` | PASS | d |"));
-        assert!(report.contains("| 07 | `convert_to_assets` | PASS | d |"));
-        assert!(report.contains("| 08 | `donation_attack` | PASS | d |"));
-        assert!(report.contains("| 11 | `access_control_probing` | PASS | d |"));
+        assert!(report.contains(
+            "| # | Check | Status | Mode | Spec | Runs on | Detail |\n|---|---|---|---|---|---|---|\n| 01 | `total_assets` | PASS | testnet | SEP-0056 v0.1.2 (Draft) | target vault | d |"
+        ));
+        assert!(report.contains("| 07 | `convert_to_assets` | PASS | testnet | SEP-0056 v0.1.2 (Draft) | target vault | d |"));
+        assert!(report.contains("| 08 | `donation_attack` | PASS | testnet | SEP-0056 v0.1.2 (Draft) | temporary copy | d |"));
+        assert!(report.contains("| 11 | `access_control_probing` | PASS | testnet | SEP-0056 v0.1.2 (Draft) | temporary copy | d |"));
         assert_eq!(report.matches("\n| 0").count() + report.matches("\n| 1").count(), 11);
         // The security rows come after the security heading only.
         assert!(report[..security].contains("| 07 |"));
@@ -337,7 +353,7 @@ mod tests {
         let report = run_report(&info(), &results);
         assert!(report.contains("- Result: Remediation needed"));
         assert!(report.contains("- Basic security checks: 3 of 4 passed"));
-        assert!(report.contains("| 08 | `donation_attack` | FAIL | VULNERABLE |"));
+        assert!(report.contains("| 08 | `donation_attack` | FAIL | testnet | SEP-0056 v0.1.2 (Draft) | temporary copy | VULNERABLE |"));
     }
 
     #[test]
@@ -353,8 +369,8 @@ mod tests {
         assert!(report.contains("- Basic security checks: not applicable"));
         assert!(report.contains("- Inconclusive: 1"));
         assert!(report.contains("- Not applicable: 4"));
-        assert!(report.contains("| 02 | `deposit` | INCONCLUSIVE | no balance |"));
-        assert!(report.contains("| 11 | `access_control_probing` | NOT_APPLICABLE | d |"));
+        assert!(report.contains("| 02 | `deposit` | INCONCLUSIVE | testnet | SEP-0056 v0.1.2 (Draft) | target vault | no balance |"));
+        assert!(report.contains("| 11 | `access_control_probing` | NOT_APPLICABLE | testnet | SEP-0056 v0.1.2 (Draft) | temporary copy | d |"));
     }
 
     #[test]
@@ -377,10 +393,10 @@ mod tests {
         let mut results = all_with(CheckStatus::Pass);
         results[0] = result("total_assets", CheckStatus::Pass, "a | b *c* _d_\nnext `e` <f> [g]");
         let report = run_report(&info(), &results);
-        assert!(report.contains("| 01 | `total_assets` | PASS | a \\| b \\*c\\* \\_d\\_ next \\`e\\` \\<f\\> \\[g\\] |"));
+        assert!(report.contains("| 01 | `total_assets` | PASS | testnet | SEP-0056 v0.1.2 (Draft) | target vault | a \\| b \\*c\\* \\_d\\_ next \\`e\\` \\<f\\> \\[g\\] |"));
         // Every table row still has exactly four cells (five unescaped bars).
         for row in report.lines().filter(|l| l.starts_with("| 0") || l.starts_with("| 1")) {
-            assert_eq!(row.replace("\\|", "").matches('|').count(), 5, "{row}");
+            assert_eq!(row.replace("\\|", "").matches('|').count(), 8, "{row}");
         }
     }
 
@@ -393,6 +409,8 @@ mod tests {
             fix: "Check the address.\nThen run again.".to_string(),
             missing_functions: Vec::new(),
             mismatched_functions: Vec::new(),
+            mode: "testnet",
+            spec: "SEP-0056 v0.1.2 (Draft)",
         };
         let report = preflight_report(VAULT, "0.4.0", &failure);
         assert!(report.starts_with("# Aegis Vault — Conformance Verification Report\n\n"));
@@ -428,6 +446,8 @@ mod tests {
                 expected: "deposit(assets: i128) -> i128".to_string(),
                 found: "deposit(amount: i128) -> i128".to_string(),
             }],
+            mode: "testnet",
+            spec: "SEP-0056 v0.1.2 (Draft)",
         };
         let report = preflight_report(VAULT, "0.5.0", &failure);
         for line in [

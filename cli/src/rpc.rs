@@ -676,7 +676,9 @@ Event log (newest first):
 
     #[test]
     fn a_bare_contract_error_number_is_not_enough() {
-        // #100 and "simulation failed" without a failed transfer around it.
+        // #100 and "simulation failed" without a failed transfer around it. The text
+        // alone stays Unclassified on purpose; `checks::confirm_short_balance` settles
+        // it with a read of the account's balance (see docs/sow2/design-custom-token.md).
         let text = "error: transaction simulation failed: HostError: Error(Contract, #100)";
         assert_eq!(classify_error_text(CommandKind::Invoke, text), ErrorClass::Unclassified);
         // A failed transfer whose error number is not one the rules know.

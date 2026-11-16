@@ -1,5 +1,6 @@
 mod rpc;
 mod checks;
+mod interface;
 mod markdown;
 mod preflight;
 mod status;
@@ -78,6 +79,11 @@ struct JsonCheckResult<'a> {
     /// exactly as before this field existed.
     #[serde(skip_serializing_if = "Option::is_none")]
     reason_code: Option<&'static str>,
+    /// The `stellar` error text the tool captured for this result, when there
+    /// is any. `detail` is unchanged and may still quote it. Only written when
+    /// there is a value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_error: Option<&'a str>,
 }
 
 /// How many results ended in each status.
@@ -143,6 +149,7 @@ fn json_results(results: &[CheckResult]) -> Vec<JsonCheckResult<'_>> {
             status: r.status.as_report_str(),
             detail: &r.detail,
             reason_code: r.reason_code,
+            raw_error: r.raw_error.as_deref(),
         })
         .collect()
 }
@@ -198,7 +205,7 @@ async fn main() {
         Err(failure) => {
             match cli.output {
                 OutputFormat::Text => {
-                    eprintln!("Prerequisite missing: {}", failure.problem);
+                    eprintln!("{}: {}", failure.headline(), failure.problem);
                     eprintln!();
                     eprintln!("{}", failure.fix);
                     eprintln!();
@@ -369,7 +376,19 @@ mod tests {
             status,
             reason_code,
             detail: format!("detail for {name}"),
+            raw_error: None,
         }
+    }
+
+    #[test]
+    fn json_writes_raw_error_after_reason_code_only_when_there_is_one() {
+        let mut r = result("deposit", CheckStatus::Inconclusive, Some("unclassified_error"));
+        r.raw_error = Some("error: something".to_string());
+        let json = serde_json::to_string(&json_results(&[r])).unwrap();
+        assert_eq!(
+            json,
+            r#"[{"name":"deposit","category":"Positive Conformance","status":"INCONCLUSIVE","detail":"detail for deposit","reason_code":"unclassified_error","raw_error":"error: something"}]"#
+        );
     }
 
     #[test]

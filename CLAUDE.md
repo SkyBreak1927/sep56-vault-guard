@@ -10,11 +10,15 @@ Rust (repo root, Cargo workspace):
 
 ```bash
 cargo build --release -p sep56-vault-guard   # always pass -p; plain `cargo build` also builds the 5 contracts in contracts/
-cargo test -p sep56-vault-guard              # only unit tests are in cli/src/preflight.rs
+cargo test -p sep56-vault-guard              # unit tests only (no testnet)
 ./target/release/sep56-vault-guard --vault <CONTRACT_ID> --output text|json [--status-file <path>]
 ```
 
-Running the CLI needs Stellar CLI ≥ v28 on PATH (spawned directly, not via a shell) and seven funded testnet identities: `alice bob carol dave erin frank grace` (`stellar keys generate <name> --network testnet --fund`). A run takes ~1 min of real testnet round trips. Exit codes: `0` all pass, `1` ran with ≥1 failure, `2` preflight failed (no check ran; JSON output is then a single `{error, code, problem, fix}` object instead of an array).
+Running the CLI needs Stellar CLI ≥ v28 on PATH (spawned directly, not via a shell) and seven funded testnet identities: `alice bob carol dave erin frank grace` (`stellar keys generate <name> --network testnet --fund`). A run takes ~1 min of real testnet round trips. Exit codes (`exit_code` in `cli/src/main.rs`):
+- `0`: no check failed and none was inconclusive. NOT_APPLICABLE counts neither way.
+- `1`: at least one FAIL. A FAIL always wins.
+- `2`: preflight failed and no check ran. The JSON output is then a single `{error: "preflight_failed", code, problem, fix}` object instead of an array. This includes `code: "unsupported_interface"`: the target does not declare the SEP-56 functions the conformance checks call. That object adds `missing_functions` and `mismatched_functions`, and nothing is invoked on the target.
+- `3`: no FAIL, but at least one INCONCLUSIVE.
 
 Web (`cd web`):
 
@@ -35,7 +39,8 @@ Server (`cd server`): `npm start`. For local dev with the web UI: `PORT=4000 ALL
 - `main.rs` — clap args, runs preflight, then two concurrent groups via `tokio::join!`: the 7 conformance checks run **sequentially** on the target vault as `alice`; the 4 security checks run **concurrently** with each other and with the conformance sequence. Each concurrent check has its own named identity(ies) because concurrent `stellar` transactions from the same account race on sequence numbers. Adding a check means assigning it a dedicated account (and adding it to `docker-entrypoint.sh` and the README list).
 - `checks/mod.rs` — all 11 checks. Conformance checks call `deposit`/`mint`/`withdraw`/`redeem` on the real target vault and **mutate its state**. Security checks resolve the target's wasm hash/asset/`decimals_offset` (`resolve_target_vault`), deploy a throwaway clone, and attack the clone; they require the vault constructor `(name, symbol, asset, decimals_offset)` and a `query_asset` fn.
 - `rpc.rs` — every chain interaction shells out to `stellar contract invoke/deploy`. Network is hardcoded to testnet; there is intentionally no mainnet flag.
-- `preflight.rs` — stellar version, identities, target-is-a-contract, balances → exit 2 on failure.
+- `preflight.rs` — stellar version, identities, target-is-a-contract, the interface probe, balances → exit 2 on failure.
+- `interface.rs` — the interface probe. It reads the target's spec with `stellar contract info interface --output json`, a ledger read with no invoke. It then compares the 16 SEP-56 functions the conformance checks call by name, argument names and types, and return type. Missing or different → preflight `unsupported_interface`. An unreadable spec → a warning, and the run goes ahead as before. `query_asset`, `decimals` and the constructor, which only the security checks need, are not probed. Those checks still give NOT_APPLICABLE without them. Fixture specs live in `cli/testdata/interface/`.
 - `status.rs` — optional `--status-file` JSON snapshot rewritten as each check starts/finishes (`run_tracked`); purely reporting, never affects results.
 - `[profile.release] overflow-checks = true` is set at workspace level deliberately.
 
@@ -65,11 +70,25 @@ There are no automated end-to-end tests. Checker changes are verified by running
 
 Any deviation from this table after a checker change is a regression (or an intended change that must also be recorded in `VAULT_CHECKS.md` and, for findings, `SECURITY.md`). These addresses are also the showcase vaults in `web/src/config/checks.ts`.
 
-Preflight (exit 2) scenarios to cover when touching `preflight.rs`: `stellar` missing or older than v28, a missing identity, and a `--vault` that is not a contract on testnet (`code: "vault_not_a_contract"` under `--output json`).
+Preflight (exit 2) scenarios to cover when touching `preflight.rs` or `interface.rs`:
+- `stellar` missing or older than v28.
+- A missing identity.
+- A `--vault` that is not a contract on testnet (`code: "vault_not_a_contract"` under `--output json`).
+- A contract without the SEP-56 interface (`code: "unsupported_interface"`). Two non-SEP-56 contracts from other teams are used for this, and running against them is safe because the run stops at the read-only probe:
+  - Celengan: `CCM6TNVNYYFUYXDON5HAGWMBL6IWMWIOZJFUNEWDUAJAGSJE326RWD2O`, all 16 functions missing.
+  - StellarBin: `CCDVBRMT3BI65JV2C7AQJOSIGT76MNNTXSVYDKGXKPBSOKVWQRGKU7VI`, 13 missing; `deposit` and `withdraw` declared differently.
+
+  Sample outputs are in `docs/sow2/samples/`.
 
 Backend/web flow: run the server locally (see Commands) with the CLI binary on PATH, `POST /api/check` with `{"vault": "<address>"}`, then poll `GET /api/check/:jobId` and confirm `checks` progresses from `pending` → `running` → `pass`/`fail` and ends `complete` with `result`. Also exercise the queue (a second request while one runs returns `queued`/`position`) and `GET /health`.
 
-Unit tests: `web/src/lib/test/` covers `useCheckRun` (polling, queue position, supersede/unmount, legacy `result` fallback), `findings` (donation-attack detail parsing), and `report` (JSON/Markdown export). Rust unit tests only cover `parse_major` in `preflight.rs`; check logic is not unit-tested and depends on testnet.
+Unit tests: `web/src/lib/test/` covers `useCheckRun` (polling, queue position, supersede/unmount, legacy `result` fallback), `findings` (donation-attack detail parsing), and `report` (JSON/Markdown export). Rust unit tests (`cargo test -p sep56-vault-guard`) cover:
+- preflight messages;
+- the interface probe, on saved specs;
+- error classification and status mapping;
+- JSON, Markdown and status-file shapes.
+
+The checks' on-chain logic itself depends on testnet and has no unit tests.
 
 ## CI
 

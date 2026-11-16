@@ -4,6 +4,20 @@ Tester requests and what was done about them. Each claim is marked
 **TERBUKTI** (run or read in this repository) or **BELUM**. Request numbers
 come from the validation tracker of the SOW 1 Final Report.
 
+## 2026-11-16 — Constructor requirements of the security checks documented (Deliverable 2)
+
+Branch `sow2/constructor-docs`. Design: `docs/sow2/design-constructor-params.md`.
+Documentation only: no Rust code changed. Decisions: the main text in
+`docs/INTEGRATE.md`, one-sentence pointers from the README and two web docs
+pages (text only), findings F1–F5 kept as a backlog, stale balance text fixed.
+
+| Tester request | What was done | Status |
+|---|---|---|
+| **Feng Vault**: document the constructor parameter names the security checks need | New subsection "Constructor requirements for the security checks" in `docs/INTEGRATE.md`: the four named arguments (`name`, `symbol`, `asset`, `decimals_offset`), their types, where each value comes from, that none can be set from the command line, how to read a vault's own constructor, a deploy-by-hand example with a custom token and offset 3, and what each kind of mismatch looks like. One-sentence pointers in `README.md`, `web/src/docs/pages/security.ts` and `limitations.ts`. | Commands: TERBUKTI (run on Testnet). Checker result for a constructor that requires an extra argument: BELUM |
+| Stale text found while writing it | `docs/INTEGRATE.md` still said the reason code of a short `grace` balance is not accurate. Replaced with the behavior since #62 (`insufficient_token_balance`, balance read). | TERBUKTI (read against #62) |
+
+Findings F1–F5 are in the design document as a backlog and were not fixed.
+
 ## 2026-11-16 — Short token balance classified as `insufficient_token_balance` (Deliverable 2)
 
 Branch `sow2/custom-token-classification`. Design: `docs/sow2/design-custom-token.md`.

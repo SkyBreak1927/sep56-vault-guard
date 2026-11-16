@@ -1,4 +1,4 @@
-import { field, text, verified } from '../blocks'
+import { field, text, unverified, verified } from '../blocks'
 import type { DocsPage } from '../types'
 
 export const security: DocsPage = {
@@ -16,6 +16,12 @@ export const security: DocsPage = {
         ),
         text(
           'The vault must accept a constructor of `(name, symbol, asset, decimals_offset)` and expose `query_asset`. Otherwise the four checks end as `NOT_APPLICABLE` (`constructor_mismatch` or `not_a_standard_vault`). The 7 conformance checks still run.',
+        ),
+        text(
+          "The argument types, where each value comes from, and what a mismatch looks like are in the repository's `docs/INTEGRATE.md`, section 'Constructor requirements for the security checks'.",
+        ),
+        unverified(
+          'A constructor that requires an argument the checks do not send is expected to end as `INCONCLUSIVE` with `unclassified_error`, not as `NOT_APPLICABLE`. This is read from the code and has not been seen on a real vault.',
         ),
       ],
     },

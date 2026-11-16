@@ -13,10 +13,13 @@ Status: **design only, no code changed.** Date: 2026-11-16. Branch
 Authorised exception: **read calls only**, through a public RPC
 (`https://mainnet.sorobanrpc.com`, the same endpoint as `feasibility.md` Part B).
 Nothing was sent, deployed or signed on Mainnet. No secret key was used or
-asked for. The only address used as a transaction source is a **public key**
-(`GCPIX7OU…2554`, the public address of the Testnet identity `alice`; it has no
-secret in any command and does not exist on Mainnet). Every command and its
-result is in section 7.1.
+asked for. The only address used as a transaction source is a **public key**,
+`GCPIX7OU…2554`. **It is the public address of the local Testnet identity
+`alice`** (compared on 2026-11-16 against the public address of every local
+identity; only `alice` is equal; no secret key was printed or passed). It does
+not exist on Mainnet. Because it belongs to a local identity, it should not
+have been used as a Mainnet source, and it is not used again (section 7.1,
+note 2). Every command and its result is in section 7.1.
 
 ## 1. Network configuration
 
@@ -72,7 +75,7 @@ the read-only gate (section 2).
 - The report says the network in the existing places: `Network:` line and the
   `mode` field (section 3).
 
-## 2. The read-only guarantee
+## 2. How read-only is enforced
 
 Rule: **in Mainnet mode no command that can send a transaction can leave the
 process.** The tool enforces it in code, in layers, and tests prove each layer.
@@ -107,13 +110,19 @@ process.** The tool enforces it in code, in layers, and tests prove each layer.
    found`, instead of only simulating). With the same variable and
    an explicit `--send=no` it simulated and printed the result. So the
    environment is honoured when the flag is absent, and an explicit flag wins.
-   **TERBUKTI** (run, G1 and G2 in section 7.1).
+   **TERBUKTI** (run, G1 and G2 in section 7.1). Note the honest limit of G1:
+   it entered the send path and stopped **only because the account does not
+   exist on Mainnet**. It does not show that a missing signature would have
+   stopped it. That is why the proof of the gate is the recording runner in
+   2.2, not more Mainnet experiments.
 4. **Only public keys, never a signer, on Mainnet.** No Mainnet call carries an
    identity name, and the tool refuses a `--holder` /
    `--depositor` value that is not a `G…` address. The CLI's own help says that
    with a public key as the source "trying to sign with public key will fail".
-   **TERBUKTI** (help text; the failure itself was seen in G1: the run stopped
-   at the account lookup).
+   **TERBUKTI** (help text only). **BELUM** as a run: G1 was stopped by the
+   missing account, not by the missing key, and the address used there is that
+   of a local identity (section 0). So this layer is **not** relied on alone;
+   layers 1, 2 and 5 do not depend on it.
 5. **Optional cross-check against local identities** (decision D6): refuse a
    supplied address that equals the public address of any identity in the local
    key store, so a real key can never be the source. **BELUM** whether the CLI
@@ -144,7 +153,14 @@ Unit tests (new, in `net.rs`), table-driven:
   and **every recorded argument list must pass `mainnet_policy`**. A new check
   that builds a forbidden command fails this test.
 - in Testnet mode the policy is not applied and the existing argument tests
-  pass unchanged.
+  pass unchanged;
+- **a source scan that fails when a new `Command::new` appears outside
+  `run_stellar`.** The test reads every `.rs` file under `cli/src` (in a test,
+  at build time of the test, no network) and asserts that `Command::new` occurs
+  exactly once, in `rpc.rs`, inside `run_stellar`. A second spawn site, for
+  example a new helper that runs `stellar` or `curl` by itself, fails the test
+  and so cannot bypass the gate unnoticed. Today the count is one
+  (**TERBUKTI**, grep).
 
 ### 2.3 Proof, by a real read-only run
 
@@ -204,11 +220,13 @@ error.
     and no key is used. The conformance checks that call write functions
     (deposit, mint, withdraw, redeem) are simulated on the Mainnet vault; a
     simulation does not check signatures. The 4 security checks run on a
-    temporary copy of the vault's Wasm deployed on Testnet.`
+    copy of the vault's code deployed on Testnet, not on the Mainnet
+    instance.`
   - `Scope:` for Mainnet: `checks 7 core SEP-56 functions and four basic
     security risks. On Mainnet, deposit, mint, withdraw and redeem are
-    simulated, not executed. The security checks ran on a Testnet copy of the
-    same code, not on the Mainnet instance. Events are not checked. A result
+    simulated, not executed. The 4 security checks ran on a copy of the vault's
+    code deployed on Testnet, not on the Mainnet instance. Events are not
+    checked. A result
     describes the scenarios that were run; it is not a statement that the vault
     is safe or correct.`
   - `Network:` line: `mainnet` (read only).
@@ -247,6 +265,9 @@ Notes:
   "executed".
 - Checks 1, 6 and 7 are plain reads on the target, as on Testnet, so their
   `runs_on` stays `target`.
+- A vault whose underlying asset does not have 7 decimals gets
+  `copy_not_reproducible` on checks 8 to 11 (decision D9), and the coverage
+  matrix lists that row as such.
 - The balance probe of #62 (`confirm_short_balance`) also works in simulation
   mode: it only reads `balance`. **BELUM** on Mainnet.
 
@@ -300,14 +321,16 @@ Wasm taken from Mainnet comes with the constructor its owner wrote.
    - If it needs another argument the tool does not send: today a silent
      failure (F1). In Mainnet mode the spec read lets the tool see this **before**
      deploying, and report INCONCLUSIVE `copy_not_reproducible` with the
-     argument list found. This depends on the F1/F2/F4 work (decision D8).
+     argument list found. This depends on the F1/F2/F4 work, which is its own
+     pull requests **before** the Wasm-copy pull request (decision D8, approved).
 4. **Underlying asset on Testnet.** The Mainnet asset does not exist on Testnet.
    The copy needs a stand-in with the **same decimals**, because
    `decimals_offset = vault.decimals() − asset.decimals()` is read on Mainnet and
    passed on. Proposal: use the **Testnet native asset contract** when the
    Mainnet asset has 7 decimals; every test identity already holds XLM there, so
-   no token funding is needed. Another decimal count: `copy_not_reproducible`
-   (**BELUM** whether a stand-in token for other decimals is worth building).
+   no token funding is needed. Another decimal count: INCONCLUSIVE `copy_not_reproducible`, and the row
+   goes into the coverage matrix (decision D9, approved). No stand-in token for
+   other decimals is built.
 5. **What the copy is, and is not.** It is a fresh instance of the same code with
    our own asset. It has none of the Mainnet vault's storage (roles, fees,
    positions, any state the constructor does not set). So a result describes the
@@ -343,6 +366,23 @@ Network ; September 2015`; public address
 | G2 | same environment, with `--send=no` | `7`, exit 0: the explicit flag wins |
 | G3 | `… --send=no -- transfer --from <G> --to <G> --amount 1` (a write function) | simulation error `Error(Contract, #6)`, exit 1; nothing sent |
 | F, H | Horizon (Mainnet) `GET accounts/<G>` and `accounts/<G>/transactions`, before and after A–G | `404` and `404` every time |
+
+Notes on these runs, written down as they are:
+
+1. **G1 entered the send path.** With `STELLAR_SEND=yes` in the environment
+   and no `--send` flag, the CLI did not simulate; it went on to look the source
+   account up, and stopped at `Account not found` **only because that account
+   does not exist on Mainnet**. It did not stop on a missing signing key. A
+   Mainnet experiment that can enter the send path is not repeated. From now on
+   no such experiment is run; the gate is proved by the recording runner and the
+   tests of section 2.2.
+2. **The source address is a local identity's.** `GCPIX7OU…2554` equals the
+   public address of the local Testnet identity `alice` (compared against the
+   public address of all 8 local identities on 2026-11-16; no secret was
+   printed). No secret was passed in any command, and the account does not exist
+   on Mainnet (Horizon 404). It is not used again for Mainnet. Any later
+   Mainnet source address will be one that is not in the local key store, which
+   is what decision D6 enforces in code.
 
 Also closed by E3: `feasibility.md` row 8 had `#6` as an unconfirmed guess
 ("probably from the native asset contract"). The event text names the native
@@ -390,36 +430,47 @@ whether any SEP-56 vault is live on Mainnet. No address is guessed here.
 
 ## 8. Work split and effect on the 113 tests
 
+Order is fixed by decisions D2, D8 and D12: **the gate and its tests come first,
+and no code that calls Mainnet exists before that pull request is merged.**
+
 | PR | Content | Tests |
 |---|---|---|
-| 1 | `net.rs`: `Network`, `--network`, `--rpc-url`/env, the policy, the env scrub, the recording runner, `--command-log`, Mainnet preflight (RPC check, passphrase check, contract check, interface probe). Testnet unchanged. | About 30 new. 0 existing change. |
-| 2 | Vault summary reads, `## Vault summary`, `--summary-file`. | About 10 new. |
-| 3 | `--read-only`, simulated checks 2–5, `missing_input`, `insufficient_shares`, `mainnet_read_only` mode and `simulation` runs-on, Mainnet `Mode:` / `Scope:` texts. | About 20 new; **5 to 8 existing touched**: the tests pinning `MODE`/the `Mode:` line (`labels.rs`, `markdown.rs`, `main.rs`) because `mode` stops being a constant. |
-| 4 | Security checks on a Testnet copy of the Mainnet Wasm, `copy_not_reproducible`. Depends on the F1/F2/F4 work. | About 15 new. |
-| 5 | Regression script and docs: `output.ts`, README, `INTEGRATE.md`, samples, coverage matrix. | docs tests only. |
+| 1 | **The gate.** `net.rs` with `mainnet_policy`, the environment scrub list, the recording runner (a trait in front of the spawn), and the test that **fails when a new `Command::new` appears outside `run_stellar`**. No flag reaches it yet: behaviour of the CLI is unchanged. | About 25 new. 0 existing change. |
+| 2 | `--network mainnet`, `--rpc-url` / `AEGIS_MAINNET_RPC_URL`, the Mainnet preflight (endpoint passphrase check, contract check, interface probe), `--command-log`. First code that can call Mainnet. | About 12 new. |
+| 3 | Vault summary reads, `## Vault summary`, `--summary-file`. | About 10 new. |
+| 4 | `--read-only` (also on Testnet), the simulated checks 2–5, `missing_input`, `insufficient_shares`, `mainnet_read_only` mode, `runs_on: simulation`, the Mainnet `Mode:` / `Scope:` texts. | About 20 new. **5 to 8 existing touched** (`mode` stops being a constant: `labels.rs`, `markdown.rs`, `main.rs`). |
+| 5 | **F1 + F2**: a missing or mistyped constructor argument is reported with the CLI's text; `constructor_mismatch` shows the target's own constructor. Its own PR, with its own regression. | About 8 new, 0 to 2 touched. |
+| 6 | **F4**: the constructor, `query_asset` and `decimals` are looked at once, before the checks, so a mismatch stops early. Its own PR. | About 8 new, 1 to 3 touched. |
+| 7 | The four security checks on a Testnet copy of the Mainnet code, `copy_not_reproducible`, the coverage-matrix rows. | About 15 new. |
+| 8 | Regression script, docs (`output.ts`, README, `INTEGRATE.md`), samples, the coverage matrix document, and the real Mainnet evidence when decision D10 is closed. | docs tests only. |
 
-The 113 existing tests stay green: Testnet argument lists, the Markdown
-header and the JSON shape do not change when `--network` is not given. The
-exception is the 5–8 above, which change only to read `mode` from the setting.
-Server and web: not touched (`server/` waits for the Render values; the web
-shows none of these fields yet).
+The other findings of `design-constructor-params.md` (F3, F5, F6, F7) are not
+touched by any of these without a report first.
 
-## 9. Decisions for you
+The 113 existing tests stay green: Testnet argument lists, the Markdown header
+and the JSON shape do not change when `--network` is not given. The exceptions
+are the 5–8 of PR 4, which change only to read `mode` from the setting, and the
+few of PR 5 and 6 that pin the old constructor text. Server and web: not
+touched (`server/` waits for the Render values; the web shows none of these
+fields yet).
 
-| # | Decision | Options | Recommendation |
-|---|---|---|---|
-| D1 | Default Mainnet RPC | (a) none: `--rpc-url` or `AEGIS_MAINNET_RPC_URL` is required. (b) built-in public endpoint (`mainnet.sorobanrpc.com`) as the default. | **(a).** A built-in default would send every user's queries to one third party, and the Stellar CLI itself leaves it blank. The README gives the endpoint used here as an example. |
-| D2 | How strict the gate is | (a) allow-list as in 2.1. (b) deny-list of write commands. | **(a).** A new command is refused until someone allows it. |
-| D3 | `--read-only` also on Testnet | Yes, as in 7.3 step 1. Or Mainnet only. | **Yes.** It is the only way to test the simulated checks against fixtures and compare with the real checks. |
-| D4 | Summary shape | (a) Markdown section plus `--summary-file`. (b) a versioned JSON envelope behind a flag. (c) Markdown only. | **(a).** The JSON array must stay an array. |
-| D5 | Label of the Testnet copy | (a) `runs_on: temporary_copy` plus text in the detail and `Scope:`. (b) a new field `copy_on`. (c) a new `runs_on` value. | **(a)**, additive and no new field. |
-| D6 | Local-identity cross-check | Refuse a supplied address that equals a local identity's public address. Or not. | **Yes.** It costs one read per identity and removes the question in 2.1 layer 5. |
-| D7 | Missing inputs | INCONCLUSIVE `missing_input` (exit 3). Or NOT_APPLICABLE. | **INCONCLUSIVE.** The vault was not fully checked, and exit 3 says so. |
-| D8 | Security checks on a copy | (a) wait for F1/F2/F4, then do PR 4. (b) do PR 4 with only the checks in section 6 steps 1–4. | **(a).** The spec read before deploy is the key part, and F4 is the same item. |
-| D9 | Stand-in asset | Native XLM on Testnet for 7-decimal assets only. Or build stand-in tokens for other decimals. | **Native only**; other decimals are reported `copy_not_reproducible`. |
-| D10 | A real Mainnet vault for the final evidence | You choose a SEP-56 vault and two public holder addresses. Or demonstrate with Testnet fixtures plus the Mainnet mechanism runs (7.3 step 2). | **You choose.** Without it the SOW's Mainnet evidence is the mechanism only. None was found that I can verify. |
-| D11 | Web and server | Later, after the CLI. | **Later.** `server/` and `render.yaml` stay untouched until the Render values come. |
-| D12 | Order of work | As in section 8. Or PR 3 before PR 2. | **As in section 8.** |
+## 9. Decisions (Pandebu, 16 Nov)
 
-Order of work, if accepted: PR 1, the mechanism runs of 7.3 step 2, PR 2, PR 3
-with the Testnet read-only comparison, then PR 4 after F1/F2/F4, then docs.
+| # | Decision | Status |
+|---|---|---|
+| D1 | No built-in Mainnet RPC; `--rpc-url` or `AEGIS_MAINNET_RPC_URL` is required. | **Disetujui** |
+| D2 | Allow-list gate. **Added:** a test that fails when a new `Command::new` appears outside `run_stellar` (section 2.2). | **Disetujui**, with the addition |
+| D3 | `--read-only` also on Testnet. | **Disetujui** |
+| D4 | Summary as a Markdown section plus `--summary-file`; the JSON stays an array. | **Disetujui** |
+| D5 | The copy is labelled `runs_on: temporary_copy` plus text. **Added:** the `Scope:` text says the four security checks ran on a copy of the code on Testnet, not on the Mainnet instance (section 3.2). | **Disetujui**, with the addition |
+| D6 | Refuse a supplied address that equals a local identity's public address. | **Disetujui** (and section 0 shows why) |
+| D7 | Missing inputs give INCONCLUSIVE `missing_input`, exit 3. | **Disetujui** |
+| D8 | F1/F2/F4 are their own pull requests **before** the Wasm-copy pull request (PR 5 and 6, then PR 7). Other F items are not touched without a report. | **Disetujui** |
+| D9 | Native XLM on Testnet as the stand-in only for 7-decimal assets. Any other asset is reported `copy_not_reproducible` and is a row of the coverage matrix. | **Disetujui** |
+| D10 | The real Mainnet SEP-56 vault and two public holder addresses for the final evidence. Pandebu looks for them. Until then the Mainnet evidence is the mechanism only, and none of the code of PR 4 to 8 is tested against a Mainnet vault. | **Terbuka** |
+| D11 | Web and server later, after the CLI. | **Disetujui** |
+| D12 | The gate pull request and its tests first; no code calls Mainnet before it is merged (section 8). | **Disetujui** |
+
+Rule for all runs from now on: **no Mainnet experiment that can enter the send
+path.** Mainnet reads (`info`, `fetch`, `--send=no` simulations from an address
+that is not a local identity) need an explicit go-ahead for each task.

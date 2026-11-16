@@ -290,3 +290,21 @@ Pemeriksaan sebelum perubahan (TERBUKTI, dibaca dengan grep):
   nilai kembaliannya; teks "Diagnostic Event" hanya dibaca dari teks error
   untuk klasifikasi kegagalan (`rpc.rs`), bukan untuk memeriksa event
   `Deposit`/`Withdraw`. Kalimat itu dipertahankan di baris `Scope:`.
+
+## 7. Sisa wording di web (untuk D3)
+
+Dicatat saat `sow2/wording-web` dikerjakan. Ini tidak diubah di branch itu.
+
+1. **Banner halaman web "All 11 checks passed" tanpa Scope.** Halaman tidak
+   punya tempat untuk baris Scope; menambahkannya berarti mengubah tata letak.
+   Scope hanya ada di ekspor Markdown.
+2. **`findings.ts` masih memuat** "The victim still received a proportional
+   share of the vault", label "stroops", dan "Economic outcome". Satuan
+   "stroops" salah untuk token kustom. Mengubahnya perlu perubahan
+   terkoordinasi dengan kalimat donasi CLI dan regex web (`DONATION_RE`,
+   `PNL_RE`), yang saling mencocokkan.
+3. **Web belum menampilkan** `reason`, `mode`, `spec`, dan `runs_on` per
+   baris, dan ekspor JSON web belum memuat field baru.
+
+Tambahan: teks `Mode` (CLI dan ekspor web) perlu diperbarui saat mode Mainnet
+ada.

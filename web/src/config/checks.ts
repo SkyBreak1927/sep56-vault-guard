@@ -28,15 +28,15 @@ export const CHECK_DEFS: CheckDef[] = [
   { id: 'redeem', group: 'conformance', name: 'Redeem conformance', description: 'Redeem function behaves per SEP-56 spec.' },
   { id: 'convert_to_shares', group: 'conformance', name: 'Convert to shares accuracy', description: 'Asset→share conversion math is correct.' },
   { id: 'convert_to_assets', group: 'conformance', name: 'Convert to assets accuracy', description: 'Share→asset conversion math is correct.' },
-  { id: 'donation_attack', group: 'security', name: 'Donation / inflation attack resistance', description: 'Tests vulnerability to direct-donation share-price manipulation.' },
+  { id: 'donation_attack', group: 'security', name: 'Donation / inflation attack resistance', description: 'Runs one donation scenario on a temporary copy of the vault and checks how many shares a victim receives.' },
   { id: 'overflow_protection', group: 'security', name: 'Overflow protection', description: 'Tests handling of extreme values without overflow/crash.' },
-  { id: 'rounding_direction', group: 'security', name: 'Rounding direction safety', description: 'Confirms rounding always favors the vault, never the attacker.' },
-  { id: 'access_control_probing', group: 'security', name: 'Access control probing', description: 'Confirms sensitive functions are properly authorization-gated.' },
+  { id: 'rounding_direction', group: 'security', name: 'Rounding direction safety', description: "Checks, at one fractional ratio, that deposit rounds shares down and mint rounds assets up, in the vault's favor." },
+  { id: 'access_control_probing', group: 'security', name: 'Access control probing', description: 'Checks that an operator without approval cannot withdraw, and that an approved allowance is enforced.' },
 ]
 
 export const CHECK_GROUPS: { id: CheckGroup; title: string }[] = [
-  { id: 'security', title: 'Security checks' },
-  { id: 'conformance', title: 'Conformance checks' },
+  { id: 'security', title: 'Basic security checks' },
+  { id: 'conformance', title: 'Core function checks' },
 ]
 
 export const FINAL_STATUSES: ReadonlySet<CheckStatus> = new Set(['pass', 'fail', 'warn', 'inconclusive', 'not_applicable'])

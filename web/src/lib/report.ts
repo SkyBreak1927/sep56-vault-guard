@@ -10,11 +10,11 @@ export const SPEC_REFERENCE = 'SEP-0056 v0.1.2 (Draft)'
 const GROUP_LABEL: Record<CheckGroup, string> = { conformance: 'Core function checks', security: 'Basic security checks' }
 
 /**
- * Headline for the run as a whole. A warn stays on the "Remediation needed"
+ * Headline for the run as a whole. A warn stays on the "Review required"
  * side, as it was before inconclusive / not applicable existed.
  */
 export function summaryTitle(counts: Record<CheckStatus, number>, total: number) {
-  if (counts.fail > 0 || counts.warn > 0) return 'Remediation needed'
+  if (counts.fail > 0 || counts.warn > 0) return 'Review required'
   if (counts.inconclusive > 0) return 'Some checks could not finish'
   if (total - counts.not_applicable === 0) return 'No applicable checks'
   if (counts.not_applicable > 0) return 'All applicable checks passed'
@@ -87,12 +87,14 @@ export type Report = ReturnType<typeof buildReport>
 
 function reportMarkdown(data: Report) {
   const lines = [
-    '# Aegis Vault — Conformance Verification Report',
+    '# Aegis Vault — SEP-56 Check Report',
     '',
     `- Vault: \`${data.vault}\``,
     `- Network: ${data.network}`,
+    '- Mode: Testnet. The 7 conformance checks send real transactions to the target vault with Testnet funds and change its state. The 4 security checks run on a temporary copy; the target is only read.',
     `- Spec: ${data.spec}`,
     `- Checker: sep56-vault-guard ${data.cli_version ?? 'version unknown'}${data.cli_commit ? ` (commit ${data.cli_commit})` : ''}`,
+    '- Scope: checks 7 core SEP-56 functions and four basic security risks, on Testnet. Events are not checked. A result describes the scenarios that were run; it is not a statement that the vault is safe or correct.',
     `- Started: ${data.started_at}`,
     `- Completed: ${data.completed_at}`,
     `- Duration: ${data.duration_seconds} s`,
@@ -100,7 +102,7 @@ function reportMarkdown(data: Report) {
     ...summaryLines(data.summary).map((line) => `- ${line}`),
     '',
   ]
-  for (const [group, title] of [['conformance', 'Conformance checks'], ['security', 'Security checks']]) {
+  for (const [group, title] of [['conformance', 'Core function checks'], ['security', 'Basic security checks']]) {
     lines.push(`## ${title}`, '', '| # | Check | Status | Settled at | Detail |', '|---|---|---|---|---|')
     for (const c of data.checks.filter((c) => c.group === group)) {
       const detail = (c.detail ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ')

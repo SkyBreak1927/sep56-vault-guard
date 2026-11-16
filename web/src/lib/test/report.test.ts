@@ -49,7 +49,7 @@ describe('buildReport', () => {
         inconclusive: 0,
         not_applicable: 0,
         groups: { conformance: { passed: 1, total: 7 }, security: { passed: 0, total: 4 } },
-        title: 'Remediation needed',
+        title: 'Review required',
       },
     })
     expect(report.timing_note).toMatch(/every 5 s/)
@@ -128,8 +128,8 @@ describe('summaryTitle', () => {
     ({ pending: 0, running: 0, pass: 0, fail: 0, warn: 0, inconclusive: 0, not_applicable: 0, ...patch }) as Parameters<typeof summaryTitle>[0]
 
   it.each([
-    [{ pass: 10, fail: 1 }, 'Remediation needed'],
-    [{ pass: 10, warn: 1 }, 'Remediation needed'],
+    [{ pass: 10, fail: 1 }, 'Review required'],
+    [{ pass: 10, warn: 1 }, 'Review required'],
     [{ pass: 10, inconclusive: 1 }, 'Some checks could not finish'],
     [{ not_applicable: 11 }, 'No applicable checks'],
     [{ pass: 10, not_applicable: 1 }, 'All applicable checks passed'],
@@ -192,11 +192,14 @@ describe('downloadReport', () => {
     expect(clicked()?.download).toMatch(/\.md$/)
     expect(blob?.type).toBe('text/markdown')
     const md = await blob!.text()
-    expect(md).toMatch(/^# Aegis Vault — Conformance Verification Report\n/)
+    expect(md).toMatch(/^# Aegis Vault — SEP-56 Check Report\n/)
     expect(md).toContain(`- Vault: \`${VAULT}\``)
     expect(md).toContain('- Duration: 95 s')
-    expect(md).toContain('- Result: Remediation needed\n- Core function checks: 1 of 7 passed\n- Basic security checks: 0 of 4 passed\n')
-    expect(md.indexOf('## Conformance checks')).toBeLessThan(md.indexOf('## Security checks'))
+    expect(md).toContain('- Result: Review required\n- Core function checks: 1 of 7 passed\n- Basic security checks: 0 of 4 passed\n')
+    expect(md.indexOf('## Core function checks')).toBeLessThan(md.indexOf('## Basic security checks'))
+    expect(md).toContain('- Mode: Testnet. The 7 conformance checks send real transactions to the target vault with Testnet funds and change its state. The 4 security checks run on a temporary copy; the target is only read.')
+    expect(md).toContain('- Scope: checks 7 core SEP-56 functions and four basic security risks, on Testnet. Events are not checked. A result describes the scenarios that were run; it is not a statement that the vault is safe or correct.')
+    expect(md.indexOf('- Scope:')).toBeLessThan(md.indexOf('- Started:'))
     expect(md).toContain('| Mint conformance | FAIL | 2026-01-01T00:00:20.000Z | got 0 \\| expected 5 shares |')
     expect(md).toContain('| Redeem conformance | PENDING | — |  |')
     expect(md.trimEnd().endsWith(`_${buildReport(run).timing_note}_`)).toBe(true)

@@ -13,7 +13,7 @@ export const secondaryButton = `${control} border border-line bg-surface text-fg
 /** Secondary button with an amber outline, for a section's main action (e.g. Export report). */
 export const accentOutlineButton = `${control} border border-accent bg-surface text-fg can-hover:border-accent-hover can-hover:bg-raised`
 
-/** Level 1 panel: audit cards, data tables, telemetry grids. */
+/** Level 1 panel: report cards, data tables, telemetry grids. */
 export const panel = 'rounded-lg border border-line bg-surface'
 
 /** Uppercase field / column label. */

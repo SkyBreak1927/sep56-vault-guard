@@ -288,7 +288,7 @@ D1–D11 disetujui sesuai rekomendasi di bagian 5, dengan tambahan berikut.
 | D6 | Lokasi perbaikan | Branch `sow2/custom-token-classification`. |
 | D7 | Skrip regresi | `scripts/regress-testnet.sh`. Hanya jalan di Testnet (abort bila bukan), hanya memakai nama identity (tanpa secret key atau seed di repo), idempoten, ada batas per mint, dan mencetak saldo sebelum dan sesudah. |
 | D8 | Isi ulang | Otomatis, hanya token Blind, dari `alice`, dengan syarat D7. |
-| D9 | `overflow_protection` | Batas "PASS kosong pada token kustom offset 0" dan batas `donation_attack` pada Blind ditulis apa adanya di `docs/sow2/custom-token-results.md`, siap dipakai di coverage matrix. Kata yang tidak dipakai: audit, sertifikasi, menjamin, kesesuaian penuh, 100% aman. |
+| D9 | `overflow_protection` | Batas `overflow_protection` dan `donation_attack` ditulis apa adanya di `docs/sow2/custom-token-results.md`, siap dipakai di coverage matrix; wording mengikuti aturan kata Project. |
 | D10 | Docs web | Hanya teks di `web/src/docs/pages/`, tanpa komponen web lain. |
 | D11 | Catatan hasil | `docs/sow2/custom-token-results.md`. |
 

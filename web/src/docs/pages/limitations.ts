@@ -59,7 +59,8 @@ export const limitations: DocsPage = {
       blocks: [
         list(
           'The minimum token balances were measured on one vault only.',
-          'A short balance on `grace` can show as `unclassified_error` instead of `insufficient_token_balance`.',
+          "A short balance is recognised by reading the paying account's balance after a token transfer is rejected. If that read fails, the result stays `unclassified_error`. This was run on Testnet with the repository's test token only.",
+          'The older rule for the native asset (a failed transfer with a negative resulting balance) is kept as a fallback. It has not been shown to match in a real run.',
           'Not tested: a vault with a custom token at `decimals_offset = 0`, classic assets exposed as a Stellar Asset Contract (including trustlines), tokens with other than 7 decimals.',
         ),
       ],

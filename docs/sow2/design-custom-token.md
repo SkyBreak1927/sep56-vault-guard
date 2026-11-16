@@ -288,7 +288,7 @@ D1–D11 disetujui sesuai rekomendasi di bagian 5, dengan tambahan berikut.
 | D6 | Lokasi perbaikan | Branch `sow2/custom-token-classification`. |
 | D7 | Skrip regresi | `scripts/regress-testnet.sh`. Hanya jalan di Testnet (abort bila bukan), hanya memakai nama identity (tanpa secret key atau seed di repo), idempoten, ada batas per mint, dan mencetak saldo sebelum dan sesudah. |
 | D8 | Isi ulang | Otomatis, hanya token Blind, dari `alice`, dengan syarat D7. |
-| D9 | `overflow_protection` | Batas "PASS kosong pada token kustom offset 0" dan batas `donation_attack` pada Blind ditulis apa adanya di `docs/sow2/custom-token-results.md`, siap dipakai di coverage matrix. Kata yang tidak dipakai: audit, sertifikasi, menjamin, kesesuaian penuh, 100% aman. |
+| D9 | `overflow_protection` | Batas `overflow_protection` dan `donation_attack` ditulis apa adanya di `docs/sow2/custom-token-results.md`, siap dipakai di coverage matrix; wording mengikuti aturan kata Project. |
 | D10 | Docs web | Hanya teks di `web/src/docs/pages/`, tanpa komponen web lain. |
 | D11 | Catatan hasil | `docs/sow2/custom-token-results.md`. |
 
@@ -296,3 +296,29 @@ Urutan: Langkah A (dokumen ini, PR ke `dev-sow2`), lalu Langkah B
 (implementasi di `sow2/custom-token-classification`: ukur kebutuhan `dave`,
 skenario Blind tanpa saldo sebelum perbaikan, C1 dan unit test, skrip,
 skenario ulang, regresi 9 fixture, dokumen hasil, teks docs web, changelog).
+
+## 7. Update after the implementation (Langkah B, 16 Nov)
+
+Branch `sow2/custom-token-classification`. Details and tables:
+`docs/sow2/custom-token-results.md`.
+
+BELUM items from section 2 that are now closed (all **TERBUKTI**, Testnet,
+Blind, `dev-sow2` build, `alice`, `bob`, `dave`, `erin` at 0, `grace` at 110M):
+
+- `deposit`, `mint`, `rounding_direction`, `donation_attack` (victim `bob`
+  short) and `access_control_probing` each ended INCONCLUSIVE
+  `unclassified_error`, exit 3, as the "code" rows predicted.
+- `dave` needs **1,601** per run, measured: 110,000 to 108,399 to 106,798
+  over two runs. This equals the figure derived from the constants.
+- `alice` net use per run is 3,002,000 (5,000,000 deposit + 3,000 mint, less
+  2,000,000 + 1,000 received from `withdraw` and `redeem`); `bob` 5,000,000 and
+  `erin` 10,000,000 (all of it); `grace` 49,976,180.
+
+Still **BELUM**: the native-XLM rule (`#10`, a negative resulting balance) is
+kept as a fallback and has not been seen to match in a real run. The C1
+balance read also covers native, but a Testnet XLM account cannot be drained to
+try it.
+
+One test was **not** changed: `a_bare_contract_error_number_is_not_enough` in
+`rpc.rs` still holds, because C1 sits above `classify_error_text`; the text alone
+stays `Unclassified`, and only its comment changed.

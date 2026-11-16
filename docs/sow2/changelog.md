@@ -4,6 +4,25 @@ Tester requests and what was done about them. Each claim is marked
 **TERBUKTI** (run or read in this repository) or **BELUM**. Request numbers
 come from the validation tracker of the SOW 1 Final Report.
 
+## 2026-11-16 — Short token balance classified as `insufficient_token_balance` (Deliverable 2)
+
+Branch `sow2/custom-token-classification`. Design: `docs/sow2/design-custom-token.md`.
+Results: `docs/sow2/custom-token-results.md`. Decisions: C1 (balance read),
+token-moving calls only, `detail` changes only on reclassified rows, native rule
+kept as a fallback.
+
+| Item | What was done | Status |
+|---|---|---|
+| Finding of the unsupported-interface entry: a short token balance gave `unclassified_error` | Cause traced: the repeat call prints one line (`Error(Contract, #100)`) in Stellar CLI 28.0.0, without the event text the old rule needs. Fix: after a rejected `deposit`, `mint` or asset `transfer`, the CLI reads the payer's `balance`; if it is below the amount needed the row is INCONCLUSIVE `insufficient_token_balance` with `holds X, needs Y` in `detail`. Blind with no balance: 5 rows changed from `unclassified_error`; exit code 3 both times. | TERBUKTI |
+| `dave`'s need for `rounding_direction` | Measured 1,601 per run. | TERBUKTI |
+| Native-XLM rule | Kept as a fallback; never seen to match in a real run. | BELUM |
+| `scripts/regress-testnet.sh` | New: Testnet-only guard, identity names only, idempotent capped top-up of the Blind token from `alice`, balances printed before and after, 9-fixture comparison through `scripts/regress-compare.mjs`. | TERBUKTI (run once) |
+| Web docs text | `custom-token.ts`, `limitations.ts`, `output.ts` (text only). | lint, 96 tests, build pass |
+
+Unit tests: 109 in total, all passing (5 new). Regression, 9 fixtures: all
+identical to the `dev-sow2` build, including `detail` after masking numbers and
+addresses.
+
 ## 2026-11-16 — Structured reason, mode, SEP-56 label and `runs_on` on every row (Deliverable 2)
 
 Branch `sow2/report-schema`. Design: `docs/sow2/design-report-schema.md`.

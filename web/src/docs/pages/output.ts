@@ -143,7 +143,7 @@ export const output: DocsPage = {
             [
               '`insufficient_token_balance`',
               'INCONCLUSIVE',
-              'A token transfer a check needed was rejected, most likely a short balance on a test account.',
+              'A token transfer a check needed was rejected, and the paying test account holds less than the call needed. The detail gives both figures when the tool read the balance.',
             ],
             ['`network_error`', 'INCONCLUSIVE', 'A network problem stopped the check.'],
             ['`unclassified_error`', 'INCONCLUSIVE', 'An error the tool could not classify. The raw error is in `raw_error` and in `detail`.'],

@@ -14,7 +14,7 @@ export const customToken: DocsPage = {
         text("Every check moves the vault's underlying asset from one of the seven test accounts."),
         list(
           'Native XLM: Friendbot-funded accounts already hold XLM. Nothing else is needed.',
-          'A custom token: five of the seven accounts need a balance of that token first. Without it, the checks that need the token end as `INCONCLUSIVE` with the reason code `insufficient_token_balance`, and the process exits with code `3`.',
+          'A custom token: five of the seven accounts need a balance of that token first. Without it, the checks that need the token end as `INCONCLUSIVE` with the reason code `insufficient_token_balance`. The process exits with code `3` when no check failed, and with `1` when one did.',
         ),
         text('XLM is only needed for transaction fees. The checker warns when an identity holds less than 5 XLM.'),
       ],
@@ -91,8 +91,8 @@ stellar contract invoke --id <TOKEN_ADDRESS> --source-account alice --network te
       title: 'Reading the result',
       blocks: [
         list(
-          "`INCONCLUSIVE` with `insufficient_token_balance`: a token transfer was rejected, most likely a short balance. The detail names the account, for example `test account 'alice'`. Top it up and run again. It is not a finding about the vault.",
-          "If `donation_attack` ends as `INCONCLUSIVE` with `unclassified_error`, check grace's balance first. The status is right, but the reason code is not yet accurate in this case.",
+          "`INCONCLUSIVE` with `insufficient_token_balance`: a token transfer was rejected, and the tool read the paying account's balance and found it below what the call needed. The detail names the account, for example `test account 'alice'`, and gives both figures (`The account holds 0 of the underlying asset and needs 5000000.`). Top it up and run again. It is not a finding about the vault.",
+          "If a check ends as `INCONCLUSIVE` with `unclassified_error` and the account it names holds enough, the failure is not a short balance. Read `raw_error`.",
           'Balances are spent by each run. Top the accounts up before running again. Testnet tokens have no monetary value.',
         ),
       ],

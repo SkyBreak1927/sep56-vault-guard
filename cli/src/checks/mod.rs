@@ -184,9 +184,25 @@ fn truncate_raw(raw: &str) -> String {
     }
 }
 
+/// What a balance read showed about an account whose token transfer was
+/// rejected: it holds `held` and the call needed `needed`, in the token's
+/// smallest unit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Shortfall {
+    pub held: i128,
+    pub needed: i128,
+}
+
 /// Maps a diagnosis to a status, or `None` to leave the result a FAIL.
 #[allow(dead_code)]
 fn verdict(subject: &Subject<'_>, diag: &Diagnosis) -> Option<Stop> {
+    verdict_with(subject, diag, None)
+}
+
+/// [`verdict`], with the balance read that confirmed a shortfall, when there was
+/// one. Only an `InsufficientTokenBalance` result uses it, and only it gets the
+/// extra sentence in its detail.
+fn verdict_with(subject: &Subject<'_>, diag: &Diagnosis, shortfall: Option<Shortfall>) -> Option<Stop> {
     let phrase = match subject {
         Subject::Call { function, .. } => format!("the call to {function}()"),
         Subject::Deploy => "the deploy of the comparison copy".to_string(),
@@ -201,7 +217,11 @@ fn verdict(subject: &Subject<'_>, diag: &Diagnosis) -> Option<Stop> {
                  insufficient balance on the account paying for it (this check started the \
                  call as test account '{account}'). Fund that account with the vault's \
                  underlying asset and run again. This is a precondition problem, not a \
-                 finding about the vault."
+                 finding about the vault.{}",
+                shortfall.map_or(String::new(), |s| format!(
+                    " The account holds {} of the underlying asset and needs {}.",
+                    s.held, s.needed
+                ))
             ),
             false,
         ),
@@ -279,11 +299,101 @@ pub(crate) async fn invoke_checked(
     match invoke_contract(contract_id, function_name, args, account).await {
         Ok(value) => Ok(value),
         Err(e) => {
-            let diag = diagnose_invoke(contract_id, function_name, args, account, &e).await;
+            let mut diag = diagnose_invoke(contract_id, function_name, args, account, &e).await;
+            // The CLI's one-line error says only `Error(Contract, #N)`, and a bare
+            // number means different things in different contracts. For a call
+            // that moves tokens, confirm with the account's real balance.
+            let mut shortfall = None;
+            if diag.class == ErrorClass::Unclassified {
+                shortfall =
+                    confirm_short_balance(contract_id, function_name, args, account, diag.raw.as_deref()).await;
+                if shortfall.is_some() {
+                    diag.class = ErrorClass::InsufficientTokenBalance;
+                }
+            }
             let subject = Subject::Call { function: function_name, account, na_if_missing };
-            Err(verdict(&subject, &diag).unwrap_or_else(|| Stop::command_fail(&e, &diag)))
+            Err(verdict_with(&subject, &diag, shortfall).unwrap_or_else(|| Stop::command_fail(&e, &diag)))
         }
     }
+}
+
+/// Where the amount a token-moving call needed comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NeededFrom {
+    /// `deposit`: the `--assets` argument, in the vault's underlying asset.
+    Assets(i128),
+    /// `mint`: the underlying asset `preview_mint` says the shares cost.
+    Shares(i128),
+    /// `transfer` on the asset itself: the `--amount` argument.
+    Amount(i128),
+}
+
+/// The value after `flag` in a `--flag value` argument list.
+fn arg_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+    args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str)
+}
+
+/// What a failed call would have needed and who pays, for the calls that move
+/// the underlying asset out of an account: `deposit`, `mint`, and `transfer`.
+/// Any other function, or arguments that cannot be read, give `None`, so the
+/// failure keeps the classification it already had.
+fn probe_plan(function: &str, args: &[String]) -> Option<(NeededFrom, String)> {
+    let payer = arg_value(args, "--from")?.to_string();
+    let number = |flag: &str| arg_value(args, flag)?.parse::<i128>().ok();
+    let needed = match function {
+        "deposit" => NeededFrom::Assets(number("--assets")?),
+        "mint" => NeededFrom::Shares(number("--shares")?),
+        "transfer" => NeededFrom::Amount(number("--amount")?),
+        _ => return None,
+    };
+    Some((needed, payer))
+}
+
+/// `Some` only when `held` is below a positive `needed`.
+fn short_by(held: i128, needed: i128) -> Option<Shortfall> {
+    (needed > 0 && held < needed).then_some(Shortfall { held, needed })
+}
+
+/// Confirms a rejected token transfer with a read of the paying account's
+/// balance of the underlying asset. Read-only. Returns `None` whenever the
+/// confirmation cannot be made (the error was not a contract error, the call is
+/// not one that moves tokens, a read failed, or the balance is enough), and the
+/// failure then keeps its classification.
+async fn confirm_short_balance(
+    contract_id: &str,
+    function_name: &str,
+    args: &[String],
+    account: &str,
+    raw: Option<&str>,
+) -> Option<Shortfall> {
+    if !raw?.contains("Error(Contract, #") {
+        return None;
+    }
+    let (from, payer) = probe_plan(function_name, args)?;
+    let (asset, needed) = match from {
+        NeededFrom::Amount(n) => (contract_id.to_string(), n),
+        NeededFrom::Assets(n) => (query_asset_of(contract_id, account).await?, n),
+        NeededFrom::Shares(shares) => {
+            let asset = query_asset_of(contract_id, account).await?;
+            let preview = ["--shares".to_string(), shares.to_string()];
+            let value = invoke_contract(contract_id, "preview_mint", &preview, account).await.ok()?;
+            (asset, parse_non_negative_i128(&value)?)
+        }
+    };
+    // The argument of `balance` is `account` in stellar-tokens and `id` in
+    // SEP-41; the CLI takes named arguments only, so try both.
+    for name in ["--account", "--id"] {
+        let read = [name.to_string(), payer.clone()];
+        if let Ok(value) = invoke_contract(&asset, "balance", &read, account).await {
+            return short_by(parse_non_negative_i128(&value)?, needed);
+        }
+    }
+    None
+}
+
+async fn query_asset_of(vault: &str, account: &str) -> Option<String> {
+    let value = invoke_contract(vault, "query_asset", &[], account).await.ok()?;
+    value.as_str().map(str::to_string)
 }
 
 /// Deploys like [`deploy_contract`]. A failure is classified from the text it
@@ -2381,5 +2491,67 @@ For more information, try '--help'."####;
         assert!(cut.ends_with(" [truncated]"));
         assert_eq!(cut.chars().count(), RAW_ERROR_LIMIT + " [truncated]".chars().count());
         assert_eq!(truncate_raw("short"), "short");
+    }
+
+    // C1: a short balance confirmed by a balance read.
+    #[test]
+    fn c1_a_confirmed_shortfall_is_insufficient_balance_with_its_figures() {
+        let one_line = "error: transaction simulation failed: HostError: Error(Contract, #100)";
+        let d = diag(ErrorClass::InsufficientTokenBalance, Some(one_line), RetryNote::RetriedFoundText);
+        let s = Shortfall { held: 0, needed: 10_000_000 };
+        let r = result_of(verdict_with(&call("deposit", false), &d, Some(s)).unwrap(), "unused");
+        assert_eq!((r.status, r.reason_code), (CheckStatus::Inconclusive, Some("insufficient_token_balance")));
+        assert!(r.detail.contains("The account holds 0 of the underlying asset and needs 10000000."));
+        assert!(r.detail.contains("Raw error: "));
+        assert_eq!(r.raw_error.as_deref(), Some(one_line));
+    }
+
+    #[test]
+    fn c1_without_a_shortfall_the_detail_is_exactly_what_it_was() {
+        let d = diag(ErrorClass::InsufficientTokenBalance, Some(BALANCE_TEXT), RetryNote::RetriedFoundText);
+        let with_none = result_of(verdict_with(&call("deposit", false), &d, None).unwrap(), "x");
+        let plain = result_of(verdict(&call("deposit", false), &d).unwrap(), "x");
+        assert_eq!(with_none.detail, plain.detail);
+        let u = diag(ErrorClass::Unclassified, Some("error: x"), RetryNote::RetriedFoundText);
+        let a = result_of(verdict_with(&call("mint", false), &u, None).unwrap(), "x");
+        let b = result_of(verdict(&call("mint", false), &u).unwrap(), "x");
+        assert_eq!((a.detail, a.reason_code), (b.detail, b.reason_code));
+    }
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn c1_only_token_moving_calls_have_a_probe_plan() {
+        let dep = args(&["--assets", "5000000", "--receiver", "erin", "--from", "erin", "--operator", "erin"]);
+        assert_eq!(probe_plan("deposit", &dep), Some((NeededFrom::Assets(5_000_000), "erin".to_string())));
+        let mint = args(&["--shares", "3000000", "--receiver", "alice", "--from", "alice"]);
+        assert_eq!(probe_plan("mint", &mint), Some((NeededFrom::Shares(3_000_000), "alice".to_string())));
+        let tr = args(&["--from", "grace", "--to", "CVAULT", "--amount", "100000000"]);
+        assert_eq!(probe_plan("transfer", &tr), Some((NeededFrom::Amount(100_000_000), "grace".to_string())));
+        // not token-moving, or arguments that cannot be read
+        for f in ["withdraw", "redeem", "max_deposit", "total_assets", "approve", "allowance"] {
+            assert_eq!(probe_plan(f, &dep), None, "{f}");
+        }
+        assert_eq!(probe_plan("deposit", &args(&["--assets", "x", "--from", "a"])), None);
+        assert_eq!(probe_plan("deposit", &args(&["--assets", "5"])), None);
+    }
+
+    #[test]
+    fn c1_short_by_needs_a_positive_amount_above_the_balance() {
+        assert_eq!(short_by(0, 10), Some(Shortfall { held: 0, needed: 10 }));
+        assert_eq!(short_by(9, 10), Some(Shortfall { held: 9, needed: 10 }));
+        assert_eq!(short_by(10, 10), None);
+        assert_eq!(short_by(50, 10), None);
+        assert_eq!(short_by(0, 0), None);
+    }
+
+    #[test]
+    fn c1_arg_value_reads_the_value_after_a_flag() {
+        let a = args(&["--assets", "5", "--from", "erin"]);
+        assert_eq!(arg_value(&a, "--from"), Some("erin"));
+        assert_eq!(arg_value(&a, "--receiver"), None);
+        assert_eq!(arg_value(&args(&["--from"]), "--from"), None);
     }
 }

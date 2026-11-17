@@ -4,6 +4,41 @@ Tester requests and what was done about them. Each claim is marked
 **TERBUKTI** (run or read in this repository) or **BELUM**. Request numbers
 come from the validation tracker of the SOW 1 Final Report.
 
+## 2026-11-17 — Read-only gate for Mainnet, PR 1 of 8 (Deliverable 1)
+
+Branch `sow2/mainnet-policy`. Design: `docs/sow2/design-mainnet-readonly.md`
+(sections 2 and 8). **No Mainnet code and no new flag yet:** this change is
+the rule that later code has to pass, and its tests. The CLI's behaviour on
+Testnet is unchanged.
+
+| Item | What was done | Status |
+|---|---|---|
+| The gate | New `cli/src/net.rs` with `mainnet_policy`. `run_stellar` (the only place that starts a process) calls it before it starts one. A list with exactly one `--network testnet` and no RPC URL is Testnet-class and passes untouched; every other list must be on an allow-list or no process is started. Allowed: `--version`, `contract info hash\|interface`, `contract fetch`, `contract id asset`, `network info\|health`, `keys address <name>`, and `contract invoke` with exactly one `--send=no`, one `G…` public key as the source, `--rpc-url` and `--network-passphrase`, no `--network`, and none of `--build-only`, `--view`, `--sign-with…`, another `--send…`. Refused: everything else, including `contract deploy\|upload\|install\|bump\|extend\|restore`, `tx …`, `keys generate\|fund\|add\|rm\|show\|secret`, an identity name, an `S…` secret key, a muxed account or a seed phrase as the source. | TERBUKTI (unit tests) |
+| Environment | For a list that is not Testnet-class the process loses `STELLAR_ACCOUNT`, `STELLAR_AUTH_MODE`, `STELLAR_CONTRACT_ID`, `STELLAR_INVOKE_VIEW`, `STELLAR_NETWORK`, `STELLAR_NETWORK_PASSPHRASE`, `STELLAR_RPC_URL`, `STELLAR_SEND`, `STELLAR_SIGN_WITH_KEY`, `STELLAR_SIGN_WITH_LAB`, `STELLAR_SIGN_WITH_LEDGER` (the `[env: …]` names in the CLI's `--help`). `STELLAR_RPC_HEADERS` is kept: it carries an RPC key and cannot make anything send. Testnet lists keep their environment as before. | TERBUKTI (unit test) |
+| Recording runner | In tests, `run_stellar` writes the argument list down and takes its reply from a small fake vault instead of starting `stellar`. All 11 checks run against it (about 100 calls, every write path reached: deploy, deposit, mint, withdraw, redeem, transfer, approve, allowance). Every recorded call passes the gate on Testnet; **pointed at Mainnet, the gate refuses every `invoke` and `deploy` the checks make**, and lets only the read forms through. | TERBUKTI |
+| Source scan | A test reads `cli/src` and **fails when a process is started anywhere but in `run_stellar`**, when `run_stellar` does not call the gate before it starts one, or when it does not scrub the environment. A second test fails on any Horizon URL that is not Testnet. Both were checked to fail on a planted violation (a second spawn site; the gate call removed). | TERBUKTI |
+
+Also: two old comments that held a word the project does not use were
+reworded (`rpc.rs`, `checks/mod.rs`; comments only).
+
+Unit tests: 149 in total (113 before, 36 new in `net.rs`), all passing.
+`clippy` reports the one warning that already existed. Web: lint and 103 tests
+pass (no web change).
+
+**Regression, 9 Testnet fixtures**, `scripts/regress-testnet.sh` without a text
+map, the `dev-sow2` build (`7de0ecb`) against this branch: all rows identical
+(name, status, `reason_code`, `reason`, keys, `detail` and `raw_error` after
+masking numbers and addresses) and the same exit codes. **TERBUKTI**
+
+| Fixture | Result | Same? |
+|---|---|---|
+| Reference, Demo, Vault A, Hardened, Blind | 10 PASS, 1 FAIL, exit 1 | Yes |
+| Vault B | 9 PASS, 2 FAIL, exit 1 | Yes |
+| Positive Control, SEP-41 Names | 11 PASS, exit 0 | Yes |
+| Reverting Max | 6 PASS, 1 FAIL, 4 INCONCLUSIVE, exit 1 | Yes |
+
+No call to Mainnet was made for this change; every proof is a unit test.
+
 ## 2026-11-16 — Wording pass on the report texts (Deliverable 2)
 
 Branch `sow2/wording-pass`. Design: `docs/sow2/design-wording.md`. CLI, the

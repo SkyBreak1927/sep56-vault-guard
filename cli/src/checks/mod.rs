@@ -962,8 +962,8 @@ pub async fn check_redeem(contract_id: &str, source_account: &str) -> CheckResul
 ///    fresh `decimals_offset = 0` vault.
 ///
 ///    The bound is `<=`, not `==`: SEP-56 requires both conversions to
-///    round DOWN, and composing two floor divisions is only guaranteed to
-///    ever lose precision, never gain it — `floor(floor(x·n/d)·d/n) <= x`
+///    round DOWN, and composing two floor divisions can only ever
+///    lose precision, never gain it — `floor(floor(x·n/d)·d/n) <= x`
 ///    holds for any positive integers `x, n, d`. Exact equality only ever
 ///    holds by coincidence, at ratios that happen to divide evenly (e.g.
 ///    a fresh vault's 1:1 ratio, or an exact power-of-ten

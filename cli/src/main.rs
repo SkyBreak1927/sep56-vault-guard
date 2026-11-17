@@ -3,6 +3,7 @@ mod checks;
 mod interface;
 mod labels;
 mod markdown;
+mod net;
 mod preflight;
 mod status;
 

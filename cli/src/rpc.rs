@@ -23,6 +23,9 @@ pub enum RpcError {
         raw: String,
         source: serde_json::Error,
     },
+    /// The read-only gate (`net::mainnet_policy`) refused the argument list.
+    /// No process was started.
+    Refused(String),
 }
 
 impl fmt::Display for RpcError {
@@ -47,6 +50,7 @@ impl fmt::Display for RpcError {
                 f,
                 "failed to parse `stellar` command output as JSON: {source} (raw output: {raw:?})"
             ),
+            RpcError::Refused(why) => f.write_str(why),
         }
     }
 }
@@ -56,7 +60,7 @@ impl std::error::Error for RpcError {
         match self {
             RpcError::Spawn(e) => Some(e),
             RpcError::InvalidJson { source, .. } => Some(source),
-            RpcError::CommandFailed { .. } | RpcError::UnexpectedStderr(_) => None,
+            RpcError::CommandFailed { .. } | RpcError::UnexpectedStderr(_) | RpcError::Refused(_) => None,
         }
     }
 }
@@ -71,12 +75,22 @@ impl std::error::Error for RpcError {
 /// a positional argument to the invoked contract function instead of a
 /// top-level CLI flag.
 pub(crate) async fn run_stellar(args: &[String]) -> Result<String, RpcError> {
-    let output = Command::new("stellar")
-        .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .map_err(RpcError::Spawn)?;
+    // The one gate every `stellar` process passes (see `net.rs`). A list for
+    // Testnet goes straight through; anything else must be on the read-only
+    // allow-list, or no process is started.
+    crate::net::mainnet_policy(args).map_err(|refusal| RpcError::Refused(refusal.to_string()))?;
+
+    #[cfg(test)]
+    if let Some(reply) = testing::replay(args) {
+        return reply;
+    }
+
+    let mut command = Command::new("stellar");
+    command.args(args).stdin(Stdio::null());
+    for variable in crate::net::env_to_scrub(args) {
+        command.env_remove(variable);
+    }
+    let output = command.output().await.map_err(RpcError::Spawn)?;
 
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
 
@@ -219,7 +233,7 @@ pub async fn fetch_wasm_hash(contract_id: &str) -> Result<String, RpcError> {
 /// Fetches the current ledger sequence from Horizon testnet.
 ///
 /// Used to compute a `live_until_ledger` value for `approve()` calls that
-/// is guaranteed to not already be expired at the time the transaction
+/// is sure not to be expired already at the time the transaction
 /// executes — the vault's `FungibleTokenError::InvalidLiveUntilLedger`
 /// check requires `live_until_ledger >= current ledger sequence`, so a
 /// hardcoded constant would eventually go stale as the network progresses.
@@ -227,6 +241,12 @@ pub async fn fetch_current_ledger_sequence() -> Result<u32, String> {
     #[derive(serde::Deserialize)]
     struct HorizonRoot {
         history_latest_ledger: u32,
+    }
+
+    // Under test with a recording runner there is no network: a fixed ledger.
+    #[cfg(test)]
+    if testing::recording() {
+        return Ok(1_000_000);
     }
 
     let response = reqwest::get("https://horizon-testnet.stellar.org/")
@@ -239,6 +259,50 @@ pub async fn fetch_current_ledger_sequence() -> Result<u32, String> {
         .map_err(|e| format!("failed to parse Horizon response: {e}"))?;
 
     Ok(body.history_latest_ledger)
+}
+
+/// A recording runner for tests: in place of starting `stellar`, `run_stellar`
+/// writes the argument list down and takes the reply from a function the test
+/// gives. The gate has already run by then, so a refused list never reaches
+/// it. Per thread, so tests that run in parallel do not see each other.
+#[cfg(test)]
+pub(crate) mod testing {
+    use super::RpcError;
+    use std::cell::RefCell;
+
+    type Reply = Box<dyn FnMut(&[String]) -> Result<String, RpcError>>;
+
+    struct Recorder {
+        calls: Vec<Vec<String>>,
+        reply: Reply,
+    }
+
+    thread_local! {
+        static RECORDER: RefCell<Option<Recorder>> = const { RefCell::new(None) };
+    }
+
+    /// Starts recording on this thread.
+    pub(crate) fn install(reply: impl FnMut(&[String]) -> Result<String, RpcError> + 'static) {
+        RECORDER.with(|r| *r.borrow_mut() = Some(Recorder { calls: Vec::new(), reply: Box::new(reply) }));
+    }
+
+    /// Stops recording and returns every argument list seen.
+    pub(crate) fn take_calls() -> Vec<Vec<String>> {
+        RECORDER.with(|r| r.borrow_mut().take().map(|rec| rec.calls).unwrap_or_default())
+    }
+
+    pub(super) fn recording() -> bool {
+        RECORDER.with(|r| r.borrow().is_some())
+    }
+
+    pub(super) fn replay(args: &[String]) -> Option<Result<String, RpcError>> {
+        RECORDER.with(|r| {
+            r.borrow_mut().as_mut().map(|rec| {
+                rec.calls.push(args.to_vec());
+                (rec.reply)(args)
+            })
+        })
+    }
 }
 
 /// Which kind of `stellar` command an error text came from. The same words can
@@ -295,7 +359,7 @@ impl RpcError {
         match self {
             RpcError::CommandFailed { stderr, .. } => Some(stderr),
             RpcError::UnexpectedStderr(stderr) => Some(stderr),
-            RpcError::Spawn(_) | RpcError::InvalidJson { .. } => None,
+            RpcError::Spawn(_) | RpcError::InvalidJson { .. } | RpcError::Refused(_) => None,
         }
     }
 
@@ -445,7 +509,10 @@ fn first_look(err: &RpcError) -> FirstLook<'_> {
         RpcError::CommandFailed { stderr, .. } if stderr.trim().is_empty() => FirstLook::Silent,
         RpcError::CommandFailed { stderr, .. } => FirstLook::Text(stderr),
         RpcError::UnexpectedStderr(text) if !text.trim().is_empty() => FirstLook::Text(text),
-        RpcError::UnexpectedStderr(_) | RpcError::Spawn(_) | RpcError::InvalidJson { .. } => {
+        RpcError::UnexpectedStderr(_)
+        | RpcError::Spawn(_)
+        | RpcError::InvalidJson { .. }
+        | RpcError::Refused(_) => {
             FirstLook::Nothing
         }
     }
